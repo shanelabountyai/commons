@@ -27,13 +27,14 @@ td button[aria-pressed=true]{background:var(--sel);color:var(--bg)!important}
 .detail p{margin:4px 0;max-width:75ch}
 .tag{display:inline-block;font:12px "IBM Plex Mono",monospace;padding:1px 7px;border:1px solid var(--line);border-radius:3px;margin-right:6px;color:var(--mute)}
 .ev{font:12px "IBM Plex Mono",monospace;color:var(--mute);overflow-wrap:anywhere}
-.scope{border-left:3px solid var(--q);padding:6px 12px;margin:0 0 18px;max-width:75ch;background:var(--surf)}
+.check{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:12px}#rq{font:500 13px "IBM Plex Sans",sans-serif;color:var(--bg);background:var(--sel);border:0;border-radius:4px;padding:7px 14px;cursor:pointer}#rq:disabled{opacity:.5;cursor:default}#rq:focus-visible{outline:2px solid var(--ok);outline-offset:2px}.scope{border-left:3px solid var(--q);padding:6px 12px;margin:0 0 18px;max-width:75ch;background:var(--surf)}
 </style>
 <main>
 <h1>Foundation Scorecard</h1>
 <p class="sub">Every code project against the 14 key pieces of the saas foundation (K1–K14). Select a cell for the reason, the evidence and the backlog item that fixes it.</p>
 <div class="scope"><b>Scope.</b> The foundation row was verified today (122 tests pass, v__VER__). Only <b>Clearpath</b> and <b>event toolkit</b> cells changed by a fix were re-checked in code on __ASOF__; every other cell is the 2026-09-23 audit baseline, marked as such in its detail. Nothing here is a fresh full audit.</div>
 <div class="legend"><span><b class="s-ok mono">✔</b> compliant</span><span><b class="s-bad mono">✗</b> not compliant</span><span><b class="s-na mono">–</b> N/A</span><span><b class="s-q mono">?</b> not verified</span></div>
+<div class="check"><button id="rq" type="button" hidden>Request re-check</button><span id="rs" class="ev">A re-check re-runs <span class="mono">npm test</span> and re-scores the cells whose SEC items were fixed. It is queued here and run from the Claude Code session in the foundation repo.</span></div>
 <div class="wrap"><table id="m"></table></div>
 <div class="detail" id="d" aria-live="polite"></div>
 </main>
@@ -55,4 +56,14 @@ d.innerHTML=`<h2>${e(r.name)} · ${b.dataset.k} ${D.keys[b.dataset.k]} <span cla
 (c.evidence?`<p class="ev">${e(c.evidence)}</p>`:'')+`<p><span class="tag">${c.basis}</span>${c.secs.map(s=>`<span class="tag">${s}</span>`).join('')}</p>`}
 m.addEventListener('click',e=>{const b=e.target.closest('button');if(b)show(b)});
 show(m.querySelector('button[data-r="4"][data-k="K6"]'));
+(async()=>{const db=await claude.use("db");if(!db)return;
+const rq=document.getElementById('rq'),rs=document.getElementById('rs');rq.hidden=false;
+const f=t=>new Date(t).toLocaleString();
+db.doc("checks/request").onSnapshot(q=>{const v=q.exists?q.data():null;
+db.doc("checks/last").get().then(l=>{const c=l.exists?l.data():null;
+const pending=v&&(!c||c.doneAt<v.requestedAt);
+rq.disabled=!!pending;
+rs.textContent=pending?'Re-check requested '+f(v.requestedAt)+'. Waiting for the Claude Code session to run it.':(c?'Last check '+f(c.doneAt)+': '+c.summary:'No manual check has run yet.')})},()=>{});
+rq.onclick=async()=>{rq.disabled=true;try{await db.doc("checks/request").set({requestedAt:Date.now()})}catch(e){rq.disabled=false;rs.textContent='Could not queue the request ('+(e.code||'error')+'). You may need edit access.'}}
+})();
 </script>
