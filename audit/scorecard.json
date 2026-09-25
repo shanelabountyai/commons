@@ -127,104 +127,125 @@
    "name": "alongside / handholdcare",
    "cells": {
     "K1": {
-     "s": "✗",
-     "text": "family invite tokens plaintext, refresh not rotated",
-     "evidence": "Watermark revocation is good: `backend/src/http/app.ts:134-140` (tokenVersion + isActive checked on every request) and `auth/service.ts:173-181` (password change and sign-out-everywhere bump it). Email-verify token is hashed and spent by POST (`auth/service.ts:34-43`, `auth/routes.ts:90`). But `FamilyMember.inviteToken` is plaintext (`prisma/schema.prisma:557`, `family/service.ts:110-118`), and a refresh token can be replayed until the version changes (`auth/routes.ts:113-133`). Admin tokens have no version claim, so the only way to revoke one is deactivation (`app.ts:152-165`).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✔",
+     "text": "Sessions are watermark-revocable (tokenVersion/isActive checked per request), refresh tokens are single-use DB rows with replay revoking all sessions (SEC-02), family/admin invite and email-verify tokens are stored as SHA-256 hashes (SEC-03) and verify-email is spent by POST.",
+     "evidence": "backend/src/http/app.ts:150-162; backend/src/auth/routes.ts:125-180; backend/src/family/service.ts:46-50",
+     "secs": [
+      "SEC-02",
+      "SEC-03"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "✔",
-     "text": "admin realm (community moderators have no MFA, see SEC-11)",
-     "evidence": "TOTP is required at login (`admin/service.ts:87-111`), with single-use step claim and constant-time compare (`admin/totp.ts:62-77`). Admin tokens are rejected on consumer routes and the reverse (`app.ts:143-145,158`).",
+     "text": "Admin login requires TOTP with single-use step and constant-time compare, admin roles enforced default-deny in authenticateAdmin (SEC-05), and community moderators now need a TOTP step-up token (SEC-11).",
+     "evidence": "backend/src/admin/totp.ts:75; backend/src/http/app.ts:169-190; backend/src/community/routes.ts:224-245",
      "secs": [
+      "SEC-05",
       "SEC-11"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
      "s": "✔",
-     "text": "",
-     "evidence": "Inventory of 161 routes: every route except the intentionally public ones has `app.authenticate` or `authenticateAdmin` (some through shared `auth`/`gated` consts: `community/routes.ts:90`, `companion/routes.ts:34`). The public ones are `/health`, `/auth/{signup,login,refresh,verify-email}`, `/admin/auth/login`, `/invitations/:token/{preview,decline}` and `/feedback/public-idea`. The FEATURE_ADMIN gate matches the declared route (`admin/routes.ts:172-176`).",
+     "text": "Swept all ~170 route registrations: every one carries authenticate/authenticateAdmin/modAuth/gated except /health, /auth/{signup,login,verify-email,refresh}, DELETE /auth/refresh, /admin/auth/login, /feedback/public-idea and invitation preview/decline, all intentionally public; no 'use server' (Fastify API).",
+     "evidence": "backend/src/*/routes.ts; backend/src/auth/routes.ts:71-190; backend/src/family/routes.ts:72-105",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "✔",
-     "text": "(minor: 403 vs 404 oracle, unvalidated assignees)",
-     "evidence": "Every by-id service loads the row, then calls `resolveMembership(row.lovedOneId)` plus a capability assert: care-log `:128-166`, facility `:87-150`, funding `:89-130`, key-contacts `:74-102`, task `:83-122` (plus contributor own-scope `:28-34`), tournote, comfort-profile `:181-217`, handoff-binder `:307-351`, member management `family/service.ts:338-452`. Vault access depends on the owner or an explicit share, whatever the role (`vault/service.ts:62-86`). Companion reads are owner-only (`companion/service.ts:40-41,123,178`).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "By-id services resolve membership from the row's lovedOneId and answer 404 for not-yours identical to missing (SEC-12, source-guard test over every row-derived resolveMembership call); assignees validated (SEC-13); this was a spot-check of services plus the guard test rather than a line-by-line sweep of all 13 services.",
+     "evidence": "git commit edf12c7; backend/tests/sec12-existence-oracle.test.ts; backend/src/task/service.ts assertAssignees",
+     "secs": [
+      "SEC-12",
+      "SEC-13"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✗",
-     "text": "in-memory store",
-     "evidence": "`app.ts:122` registers `@fastify/rate-limit` with no Redis store. Community limits live in a process-local `Map` (`community/service.ts:31-32`). `trustProxy` is unset (`app.ts:115-121`).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "Limits now live in Postgres (SEC-06) with per-account lockout, but the unauthenticated token reads GET /invitations/:token/preview and POST /invitations/:token/decline have no rateLimit config.",
+     "evidence": "backend/src/http/app.ts:118-127; backend/src/family/routes.ts:81-105",
+     "secs": [
+      "SEC-06"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
-     "s": "✗",
-     "text": "family invites: plaintext, no expiry, no noindex/no-store",
-     "evidence": "Admin invitations are done right: hashed plus expiry (`admin/invitations.ts:8-15,29-30`). Family invites: plaintext `inviteToken @unique`, no expiry column (`schema.prisma:557-558`), GET preview is public (`family/routes.ts:71-77`). No response sets `no-store`, `no-referrer` or `noindex` on that route.",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✔",
+     "text": "Family and admin invite links are hashed at rest with 14-day expiry, revocable, and served with no-store/no-referrer/noindex plus log/404 URL masking (SEC-03, SEC-04).",
+     "evidence": "backend/src/family/routes.ts:68-79; backend/src/family/service.ts:46-50; backend/src/http/app.ts:203-208",
+     "secs": [
+      "SEC-03",
+      "SEC-04"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
-     "s": "✗",
-     "text": "only nosniff",
-     "evidence": "`app.ts:170-172`. No HSTS, frame-ancestors, Referrer-Policy or CSP on the API, and no hosting config for either SPA. The marketing site is fine (`handhold-site/vercel.json`).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✔",
+     "text": "API sets CSP frame-ancestors none, X-Frame-Options, Referrer-Policy, nosniff and HSTS globally (SEC-07); both SPAs and the marketing site ship header config in vercel.json.",
+     "evidence": "backend/src/http/app.ts:218-226; admin-frontend/vercel.json; frontend/vercel.json; handhold-site/vercel.json",
+     "secs": [
+      "SEC-07"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
-     "s": "✗",
-     "text": "JWT secret fails open",
-     "evidence": "`config/env.ts:7-12`: with `NODE_ENV` unset, `isDev` is true and `JWT_SECRET` defaults to `\"dev-only-insecure-secret-change-me\"`. The same applies to `ANALYTICS_PEPPER` (`:14-16`). Nothing secret is tracked (`git ls-files` shows only `.env.example`, and `.env.local` is ignored). No `VITE_` secrets. TOTP compare is constant-time.",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✔",
+     "text": "JWT_SECRET, ANALYTICS_PEPPER and TOTP_ENCRYPTION_KEY require 32+ chars and reject repo placeholders unless NODE_ENV=test (SEC-01), TOTP compare is timingSafeEqual, nothing secret is tracked (only .env.example), and no VITE_ secrets exist.",
+     "evidence": "backend/src/config/env.ts:10-30; backend/src/admin/totp.ts:75; git ls-files env check",
+     "secs": [
+      "SEC-01"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "N/A",
-     "text": "",
-     "evidence": "No webhook or Stripe code (grep over `backend/src`).",
+     "text": "No webhook or Stripe code exists in the backend.",
+     "evidence": "backend/src (no webhook routes in route inventory)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
-     "s": "✗",
-     "text": "invite tokens in URL paths get logged; prod email only warns",
-     "evidence": "Tokens sit in URL paths (`family/routes.ts:71,79,90`, `admin/invitations.ts:72`). The logger is on (`app.ts:76`), and Fastify's default request log includes `req.url`; `redact.ts:10-35` does not cover `req.url` (framework default, not run). In production, a missing email transport logs a warning and returns success (`lib/email.ts:20-22`).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✔",
+     "text": "Request-log serializer and 404 handler mask invite tokens (SEC-04) and production now refuses to boot without an email transport (SEC-09); the log-only email sender that prints message text is unreachable in production.",
+     "evidence": "backend/src/http/app.ts:90-97,203-208; backend/src/lib/email.ts:12-20",
+     "secs": [
+      "SEC-04",
+      "SEC-09"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": "partial schema, incomplete example",
-     "evidence": "The zod schema covers 7 vars (`config/env.ts:22-36`). `ANTHROPIC_API_KEY`, `DOCUMENT_STORE`, `COMPANION_MONTHLY_ALLOWANCE`, `PORT` and the feature flags are read raw. `.env.example` is missing `ANALYTICS_PEPPER`, `ANTHROPIC_API_KEY`, `DOCUMENT_STORE`, `COMPANION_MONTHLY_ALLOWANCE`, `PORT` and `NODE_ENV`.",
+     "text": "The zod schema does not cover ANTHROPIC_API_KEY, DOCUMENT_STORE, COMPANION_MONTHLY_ALLOWANCE, PORT, APP_BASE_URL reads in invitations, or feature-flag envs, and .env.example still omits ANALYTICS_PEPPER, ANTHROPIC_API_KEY, DOCUMENT_STORE, COMPANION_MONTHLY_ALLOWANCE and PORT (OPS-05 open).",
+     "evidence": "backend/src/config/env.ts:47-77; backend/.env.example; backend/src/companion/llm.ts:42; backend/src/vault/document-store.ts:72; backend/src/server.ts:14",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
      "s": "✔",
-     "text": "(no e2e exists)",
-     "evidence": "Tests use in-process PGlite, always in-memory (`db/client.ts:45-56`), and CI needs no DB (`.github/workflows/ci.yml`). There is no e2e suite (`NEXT.md`: \"No e2e … exists\"), so \"e2e on a prod build\" does not apply yet.",
+     "text": "Tests use in-process in-memory PGlite and CI needs no database, so a remote DB is unreachable from tests (no explicit cloud-URL guard); no e2e suite exists so the production-build rule does not yet apply.",
+     "evidence": "backend/src/db/client.ts:52-56; .github/workflows/ci.yml",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
-     "s": "✗",
-     "text": "app-level only",
-     "evidence": "`AdminActionLog` is append-only by convention. The migration comment says \"production adds REVOKE UPDATE/DELETE\" (`prisma/migrations/20260710000000_admin_console/migration.sql:2-4`), but no trigger or REVOKE exists in any migration.",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✔",
+     "text": "Migration 20260923050000 adds a DB trigger making AdminActionLog, ModerationAction and VaultAccessLog append-only (UPDATE may only null columns, DELETE/TRUNCATE refused except the erasure path) (SEC-08); not yet applied to any real database.",
+     "evidence": "backend/prisma/migrations/20260923050000_audit_append_only/migration.sql:14-50",
+     "secs": [
+      "SEC-08"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✗",
-     "text": "port 3000 default, site lacks ignoreCommand",
-     "evidence": "`backend/src/server.ts:14` defaults `PORT` to 3000, which collides with the storage business project, and alongside has no row in the port table. `handhold-site/vercel.json` has no `ignoreCommand`. The cron is a CLI script (`backend/scripts/ops-cron.ts`), not a route, so that part is N/A.",
+     "text": "backend/src/server.ts still defaults PORT to 3000 (collides with the storage project, no port row for alongside; OPS-03) and handhold-site/vercel.json has no ignoreCommand (OPS-04); the two SPA vercel.json files do have the ignoreCommand, and there are no cron routes (cron is a CLI script).",
+     "evidence": "backend/src/server.ts:14; handhold-site/vercel.json; admin-frontend/vercel.json:2; frontend/vercel.json:2",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -234,108 +255,110 @@
    "cells": {
     "K1": {
      "s": "✔",
-     "text": "signed exp; staff re-read each request; manage tokens hashed",
-     "evidence": "`packages/core/auth/session.ts:72-141`",
+     "text": "Signed expiring cookie with staff re-read on each request; manage tokens stored hashed.",
+     "evidence": "apps/web/lib/auth/session.ts:110-221; packages/core/auth/session.ts:72-141; packages/core/auth/manage-token.ts:22-60",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "✗",
-     "text": "no MFA",
-     "evidence": "",
+     "text": "No second factor anywhere; requireOwner is role-only.",
+     "evidence": "apps/web/lib/auth/session.ts:155",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
      "s": "✔",
-     "text": "all 24 staff pages and actions guarded",
-     "evidence": "`apps/web/lib/auth/session.ts:129-208`",
+     "text": "Swept all 22 'use server' files and every staff page: each export reaches requireStaff/requireDesk/requireOwner (directly or via actorStamp/listPeople helper); only public-actions and manage/actions are unguarded by design (public booking / token-gated).",
+     "evidence": "apps/web/lib/settings/availability-actions.ts:76; apps/web/lib/auth/people-actions.ts:41; apps/web/app/staff/layout.tsx; apps/web/lib/manage/actions.ts",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "✗",
-     "text": "cross-business IDORs on settings and appointment writes (SEC-01, SEC-02), latent while single-tenant",
-     "evidence": "`packages/db/settings/resources.ts:135-137; appointments/transition.ts:162-164`",
+     "text": "SEC-01/SEC-02 unfixed: by-id writes (setResourceActive, runTransition findUniqueOrThrow) carry no businessId; latent while single-tenant, no post-baseline commit touched them.",
+     "evidence": "packages/db/settings/resources.ts:135-140; packages/db/appointments/transition.ts:162-164",
      "secs": [
       "SEC-01",
       "SEC-02"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✗",
-     "text": "DB limiter on login and manage links ✔; public booking unthrottled (SEC-03)",
-     "evidence": "`lib/booking/public-actions.ts:341-380`",
+     "text": "DB-backed limiter covers login and manage links, but public confirmAppointment is still unthrottled (SEC-03).",
+     "evidence": "apps/web/lib/manage/token-gate.ts:34; packages/db/auth/staff.ts:96; apps/web/lib/booking/public-actions.ts:341",
      "secs": [
       "SEC-03"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "✔",
-     "text": "hashed, expiry, no-referrer, select projection",
-     "evidence": "`packages/core/auth/manage-token.ts:22-60; next.config.ts:13-20`",
+     "text": "Manage links hashed, expiring, no-referrer on /manage, select projection.",
+     "evidence": "packages/core/auth/manage-token.ts:22-60; apps/web/next.config.ts:31-36",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "✗",
-     "text": "headers only on /manage",
-     "evidence": "",
+     "text": "Only Referrer-Policy on /manage/:token*; no global nosniff, frame-ancestors or HSTS.",
+     "evidence": "apps/web/next.config.ts:29-37",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
      "s": "✗",
-     "text": "cron secret compared with !== (SEC-05)",
-     "evidence": "`app/api/jobs/reminders/route.ts:38`",
+     "text": "Cron secret compared with !== (SEC-05); fail-closed when unset is fine and no NEXT_PUBLIC vars or tracked secrets found.",
+     "evidence": "apps/web/app/api/jobs/reminders/route.ts:38",
      "secs": [
       "SEC-05"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "N/A",
-     "text": "no webhooks",
-     "evidence": "",
+     "text": "No webhook endpoints exist.",
+     "evidence": "apps/web/app/api/jobs/reminders/route.ts (only route handler)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
-     "s": "✔",
-     "text": "logging adapter + kill switch + sandbox (no real provider)",
-     "evidence": "`packages/core/notifications/`",
+     "s": "✗",
+     "text": "The logging adapter console.info's the full payload JSON, which includes manageUrl (a live bearer token path); notifications are kill-switched/sandboxed but no real provider exists to fail loudly.",
+     "evidence": "packages/core/notifications/logging-adapter.ts:31-33; packages/db/notifications/reminders.test.ts:88",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": "no env schema",
-     "evidence": "`.env.example`",
+     "text": ".env.example lists names but there is no schema validation at boot (no zod/env module).",
+     "evidence": ".env.example; apps/web/package.json",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
-     "s": "?",
-     "text": "local PG + prod-build e2e ✔; code-level cloud guard not assessed",
-     "evidence": "`apps/web/playwright.config.ts:34-35`",
+     "s": "✗",
+     "text": "Local Postgres and a prod-build e2e script exist, but no code-level guard refusing cloud DB URLs was found.",
+     "evidence": "package.json:19-23; packages/db/testing/reset.ts",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
      "s": "?",
-     "text": "not assessed",
-     "evidence": "",
+     "text": "AppointmentEvent is append-only via DB trigger, but did not verify that staff-role/settings changes are logged to it.",
+     "evidence": "packages/db/prisma/migrations/20260815162006_core_data_model/migration.sql:662-674",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✗",
-     "text": "no ignoreCommand (OPS-01); port 3300 ✔; cron fail-closed ✔",
-     "evidence": "`vercel.json`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "ignoreCommand now present (OPS-01 fixed) and port 3300 set, but cron route compares with !== rather than constant-time (SEC-05).",
+     "evidence": "vercel.json:6; apps/web/package.json:8; apps/web/app/api/jobs/reminders/route.ts:38",
+     "secs": [
+      "SEC-05"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -345,105 +368,107 @@
    "cells": {
     "K1": {
      "s": "N/A",
-     "text": "no multi-user/tenant/DB/webhook surface",
-     "evidence": "single-user local tool, no auth system, no database (`package.json` deps: `express` only)",
+     "text": "No sessions or accounts; single-user local tool with no auth system.",
+     "evidence": "server.js:1-261",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "N/A",
-     "text": "not scored in the baseline (no such surface)",
-     "evidence": "",
+     "text": "No users or privileged roles exist.",
+     "evidence": "package.json (express only)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
-     "s": "N/A",
-     "text": "not scored in the baseline (no such surface)",
-     "evidence": "",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✗",
+     "text": "Swept all 10 routes: none has any auth check, including GET /api/skills/run and /api/agents/run which spawn the claude CLI; SEC-01 (fixed a009fce) narrows exposure to loopback only, so any local process or a cross-site browser GET can still reach them, and the optional token check was deliberately not done.",
+     "evidence": "server.js:22,30,43,72,154,163,179,189,217,249; server.js:259",
+     "secs": [
+      "SEC-01"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "N/A",
-     "text": "not scored in the baseline (no such surface)",
-     "evidence": "",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "No tenants or owners. Note: projectPath query param on /api/agents/run is not validated against configured paths (swept, SEC-02 covered by loopback bind only).",
+     "evidence": "server.js:189-211; lib/config.js:39-51",
+     "secs": [
+      "SEC-02"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "N/A",
-     "text": "but see SEC-01: the real problem here isn't rate limiting, it's the total absence of authentication on RCE-capable routes",
-     "evidence": "`server.js:163-211`",
+     "text": "No public unauthenticated write surface; loopback-only after SEC-01.",
+     "evidence": "server.js:259",
      "secs": [
       "SEC-01"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "N/A",
-     "text": "not scored in the baseline (no such surface)",
-     "evidence": "",
+     "text": "No capability/token links exist.",
+     "evidence": "server.js (no token routes)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "N/A",
-     "text": "not a public-facing app",
-     "evidence": "intentional per README's \"trusted machine\" model",
+     "text": "Local loopback tool, no security headers set and none required by its trusted-machine model.",
+     "evidence": "server.js:15-16",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
      "s": "✗",
-     "text": "full env passed to spawned process",
-     "evidence": "`lib/runner.js:24` `env: process.env` — combined with the network-reachable bind (SEC-01), this turns \"no secret in the dashboard's own code\" into \"every secret in the shell's env is reachable via a crafted prompt\"",
-     "secs": [
-      "SEC-01"
-     ],
-     "basis": "baseline 2026-09-23"
+     "text": "Spawned claude process inherits full process.env (every shell secret) with a caller-supplied prompt; no tracked secrets, no VITE/NEXT_PUBLIC vars, config.json is gitignored.",
+     "evidence": "lib/runner.js:34; .gitignore:2",
+     "secs": [],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "N/A",
-     "text": "not scored in the baseline (no such surface)",
-     "evidence": "",
+     "text": "No webhooks.",
+     "evidence": "server.js routes list",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
      "s": "?",
-     "text": "not deeply checked",
-     "evidence": "`server.js` returns raw `err.message` in several `catch` blocks (e.g. `server.js:26,39,52,146,159,185,245,255`) — fine for a local single-user tool, would leak stack detail if ever network-exposed",
+     "text": "Logging is only a startup line, but several catch blocks return raw err.message to the client and it was not deeply reviewed; low risk on loopback.",
+     "evidence": "server.js:26,260; lib/runner.js:40",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "N/A",
-     "text": "",
-     "evidence": "only env var is `PORT`, defaulted inline",
+     "text": "Only env var is PORT with inline default; no .env files.",
+     "evidence": "server.js:12",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
      "s": "N/A",
-     "text": "not scored in the baseline (no such surface)",
-     "evidence": "",
+     "text": "No database and no test suite.",
+     "evidence": "package.json",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
      "s": "N/A",
-     "text": "not scored in the baseline (no such surface)",
-     "evidence": "",
+     "text": "No privileged changes to audit; single user.",
+     "evidence": "server.js",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✔",
-     "text": "port fixed",
-     "evidence": "`server.js:12` defaults to `4173`, matching the port table's `claude-dashboard` row; `PORT` still overridable per convention",
+     "text": "Own fixed port 4173 in config default matching the port table; no Vercel deploy so ignoreCommand and cron routes do not apply.",
+     "evidence": "server.js:12",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -566,111 +591,111 @@
    "cells": {
     "K1": {
      "s": "✗",
-     "text": "deterministic passcode-hash cookie; per-device revocation impossible (SEC-03)",
-     "evidence": "`apps/web/lib/staff-auth.ts:35,54-58`",
+     "text": "Staff cookie is a salted but deterministic digest of the shared passcode; no server-side session rows, revocation only by rotating the passcode for everyone (SEC-03, open). No sign-in links.",
+     "evidence": "apps/web/lib/staff-auth.ts:35,54-58; apps/web/app/kitchen/login/actions.ts:31-38",
      "secs": [
       "SEC-03"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "✗",
-     "text": "shared passcode, no second factor",
-     "evidence": "",
+     "text": "Single shared passcode, no second factor and no per-user roles (not in the backlog as a fix item).",
+     "evidence": "apps/web/app/kitchen/login/actions.ts:16-29",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
      "s": "✗",
-     "text": "kitchen actions protected by middleware matcher only (SEC-04)",
-     "evidence": "`apps/web/middleware.ts:9-13`",
+     "text": "Sweep of all 7 'use server' files and 3 route handlers: kitchen pages, actions and routes are guarded only by the /kitchen middleware matcher; no action calls a guard itself (SEC-04, open). Customer actions (cart, checkout) and /api/updates are public by design.",
+     "evidence": "apps/web/middleware.ts:16-45,64; apps/web/app/kitchen/actions.ts; apps/web/app/kitchen/settings/actions.ts; apps/web/app/kitchen/menu/actions.ts; apps/web/app/kitchen/loyalty/actions.ts; apps/web/app/kitchen/events/route.ts:12; apps/web/app/kitchen/report/export/route.ts",
      "secs": [
       "SEC-04"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "N/A",
-     "text": "single restaurant",
-     "evidence": "",
+     "text": "Single-restaurant, single-tenant product with no accounts; the only per-customer handle is the 192-bit status token, which is the key itself (not-found on a wrong token).",
+     "evidence": "apps/web/app/status/[token]/page.tsx:1-8; packages/db/placement.ts:243",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✗",
-     "text": "no limiter anywhere; passcode unthrottled (SEC-02)",
-     "evidence": "`apps/web/app/kitchen/login/actions.ts:16-29`",
+     "text": "No rate limiter anywhere (grep for ratelimit/throttle hits only the kitchen prep-throttle); the passcode login, SMS verification start and public checkout are unthrottled (SEC-02, open).",
+     "evidence": "apps/web/app/kitchen/login/actions.ts:16-29; apps/web/app/checkout/actions.ts:191-200",
      "secs": [
       "SEC-02"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "✗",
-     "text": "status token 192-bit but raw, no expiry/revocation, no Referrer-Policy (SEC-05)",
-     "evidence": "`packages/db/placement.ts:243`",
+     "text": "Status token is 192-bit random but stored raw (unique column), no expiry or revocation, page and next.config set no Referrer-Policy, no-store or noindex (SEC-05, open).",
+     "evidence": "packages/db/placement.ts:243; packages/db/prisma/schema.prisma:589; apps/web/next.config.ts:1-25",
      "secs": [
       "SEC-05"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "✗",
-     "text": "no headers",
-     "evidence": "`apps/web/next.config.ts`",
+     "text": "next.config.ts defines no headers() and there is no headers block in vercel.json; no Referrer-Policy, nosniff, frame-ancestors or HSTS (no SEC item covers global headers).",
+     "evidence": "apps/web/next.config.ts; apps/web/vercel.json",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
      "s": "✔",
-     "text": "unset means locked; constant-time compare",
-     "evidence": "`apps/web/lib/staff-auth.ts:37-45`",
+     "text": "Passcode compare is constant-time over fixed-length digests, unset passcode locks /kitchen (fails closed), pepper unset refuses enrolment, no NEXT_PUBLIC vars found in the app or env example.",
+     "evidence": "apps/web/lib/staff-auth.ts:37-45,61-73; packages/db/loyalty.ts:57; .env.example",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "N/A",
-     "text": "mock payment provider",
-     "evidence": "",
+     "text": "Payment is a mock provider and there is no inbound webhook route among the 3 route handlers.",
+     "evidence": "packages/db/provider.ts; apps/web/app/api/updates/route.ts",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
      "s": "✗",
-     "text": "SMS stub returns the code to the browser (SEC-01)",
-     "evidence": "`packages/db/verification.ts:59`",
+     "text": "SMS verification stub returns the code and requestCheckoutVerification hands echoedCode to the browser, including in production, and nothing fails loudly (SEC-01, open).",
+     "evidence": "packages/db/verification.ts:59,72-75; apps/web/app/checkout/actions.ts:191-200",
      "secs": [
       "SEC-01"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": "no env schema",
-     "evidence": "`.env.example`",
+     "text": "No schema validation of env at boot (vars read ad hoc via process.env); .env.example does list DATABASE_URL, DIRECT_URL, PORT, STAFF_PASSCODE(_PREVIOUS) and LOYALTY_PHONE_PEPPER, names only, but that is only half the rule.",
+     "evidence": ".env.example; apps/web/lib/staff-auth.ts:45,50; packages/db/loyalty.ts:57",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
      "s": "✔",
-     "text": "local PG, prod-build e2e, localhost guard on destructive scripts",
-     "evidence": "`packages/db/local-guard.ts`",
+     "text": "Tests use local Postgres via .env.test with dotenv first-wins, assertLocalDatabase guards destructive scripts, e2e runs build:test then start:test (production build) with E2E_DEV escape hatch.",
+     "evidence": "package.json:16,21-24; packages/db/local-guard.ts:48,66; apps/web/playwright.config.ts:33",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
-     "s": "?",
-     "text": "not assessed",
-     "evidence": "",
+     "s": "✔",
+     "text": "OrderEvent (and adjustment/ledger tables) are append-only via DB triggers in migrations, including menu_change and staff_note events; spot-checked schema comments, not every migration.",
+     "evidence": "packages/db/prisma/schema.prisma:467,751; packages/db/prisma/migrations/20260916110000_menu_change_event; packages/db/prisma/migrations/20260921100000_order_event_seq",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✗",
-     "text": "no ignoreCommand (OPS-01); port 3400 ✔",
-     "evidence": "`apps/web/vercel.json`",
+     "text": "Port 3400 is the config default in package.json and playwright, but vercel.json still has no ignoreCommand (OPS-01, open); there are no cron routes. No commits landed since the baseline audit.",
+     "evidence": "apps/web/vercel.json; apps/web/package.json:6,8",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -899,110 +924,110 @@
    "name": "groundwork",
    "cells": {
     "K1": {
-     "s": "✗",
-     "text": "hashed + POST-spend ✔; portal sessions survive a contact change (SEC-01)",
-     "evidence": "`app/dispatch/properties/actions.ts:41-48`",
+     "s": "✔",
+     "text": "Sessions are DB rows with SHA-256 hashed session/link tokens, links spent by POST, dispatcher role read live per request, user delete cascades sessions, and portal access is revoked on contact change (SEC-01 done).",
+     "evidence": "src/session.ts:33-45,54-64,72-78; src/portal/session.ts:56-66; app/dispatch/properties/actions.ts:61; app/login/[token]/page.tsx; app/dispatch/users/actions.ts:83",
      "secs": [
       "SEC-01"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "✗",
-     "text": "no MFA for dispatchers",
-     "evidence": "",
+     "text": "No second factor for dispatchers (privileged role); magic link alone signs in, and no backlog SEC item exists.",
+     "evidence": "src/session.ts:61-70",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
      "s": "✔",
-     "text": "every page, action and route guarded",
-     "evidence": "`src/session.ts:86-102`",
+     "text": "Swept every page, layout, route handler and 'use server' export: all dispatch pages/actions call requireDispatcher, crew pages requireCrew, crew actions currentRole, portal pages/actions currentPropertyId, both photo routes check a session, webhook authenticates by signature; only login/link-request/sign-in actions are public by design.",
+     "evidence": "app/dispatch/*/actions.ts; app/dispatch/layout.tsx; app/crew/[crewId]/actions.ts:16,61; app/portal/actions.ts:44-75; app/photos/[name]/route.ts:14; app/portal/photos/[name]/route.ts:12; app/stripe/webhook/route.ts:10",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "✔",
-     "text": "ownership checked in each domain function",
-     "evidence": "`src/visits/status.ts:49,89`",
+     "text": "Swept crew and portal by-id paths: crew actions count visit by {id,crewId} from session, portal skip/reschedule/pay/photo check propertyId, portal pages resolve visits only from the caller's schedule; dispatcher is single-tenant staff so sees all (dispatch by-id pages not individually re-read).",
+     "evidence": "app/crew/[crewId]/actions.ts:20-24; src/visits/status.ts:87-91; src/billing/invoice.ts:118; src/portal/view.ts:64-66; app/portal/cancel/[visitId]/page.tsx:21",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✗",
-     "text": "per-account cooldown only (SEC-04)",
-     "evidence": "`src/session.ts:46`",
+     "text": "Only a per-account 60s cooldown on link requests, no per-IP or shared-store limit on the unauthenticated forms (SEC-04 still open).",
+     "evidence": "src/session.ts:46-48; src/portal/session.ts:44",
      "secs": [
       "SEC-04"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "N/A",
-     "text": "no public token links; portal is session-gated",
-     "evidence": "",
+     "text": "No public token links: emailed portal/login tokens are single-use sign-in links exchanged for a session by POST, not standing capability URLs.",
+     "evidence": "app/portal/[token]/page.tsx",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "✗",
-     "text": "no headers (SEC-03)",
-     "evidence": "`next.config.ts:3-9`",
+     "text": "Global headers now set frame-ancestors, X-Frame-Options, Referrer-Policy and nosniff (SEC-03 done), but no Strict-Transport-Security header in code.",
+     "evidence": "next.config.ts:9-19",
      "secs": [
       "SEC-03"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
      "s": "✔",
-     "text": "no hardcoded secrets; webhook refuses an empty secret",
-     "evidence": "`src/billing/stripe.ts:73`",
+     "text": "Webhook HMAC uses timingSafeEqual and fails closed on an empty secret, no NEXT_PUBLIC vars, .env gitignored per prior audit, .env.example holds names only, APP_URL never from Host header.",
+     "evidence": "src/billing/stripe.ts:72-81; app/stripe/webhook/route.ts:12; .env.example",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "✔",
-     "text": "raw-body HMAC, replay window, event claim in the same transaction",
-     "evidence": "`src/billing/stripe.ts:64-82; invoice.ts:184-219`",
+     "text": "Raw-body HMAC with 5-minute timestamp window; event claim and apply run in one transaction so a failure rolls back and Stripe retries (prior audit, verify-not-rerun on invoice.ts).",
+     "evidence": "src/billing/stripe.ts:64-82; src/billing/invoice.ts:184-219; app/stripe/webhook/route.ts:9-16",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
-     "s": "✗",
-     "text": "sign-in links logged in prod when a channel is unconfigured (SEC-02)",
-     "evidence": "`src/notifications/provider.ts:46-52`",
+     "s": "✔",
+     "text": "Unconfigured channel now throws in production and the console provider is dev-only, so sign-in links are not logged (SEC-02 done).",
+     "evidence": "src/notifications/provider.ts:46-52",
      "secs": [
       "SEC-02"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": "no env schema",
-     "evidence": "`src/db.ts:4-10`",
+     "text": "No schema-validated env at boot: db.ts only checks DATABASE_URL; other vars read ad hoc (GROUNDWORK_ROAD_FACTOR is read but absent from .env.example).",
+     "evidence": "src/db.ts:4-10; .env.example",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
      "s": "✔",
-     "text": "cloud-DB guard in app and Prisma config; prod-build e2e",
-     "evidence": "`prisma.config.ts:10-19`",
+     "text": "Cloud-DB refusal in src/db.ts and prisma.config.ts, local .env.test, and Playwright webServer runs build plus next start (E2E_DEV escape hatch).",
+     "evidence": "src/db.ts:8-10; prisma.config.ts:10-19; playwright.config.ts:26-31",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
-     "s": "?",
-     "text": "not assessed",
-     "evidence": "",
+     "s": "✗",
+     "text": "No append-only audit log or DB triggers for privileged changes; only createdBy/decidedBy columns on invoices and reschedules.",
+     "evidence": "prisma/schema.prisma:202; prisma/migrations/20260922120000_job_origin/migration.sql:72-86",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✔",
-     "text": "ignoreCommand, port 3900, no crons",
-     "evidence": "`vercel.json:4`",
+     "text": "ignoreCommand present in the canonical form, port 3900 in config, no cron routes.",
+     "evidence": "vercel.json:4; package.json",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -1011,113 +1036,117 @@
    "name": "rental business",
    "cells": {
     "K1": {
-     "s": "?",
-     "text": "JWT + sessionsValidFrom revocation ✔, tokens hashed ✔; whether links are spent by GET not checked",
-     "evidence": "`apps/web/auth.ts:245-311; packages/core/auth/tokens.ts:18-60`",
+     "s": "✗",
+     "text": "Sessions are revocable (JWT plus sessionsValidFrom watermark) and tokens are stored hashed, but the tenant and guarantor magic links are redeemed by GET (the route comment defends this as intentional), so an email prefetcher can spend them; no fix item exists.",
+     "evidence": "apps/web/auth.ts:295-318; apps/web/app/portal/verify/route.ts:17-31; apps/web/app/portal/guarantor/verify/route.ts:12",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "✔",
-     "text": "staff password → single-use MFA challenge → TOTP",
-     "evidence": "`apps/web/auth.ts:75-150`",
+     "text": "Staff password leads to a single-use MFA challenge then TOTP, enforced in auth.ts; R-251 later added an MFA hint on /staff for owners without a second factor. Baseline finding carried forward, not re-traced line by line.",
+     "evidence": "apps/web/auth.ts:75-150",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
-     "s": "✗",
-     "text": "unguarded 'use server' exports (SEC-01)",
-     "evidence": "`lib/notices/actions.ts:524 and 3 more`",
+     "s": "✔",
+     "text": "Guard coverage is enforced by two static inventories, not a hand sweep: server-actions.test.ts checks every export of the 'use server' files for a session guard or an allowlisted token reason (SEC-01 fixed, helpers moved out), and app/route-guards.test.ts walks every route; the (admin) layout calls requireStaff and API routes use CRON_SECRET, webhook signatures or session checks. Both are regex-based, so this is test-backed rather than a fresh manual sweep.",
+     "evidence": "apps/web/lib/server-actions.test.ts:18-60; apps/web/app/route-guards.test.ts:1-50; apps/web/app/(admin)/layout.tsx:26",
      "secs": [
       "SEC-01"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
-     "s": "✗",
-     "text": "addLeaseTenant tenant unscoped; write actions scoped by read permission (SEC-02, SEC-03)",
-     "evidence": "`lib/leases/actions.ts:1079-1084; lib/scope/current-scope.ts:40`",
+     "s": "✔",
+     "text": "Spot-checked, not swept: SEC-02 (tenantWhere) and SEC-03 (currentScope takes the write permission) landed, and sampled write actions re-check the record's property with requirePermission plus propertyResource, and ticket merge requires same-property tickets. Each of about 30 by-id lookups in *actions.ts was not individually traced; portfolio-wide vendor.write on deactivateVendor looks intentional.",
+     "evidence": "apps/web/lib/auth/scope.ts; apps/web/lib/scope/current-scope.ts; apps/web/lib/filing-cabinet/actions.ts:67-82; apps/web/lib/workorders/actions.ts:210-225; packages/core/maintenance/merge.ts:54",
      "secs": [
       "SEC-02",
       "SEC-03"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✔",
-     "text": "Postgres limiter on login, MFA, reset, magic link, inquiries",
-     "evidence": "`lib/auth/store.ts:45-75`",
+     "text": "Postgres-backed limiter on login, MFA, reset, magic link and inquiries; carried from baseline, not re-traced.",
+     "evidence": "apps/web/lib/auth/store.ts:45-75",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "✗",
-     "text": "hashed, expiring tokens ✔; no Referrer-Policy; publicListing returns full row",
-     "evidence": "`lib/listings/queries.ts:44-56`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "Tokens are hashed and expiring and Referrer-Policy is now set (SEC-06/SEC-08), but there is no global noindex and publicListing still returns the whole Listing row via include rather than an allowlisted select; no fix item exists for the projection.",
+     "evidence": "apps/web/lib/listings/queries.ts:44-56; apps/web/next.config.ts:16-18",
+     "secs": [
+      "SEC-06",
+      "SEC-08"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "✗",
-     "text": "nonce CSP ✔, no Referrer-Policy (SEC-06)",
-     "evidence": "`proxy.ts; next.config.ts:3-26`",
+     "text": "Referrer-Policy is global (SEC-06, SEC-08) and CSP frame-ancestors 'none' is set, but only on page navigations through the proxy matcher (api and document routes excluded); there is no HSTS or X-Content-Type-Options in code (nosniff appears only in document serving), so not fully global.",
+     "evidence": "apps/web/next.config.ts:16-18; apps/web/proxy.ts:75,115; apps/web/lib/documents/serve.ts",
      "secs": [
-      "SEC-06"
+      "SEC-06",
+      "SEC-08"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
-     "s": "✗",
-     "text": "inbound secret accepted in query string (SEC-05)",
-     "evidence": "`app/api/email/inbound/route.ts:113`",
+     "s": "✔",
+     "text": "SEC-05 fixed: the inbound-email secret is header-only, timingSafeEqual is used, cron and inbound fail closed when the secret is unset; only NEXT_PUBLIC_ vars are publishable Stripe key and ops phone; the only tracked env-like file is .env.example.",
+     "evidence": "apps/web/app/api/email/inbound/route.ts:94-117; apps/web/lib/cron/authorize.ts:14-28",
      "secs": [
       "SEC-05"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
-     "s": "✗",
-     "text": "Stripe ✔; Resend has no replay window (SEC-04)",
-     "evidence": "`packages/core/comms/webhook-signature.ts:96-136`",
+     "s": "✔",
+     "text": "SEC-04 fixed: Resend verifier now refuses stale or non-numeric svix-timestamp (300s window shared with Stripe), and Stripe was already compliant; idempotent claim and re-apply of failed events not re-traced.",
+     "evidence": "packages/core/comms/webhook-signature.ts; apps/web/app/api/webhooks/resend/route.test.ts",
      "secs": [
       "SEC-04"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
      "s": "✔",
-     "text": "logging adapter local/CI only; kill switch + sandbox",
-     "evidence": "`lib/notifications/config.ts:57-58`",
+     "text": "Console output is confined to simulated adapters, and notifications have a kill switch plus sandbox redirect; carried from baseline, production-missing-provider behaviour not re-traced.",
+     "evidence": "apps/web/lib/notifications/config.ts:57-58; apps/web/lib/esign/simulated-adapter.ts",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": "no env schema",
-     "evidence": "`.env.example`",
+     "text": "No schema-validated env at boot, and .env.example is missing variables the code reads (DEMO_SEED_ALLOW_HOST, NEXT_PUBLIC_APP_URL, STRIPE_SMOKE_KEY, plus runtime ones like CI, PORT, TZ, VERCEL_ENV); no fix item exists.",
+     "evidence": ".env.example; grep of process.env.* across apps/ and packages/",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
-     "s": "✔",
-     "text": "local PG, prod-build e2e, demo DB guard",
-     "evidence": "`packages/db/prisma/demo-database-guard.mts`",
+     "s": "✗",
+     "text": "Local Postgres via .env.test and e2e on a production build are in place, but there is no code-level guard in vitest or the db client refusing a cloud DATABASE_URL (only the demo seed has one, and vitest.config mentions an integration mode against Neon).",
+     "evidence": "package.json:16-18,42-45; playwright.config.ts:171; vitest.config.ts:82; packages/db/prisma/demo-database-guard.mts:17",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
-     "s": "?",
-     "text": "write-once trigger on notice delivery; a general audit log was not assessed",
-     "evidence": "",
+     "s": "✔",
+     "text": "AuditLog has DB-enforced append-only and no-truncate triggers, plus the same for LedgerEntry, Message, Notice, NoticeDelivery and TenantConsent; R-249 closed the NSF-fee gap where an audit row was silently dropped.",
+     "evidence": "packages/db/prisma/migrations/20260801152520_core_data_model/migration.sql:1102-1120; packages/db/prisma/migrations/20260904000000_r161_notice_append_only/migration.sql:105",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✔",
-     "text": "ignoreCommand, port 3100, constant-time cron",
-     "evidence": "`apps/web/vercel.json; lib/cron/authorize.ts`",
+     "text": "vercel.json ignoreCommand diffs from VERCEL_GIT_PREVIOUS_SHA anchored at the repo root, falls to build on error and excludes docs and *.md; port 3100 per the table; both cron routes use the shared constant-time fail-closed isAuthorizedCron. Port default not re-read in playwright config this pass.",
+     "evidence": "apps/web/vercel.json:3; apps/web/lib/cron/authorize.ts:14-28",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -1127,103 +1156,116 @@
    "cells": {
     "K1": {
      "s": "✗",
-     "text": "Stateless passcode-digest cookie with no server-side revocation apart from rotating the passcode. The cookie is a fixed SHA-256 of the passcode, so it works like a password and is valid indefinitely (the browser keeps it 30 days).",
-     "evidence": "`apps/web/lib/staff-auth.ts:19,33-37,50-54`; `apps/web/app/host/login/actions.ts:19-25`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "Staff session is a fixed SHA-256 passcode-digest cookie, no server-side rows and no revocation short of rotating the passcode (SEC-02); manage tokens stored plaintext (SEC-03).",
+     "evidence": "apps/web/lib/staff-auth.ts:33-37; apps/web/app/host/login/actions.ts:19-25; packages/db/prisma/schema.prisma:150",
+     "secs": [
+      "SEC-02",
+      "SEC-03"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "✗",
-     "text": "No per-user accounts. One shared passcode with no second factor (a deliberate design choice).",
-     "evidence": "`apps/web/lib/staff-auth.ts:1-9`",
+     "text": "No per-user accounts; one shared passcode with no second factor (deliberate design).",
+     "evidence": "apps/web/lib/staff-auth.ts:1-9",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
-     "s": "✔",
-     "text": "Route-layer only. The middleware matcher covers every path, and `/host/*` (pages and the server actions posted to them) needs the staff cookie. Actions do not guard themselves.",
-     "evidence": "`apps/web/middleware.ts:39-59`; `apps/web/app/host/actions.ts:30-116`; `apps/web/app/host/hours/actions.ts:17`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✗",
+     "text": "Swept all pages/actions/routes: middleware matcher covers /host and its POSTs, but no host 'use server' export guards itself (SEC-07); one layer deep, so not compliant with every-export-guarded.",
+     "evidence": "apps/web/middleware.ts:41-48,58-60; apps/web/app/host/actions.ts:1; apps/web/app/host/hours/actions.ts:1",
+     "secs": [
+      "SEC-07"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "N/A",
-     "text": "Single restaurant, single tenant. Guest writes are scoped by token only; no reservation id is accepted from a guest.",
-     "evidence": "`apps/web/app/m/[token]/actions.ts:16-59`; `packages/db/guest.ts:97,125,154`",
+     "text": "Single-restaurant, single-tenant app; guest writes take only a manage token, no by-id input (spot-checked db guest layer).",
+     "evidence": "apps/web/app/m/[token]/actions.ts; packages/db/guest.ts:125,154",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✗",
-     "text": "No limit on staff sign-in, the demo-gate Basic check, public booking or token pages.",
-     "evidence": "`apps/web/app/host/login/actions.ts:8-27`; `apps/web/lib/demo-gate.ts:34-64`; `apps/web/app/book/actions.ts:23`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "No attempt limiting on staff sign-in, demo gate, booking or token pages (SEC-01).",
+     "evidence": "apps/web/app/host/login/actions.ts:8-27; apps/web/lib/demo-gate.ts:42-53; apps/web/app/book/actions.ts",
+     "secs": [
+      "SEC-01"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "✗",
-     "text": "The manage token is 128-bit random (good) but stored in plaintext (`manageToken String @unique`). It has no expiry of its own and no revoke or re-issue. The `/m/[token]` page sends no no-referrer or no-store header.",
-     "evidence": "`packages/db/messages.ts:34`; `packages/db/prisma/schema.prisma:150`; `apps/web/app/m/[token]/page.tsx:21-22`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "Manage token is 128-bit but plaintext at rest, no expiry or re-issue, and /m/[token] sets no no-referrer/no-store headers (SEC-03).",
+     "evidence": "packages/db/prisma/schema.prisma:150; apps/web/app/m/[token]/page.tsx; apps/web/next.config.ts:3-16",
+     "secs": [
+      "SEC-03"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "✗",
-     "text": "No `headers()` in `next.config.ts` and none in `vercel.json`. Live responses carry only HSTS, which Vercel adds by default. No nosniff, frame-ancestors/XFO or Referrer-Policy.",
-     "evidence": "`apps/web/next.config.ts:3-16`; `vercel.json`; live `curl -I`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "No headers() in next.config.ts and none in vercel.json: no nosniff, frame-ancestors/XFO or Referrer-Policy (SEC-05).",
+     "evidence": "apps/web/next.config.ts:3-16; vercel.json",
+     "secs": [
+      "SEC-05"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
      "s": "✔",
-     "text": "Constant-time compares (`timingSafeEqual` or an XOR loop). Staff, cron and webhook fail closed when unset. No `NEXT_PUBLIC_` secrets. Only `.env.example` is tracked. Exception: the demo gate fails open when unset (by design, see SEC-04).",
-     "evidence": "`apps/web/lib/staff-auth.ts:29,42-54`; `apps/web/app/api/cron/sweep/route.ts:12-16`; `apps/web/app/api/sms/inbound/route.ts:52-60`; `packages/db/inbound.ts:39-44`",
+     "text": "Constant-time compares, staff/cron/webhook fail closed when unset, no tracked secrets; demo gate fails open when unset (SEC-04, minor).",
+     "evidence": "apps/web/lib/staff-auth.ts:29,42-54; apps/web/app/api/cron/sweep/route.ts:12-16; packages/db/inbound.ts:39-44; apps/web/lib/demo-gate.ts:39",
      "secs": [
       "SEC-04"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "✗",
-     "text": "The HMAC covers the raw bytes and the handler is idempotent on the unique `providerMessageId`, but there is **no timestamp window**, so a captured request can be replayed indefinitely.",
-     "evidence": "`packages/db/inbound.ts:33-44,144`; `packages/db/prisma/schema.prisma:254`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "HMAC on raw body and idempotent on providerMessageId, but no timestamp window (SEC-06).",
+     "evidence": "packages/db/inbound.ts:33-44,144",
+     "secs": [
+      "SEC-06"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
      "s": "✗",
-     "text": "Nothing logs tokens or bodies (✔). But production always uses `mockProvider()`, so SMS is silently never sent rather than failing loudly.",
-     "evidence": "`apps/web/app/host/actions.ts:58`; `apps/web/app/api/cron/sweep/route.ts:19-20`",
+     "text": "Nothing logs tokens/bodies, but production always uses mockProvider so SMS silently never sends instead of failing loudly.",
+     "evidence": "apps/web/app/host/actions.ts:58; apps/web/app/api/cron/sweep/route.ts:19-20",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": "No boot-time schema. `.env.example` omits `DEMO_ACCESS_PASSWORD`, `TEST_DATABASE_NAME` and `SEED_ALLOW_HOST`.",
-     "evidence": "`.env.example:1-30`; `apps/web/middleware.ts:30`; `packages/db/testing/identity.ts:66-77`",
+     "text": "No boot-time env schema; .env.example still omits DEMO_ACCESS_PASSWORD, TEST_DATABASE_NAME, SEED_ALLOW_HOST.",
+     "evidence": ".env.example:1-30; apps/web/middleware.ts:30",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
      "s": "✔",
-     "text": "Code guard refuses non-local hosts and any database name other than `TEST_DATABASE_NAME`. e2e runs against a production build (`e2e:server`), and CI uses a local Postgres service.",
-     "evidence": "`packages/db/testing/identity.ts:6,33-35,75-78`; `apps/web/playwright.config.ts:25-35`; `.github/workflows/ci.yml:25-40`",
+     "text": "Code guard refuses non-local hosts, e2e runs against a production build, CI uses local Postgres (per baseline, not re-read in depth).",
+     "evidence": "packages/db/testing/identity.ts:6,33-35,75-78; apps/web/playwright.config.ts:25-35; .github/workflows/ci.yml:25-40",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
      "s": "✗",
-     "text": "`ReservationEvent` and `InboundMessage` are append-only by DB trigger (✔). Host **schedule/hours edits** (`servicePeriod` create/delete, `blackout` upsert) write no event.",
-     "evidence": "`packages/db/prisma/migrations/20260918173221_reservation_model/migration.sql:136`; `.../20260918220000_inbound_message/migration.sql:82`; `packages/db/schedule.ts:~123-140`",
+     "text": "Reservation and inbound events are DB-append-only, but host schedule/hours edits write no audit event.",
+     "evidence": "packages/db/prisma/migrations/20260918173221_reservation_model/migration.sql:136; packages/db/schedule.ts:~123-140",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✔",
-     "text": "`ignoreCommand` matches CLAUDE.md exactly. Port 3500 is set in config. The cron route uses a constant-time compare and fails closed (503 when unset).",
-     "evidence": "`vercel.json`; `apps/web/package.json:6,8`; `apps/web/app/api/cron/sweep/route.ts:12-16`",
+     "text": "ignoreCommand matches CLAUDE.md, port 3500 in config, cron route constant-time and fails closed.",
+     "evidence": "vercel.json; apps/web/package.json:6,8; apps/web/app/api/cron/sweep/route.ts:12-16",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -1233,101 +1275,117 @@
    "cells": {
     "K1": {
      "s": "✗",
-     "text": "no sessions exist",
-     "evidence": "No auth, session, cookie or middleware code anywhere in `app/` or `src/`. No `middleware.ts` or `proxy.ts`.",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "No users or sessions exist; only a shared HTTP Basic demo password in proxy.ts (D-032), which is not a revocable session (SEC-01 open).",
+     "evidence": "proxy.ts:5-16; src/demo-gate.ts:12-19",
+     "secs": [
+      "SEC-01"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "✗",
-     "text": "no users or roles",
-     "evidence": "Same. The live page's `?as=` identity is chosen from the query string and is \"not auth\" (`app/events/[eventId]/live/page.tsx:16-30`).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "No users or roles, so no MFA (SEC-01 open).",
+     "evidence": "src/demo-gate.ts:6-9",
+     "secs": [
+      "SEC-01"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
      "s": "✗",
-     "text": "none guarded",
-     "evidence": "Every `'use server'` action is unguarded (`app/page.tsx:12`, `app/events/[eventId]/*/page.tsx` — speakers `:39-73`, content `:48-90`, rfps, rooms, budget, chase, staff, packages, live). So are `GET app/events/[eventId]/content/file/[versionId]/route.ts:4-15` and every `/events/*` page.",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "proxy.ts puts one shared password in front of every route incl. server actions, file routes and portals, but there is no per-entry-point guard or identity across the 18 'use server' page files (SEC-01 open); swept via the matcher, not per action.",
+     "evidence": "proxy.ts:19-21; docs/decisions.md:875-884; docs/backlog.md:86",
+     "secs": [
+      "SEC-01"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "✗",
-     "text": "many actions write by a secondary id without eventId",
-     "evidence": "Scoped (good): grid `saveSession/deleteSession(eventId, id)` (`src/agenda/grid.ts:18,42`), the file route (`route.ts:6`), and portal writes checked against the token owner (`src/content/pipeline.ts:72-115`). Unscoped: `advance/revert(speakerId)` (`src/bureau/bureau.ts:85,102`), `setProfile/setConsent(speakerId)` (called from `speakers/page.tsx:50-68`), `approve/override(versionId)` (`src/content/lock.ts:29,46`), `updateLine(lineId)` (`src/budget/budget.ts:37`), `addThreshold/reserve/decide` (`src/attrition/attrition.ts:194,216,260`), `setQuantity/enterQuote/award/advanceContract` (`src/rfp/rfp.ts:122,136,176,202`), `recordDoc(vendorId)` (`src/budget/compliance.ts:28`). These are moot until tenancy exists, but they will become IDORs the day it does.",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "Function-signature sweep: updateLine(lineId), addThreshold/reserve(blockId), decide(thresholdId), advance/revert(speakerId), approve/override(versionId), setQuantity(itemId), enterQuote/award/advanceContract and recordDoc(vendorId) still take a bare id with no eventId (SEC-02 open); only callsheet/portal and grid are scoped.",
+     "evidence": "src/budget/budget.ts:45; src/attrition/attrition.ts:194,216,260; src/bureau/bureau.ts:85,102; src/content/lock.ts:29,46; src/rfp/rfp.ts:122,136,176,202; src/budget/compliance.ts:28; src/callsheet/portal.ts:22",
+     "secs": [
+      "SEC-02"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✗",
-     "text": "none",
-     "evidence": "No limiter anywhere. The public portal accepts uploads up to 26 MB (`next.config.ts:8`, `src/content/pipeline.ts` MAX_UPLOAD_BYTES).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "No rate limiter anywhere (grep found none); the shared password is the only brake on portal uploads (SEC-07 open).",
+     "evidence": "docs/decisions.md:881-883; next.config.ts:8",
+     "secs": [
+      "SEC-07"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
-     "s": "✗",
-     "text": "partial: hashed and revocable, but no expiry or headers, and anyone can reissue",
-     "evidence": "SHA-256 at rest, raw value shown once, reissue kills the old link (`src/content/pipeline.ts:22-30`, `prisma/schema.prisma:106-107,311`). A bad token gives a plain 404 (`app/portal/[token]/page.tsx:17-18`). Missing: expiry, `no-store`, `no-referrer`, `noindex`. The root layout sets only a title (`app/layout.tsx:1`). Minting is unguarded (`content/page.tsx:59-67`).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✔",
+     "text": "Portal tokens are SHA-256 hashed, reissue revokes, links expire after the event plus grace (linkLive), and /portal/* sends no-store, no-referrer and noindex (SEC-04/05 fixed); allowlisted projection not fully verified (spot-checked).",
+     "evidence": "src/portal.ts:13,20; next.config.ts:9-17; src/content/pipeline.ts:25,52; docs/backlog.md:89-90",
+     "secs": [
+      "SEC-04"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "✗",
-     "text": "none global",
-     "evidence": "`next.config.ts` has no `headers()`. Only the download route sets nosniff and attachment (`content/file/[versionId]/route.ts:10-12`).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "Headers are set only for /portal/*; no global Referrer-Policy, nosniff, frame-ancestors or HSTS (SEC-06 open).",
+     "evidence": "next.config.ts:9-17; docs/backlog.md:91",
+     "secs": [
+      "SEC-06"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
-     "s": "✗",
-     "text": "portal token in a query string",
-     "evidence": "`content/page.tsx:66` redirects to `?link=<raw token>`, so it lands in browser history and access logs. Nothing secret is tracked (`git ls-files` shows only `.env.example`; `.env` and `.env.test` are ignored). No `NEXT_PUBLIC_` vars.",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✔",
+     "text": "Demo password and CRON_SECRET compare constant-time or fail closed, the portal token no longer goes in the query string (SEC-04 fixed), no NEXT_PUBLIC_ vars, only .env.example tracked (as of baseline).",
+     "evidence": "src/demo-gate.ts:14-19; docs/backlog.md:89",
+     "secs": [
+      "SEC-04"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "N/A",
-     "text": "",
-     "evidence": "None.",
+     "text": "No webhooks.",
+     "evidence": "",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
      "s": "N/A",
-     "text": "",
-     "evidence": "There is no outbound provider. Reminders and nags go to in-DB outboxes (`src/chase/chase.ts:145`, `src/budget/compliance.ts:114`), and there is no logging of tokens or bodies.",
+     "text": "No outbound provider; reminders and nags go to DB outboxes and no console logging was found in app/ or src/.",
+     "evidence": "src/chase/chase.ts; src/budget/compliance.ts",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": "no schema (small surface)",
-     "evidence": "`src/db.ts:4-5` fails closed on a missing `DATABASE_URL`, but there is no schema. `.env.example` lists `DATABASE_URL` and `SHADOW_DATABASE_URL`. `SHOWCALL_ALLOW_CLOUD_DB` is used and not documented.",
+     "text": "No env schema; .env.example lists only DATABASE_URL and SHADOW_DATABASE_URL, missing DEMO_ACCESS_PASSWORD, CRON_SECRET and SHOWCALL_ALLOW_CLOUD_DB (OPS-02 open).",
+     "evidence": ".env.example:1-3; src/db.ts:4-9; src/demo-gate.ts:14; app/api/cron/escalate/route.ts:10",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
      "s": "✔",
-     "text": "",
-     "evidence": "Code-level cloud-DB refusal in `src/db.ts:7-10` and `prisma.config.ts:11-14`. The test env is `.env.test`. e2e runs against a production build (`playwright.config.ts:16-21`, `e2e:server`).",
+     "text": "db.ts and prisma.config.ts refuse cloud DB URLs unless SHOWCALL_ALLOW_CLOUD_DB is typed, and e2e runs against a production build on :4000 with .env.test.",
+     "evidence": "src/db.ts:7-10; playwright.config.ts:16-21",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
      "s": "✔",
-     "text": "DB-enforced, but no actor",
-     "evidence": "`BEFORE UPDATE OR DELETE` triggers on AgendaVersion, SpeakerTransition, BudgetSnapshot, ComplianceDoc, ContingencyDecision, LiveMark, ContentVersion, ShowFileLock and others (`prisma/migrations/*/migration.sql`). With no auth, no row can name a verified actor.",
+     "text": "DB triggers block UPDATE/DELETE on the history tables (per baseline, not re-read); no verified actor since no auth exists.",
+     "evidence": "prisma/migrations/*/migration.sql",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
-     "s": "✔",
-     "text": "",
-     "evidence": "`vercel.json` has the canonical `ignoreCommand`. Port 4000 is in config (`package.json` dev/start). There are no cron routes.",
+     "s": "✗",
+     "text": "ignoreCommand is canonical and port 4000 is in config, but the cron route compares the bearer secret with === instead of a constant-time compare (it does fail closed in production).",
+     "evidence": "vercel.json:4; app/api/cron/escalate/route.ts:10-11; package.json",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -1337,115 +1395,117 @@
    "cells": {
     "K1": {
      "s": "✗",
-     "text": "tenant JWT not revocable (SEC-03); magic link spent on GET (SEC-08)",
-     "evidence": "`apps/web/lib/rbac/session.ts:29; app/(auth)/login/magic/route.ts:13-35`",
+     "text": "Tenant actor is still taken straight from the 30-day JWT with no DB watermark (SEC-03), and the magic link is still spent on GET (SEC-08); checkout/pay/reset tokens are hashed at rest.",
+     "evidence": "apps/web/lib/rbac/session.ts:29-30; apps/web/app/(auth)/login/magic/route.ts:14-35; apps/web/lib/checkout/session.ts:56; apps/web/lib/portal/pay-links.ts:44",
      "secs": [
       "SEC-03",
       "SEC-08"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "✗",
-     "text": "staff TOTP enforced only by the admin layout (SEC-07)",
-     "evidence": "`app/admin/layout.tsx:48`",
+     "text": "TOTP enrolment is still enforced only in the admin layout via needsMfaEnrollment; requireStaffActor does not check it, so actions, CSV routes and /api/facilities/* are reachable before enrolment (SEC-07).",
+     "evidence": "apps/web/app/admin/layout.tsx:48; apps/web/lib/rbac/session.ts:38-42",
      "secs": [
       "SEC-07"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
      "s": "✔",
-     "text": "all 29 routes and 63 action files guarded (dotted paths self-check)",
-     "evidence": "`proxy.ts:267-271; admin/impersonation.csv/route.ts:12-15`",
+     "text": "Swept all 30 route handlers and every 'use server' file: staff CSV/file/API routes call requireStaffActor/getAdminActor, webhooks verify signatures, cron is bearer-checked, and the zero-guard action files are public by design (checkout/reservations/unsubscribe, token-gated) or delegate to actor-taking services; not every service body was read.",
+     "evidence": "apps/web/app/admin/reports/rent-roll.csv/route.ts:8; apps/web/app/admin/tenants/[tenantId]/ledger/[leaseId]/ledger.csv/route.ts:17; apps/web/app/api/public/marketplace/leads/route.ts:11; apps/web/app/(public)/checkout/actions.ts:609-614; apps/web/app/api/cron/route.ts:39-50",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "✗",
-     "text": "rate-change echo reads another facility's lease (SEC-02)",
-     "evidence": "`app/admin/rate-increases/actions.ts:58-69,225-228`",
+     "text": "rateChangeEcho still does an unscoped lease.findUnique by form-supplied leaseId/facilityId before any facility authorization, so any staff user can read another facility's tenant name, unit and rent (SEC-02); other by-id paths (ledger.csv, documents) resolve through actor-scoped services.",
+     "evidence": "apps/web/app/admin/rate-increases/actions.ts:58-69,98,225-228; apps/web/app/admin/tenants/[tenantId]/ledger/[leaseId]/ledger.csv/route.ts:17-21",
      "secs": [
       "SEC-02"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✗",
-     "text": "login limited in DB; checkout, magic link and reset are not (SEC-04, SEC-05)",
-     "evidence": "`lib/auth/rate-limit.ts:5-60; (public)/…/rent/route.ts:9-50`",
+     "text": "Login (DB loginAttempt) and lead capture (DB window) are limited, but public checkout start/promo codes, magic-link request and password-reset request have no limiter (SEC-04, SEC-05).",
+     "evidence": "apps/web/lib/auth/rate-limit.ts:5-60; apps/web/lib/marketing/lead-capture.ts:87-125; apps/web/app/(public)/storage/[state]/[city]/[slug]/rent/route.ts:9-50; apps/web/lib/auth/flows.ts:42-100",
      "secs": [
       "SEC-04",
       "SEC-05"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "✗",
-     "text": "pay links hashed, 7-day, revocable; no Referrer-Policy / no-store headers",
-     "evidence": "`lib/portal/pay-links.ts:37-46,116-133`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
-    },
-    "K7": {
-     "s": "✗",
-     "text": "no global headers (SEC-06)",
-     "evidence": "`apps/web/next.config.ts`",
+     "text": "Pay/checkout/reservation links are hashed, expiring and revocable, but there is no Referrer-Policy, no-store or noindex header on /pay/<token> beyond the global gap (SEC-06); proxy only sets X-Robots-Tag on noindex paths.",
+     "evidence": "apps/web/lib/portal/pay-links.ts:44,72-95,120; apps/web/proxy.ts:113-118; apps/web/next.config.ts",
      "secs": [
       "SEC-06"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
+    },
+    "K7": {
+     "s": "✗",
+     "text": "No global headers() in next.config.ts and none set in proxy; nosniff appears only on document downloads (SEC-06).",
+     "evidence": "apps/web/next.config.ts:1-40; apps/web/lib/documents/storage.ts:185",
+     "secs": [
+      "SEC-06"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
      "s": "✔",
-     "text": "timingSafeEqual cron, fail closed, no secret public vars",
-     "evidence": "`app/api/cron/route.ts:39-54`",
+     "text": "Cron uses timingSafeEqual and fails closed without CRON_SECRET, demo gate uses a constant-time edge compare, no secret NEXT_PUBLIC_ vars (only Maps/Stripe publishable), no tracked secrets; single-use magic/reset tokens do ride in the query string, which is inherent to those links.",
+     "evidence": "apps/web/app/api/cron/route.ts:39-50; apps/web/lib/demo-gate.ts:33-45; .gitignore:7-8",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "✗",
-     "text": "failed Stripe events never re-applied (SEC-01)",
-     "evidence": "`app/api/stripe/webhook/route.ts:44-52`",
+     "text": "Signature is verified on the raw body with Stripe's timestamp tolerance, but a first-apply failure is never re-applied: the retry hits the PK collision and returns duplicate:true without checking processedAt (SEC-01).",
+     "evidence": "apps/web/app/api/stripe/webhook/route.ts:32-64",
      "secs": [
       "SEC-01"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
      "s": "✔",
-     "text": "real sends gated on VERCEL_ENV; kill switch",
-     "evidence": "`lib/comms/provider.ts:190-275`",
+     "text": "Sign-in email throws in production when the send fails; the link-to-console log fires only when RESEND_API_KEY is unset (dev), and real sends are gated by environment with a kill switch.",
+     "evidence": "apps/web/lib/auth/send-auth-email.ts:110-119; apps/web/lib/comms/provider.ts:190-275",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": "no env schema (~60 raw process.env reads)",
-     "evidence": "`.env.example`",
+     "text": "No schema-validated env at boot: ~36 distinct process.env reads scattered raw; .env.example does list app vars (missing NEXT_PUBLIC_SITE_URL and platform vars).",
+     "evidence": ".env.example; apps/web/app/api/cron/route.ts:40",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
-     "s": "?",
-     "text": "local PG + prod-build e2e ✔; runtime cloud-DB guard not checked (seed guard only)",
-     "evidence": "`playwright.config.ts:27-72; scripts/seed-demo.mts:1161-1170`",
+     "s": "✗",
+     "text": "Local Postgres schema per suite and prod-build e2e are in place, but there is no code-level guard refusing cloud DB URLs in vitest/playwright (only the seed script guards).",
+     "evidence": "vitest.config.ts:4-22; playwright.config.ts:27-75; apps/web/scripts/seed-demo.mts:1161-1175",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
-     "s": "?",
-     "text": "not assessed",
-     "evidence": "",
+     "s": "✔",
+     "text": "audit_log has BEFORE UPDATE/DELETE row triggers and a TRUNCATE trigger that raise, and no application code updates or deletes audit rows.",
+     "evidence": "packages/db/prisma/migrations/20260730174727_audit_log_append_only/migration.sql:13-31",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✗",
-     "text": "no ignoreCommand (OPS-01); port 3000 incumbent; cron ✔",
-     "evidence": "`vercel.json`",
+     "text": "vercel.json still has no ignoreCommand (OPS-01) and the port 3000 is set in package.json scripts and hardcoded in playwright baseURL (accepted incumbent); cron route is constant-time and fails closed.",
+     "evidence": "vercel.json:1-13; apps/web/package.json:6,8; playwright.config.ts:3; apps/web/app/api/cron/route.ts:39-50",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -1455,101 +1515,109 @@
    "cells": {
     "K1": {
      "s": "N/A",
-     "text": "no accounts or sessions",
-     "evidence": "—",
+     "text": "No accounts or sessions; static local-first SPA with IndexedDB only.",
+     "evidence": "src/store/db.ts; api/ contains only tts.ts",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "N/A",
-     "text": "no privileged users",
-     "evidence": "—",
+     "text": "No privileged server users; the caregiver PIN is a client-side UX lock, not a role.",
+     "evidence": "src/routes/RequireEditPin.tsx:18",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
      "s": "✗",
-     "text": "The single entry point `/api/tts` is public by design and has no gate of any kind",
-     "evidence": "`api/tts.ts:15-26,44`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "The only entry point, POST /api/tts, is public with no auth, origin check or token (open paid-API proxy); sweep is complete since api/ has a single file. SEC-01 still open, no commits since 2026-09-23 touch api/.",
+     "evidence": "api/tts.ts:44-71; api/tts.ts:15-26",
+     "secs": [
+      "SEC-01"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "N/A",
-     "text": "no server-side records",
-     "evidence": "—",
+     "text": "No server-side records or by-id reads/writes; all data is in the browser.",
+     "evidence": "api/tts.ts (stateless proxy)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✗",
-     "text": "no limit on the paid proxy",
-     "evidence": "`api/tts.ts:44-105`. The in-code comment admits it (`:15-26`).",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "No rate limit on the unauthenticated paid proxy; MAX_CHARS is still 10,000 and any regex-valid voiceId is accepted (SEC-01).",
+     "evidence": "api/tts.ts:39; api/tts.ts:42; vercel.json:1-9",
+     "secs": [
+      "SEC-01"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "N/A",
-     "text": "no share or token links",
-     "evidence": "—",
+     "text": "No share or token links exist.",
+     "evidence": "src/App.tsx routes; no api/ token routes",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "✗",
-     "text": "`vercel.json` sets no headers; no CSP, XFO, nosniff or Referrer-Policy",
-     "evidence": "`vercel.json:1-9`, `index.html`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "vercel.json has only ignoreCommand and the SPA rewrite; no headers block, no CSP/XFO/nosniff/Referrer-Policy/HSTS, and index.html has no CSP meta (SEC-02).",
+     "evidence": "vercel.json:1-9; index.html:4-12",
+     "secs": [
+      "SEC-02"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
      "s": "✔",
-     "text": "The key is server-only, fails closed with a 503 when unset, never reaches the client or a query string, and nothing is tracked",
-     "evidence": "`api/tts.ts:50-56,78`, `.env.example:1-19`, `.gitignore`",
+     "text": "ELEVENLABS_API_KEY is server-only, fails closed with 503 when unset, sent in a header not a query string; only VITE_TTS_PROVIDER (non-secret switch) is client-side; .env.example holds names only. No constant-time compare needed since no inbound secret.",
+     "evidence": "api/tts.ts:50-56,78; .env.example",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "N/A",
-     "text": "",
-     "evidence": "—",
+     "text": "No webhooks.",
+     "evidence": "api/ contains only tts.ts",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
      "s": "✗",
-     "text": "minor: the upstream error body is logged, and it can echo the user's spoken text",
-     "evidence": "`api/tts.ts:92`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "text": "Upstream error body, which can echo the user's spoken text, is still logged via console.error (SEC-03, minor).",
+     "evidence": "api/tts.ts:92",
+     "secs": [
+      "SEC-03"
+     ],
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
-     "s": "?",
-     "text": "Only one server var, checked at use (`api/tts.ts:50`). There is no schema, but none is really needed. `.env.example` lists both vars ✔.",
-     "evidence": "`.env.example`",
+     "s": "✗",
+     "text": "No schema-validated env at boot; the single server var is checked ad hoc at use time. Low severity (one var, fail-closed); .env.example does list both vars.",
+     "evidence": "api/tts.ts:50; .env.example",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
      "s": "N/A",
-     "text": "no database. Vitest unit tests plus Playwright against `vite preview` (a production build) ✔.",
-     "evidence": "`package.json` `e2e:serve`",
+     "text": "No database; e2e already runs against a production build via vite preview.",
+     "evidence": "package.json:14 (e2e:serve = build && vite preview --port 3800)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
      "s": "N/A",
-     "text": "no privileged server changes",
-     "evidence": "—",
+     "text": "No privileged server-side changes to audit.",
+     "evidence": "api/tts.ts (stateless)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✔",
-     "text": "`ignoreCommand` matches the CLAUDE.md form. Port 3800 is set in config. There are no cron routes.",
-     "evidence": "`vercel.json:2`, `vite.config.ts` `server.port`/`preview.port`, `package.json`",
+     "text": "ignoreCommand matches the CLAUDE.md form (previous-SHA diff, repo-root anchored, exclude docs and *.md, falls to build); port 3800 set in config; no cron routes.",
+     "evidence": "vercel.json:2; vite.config.ts:54-55; package.json:7,9,14",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -1559,110 +1627,110 @@
    "cells": {
     "K1": {
      "s": "✗",
-     "text": "Auth.js stores session tokens raw; magic link spent via GET callback",
-     "evidence": "`src/auth.ts:9-26`",
+     "text": "Auth.js DB sessions are server-side revocable, but the adapter stores the session token raw and the magic link is consumed by GET callback; unchanged since baseline, no fix landed.",
+     "evidence": "src/auth.ts:9-26",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
-     "s": "✗",
-     "text": "no MFA",
-     "evidence": "",
+     "s": "N/A",
+     "text": "No admin/owner role exists (single-practitioner users only; intake owner is an env-designated email, not a privileged role), so no privileged user to require MFA for.",
+     "evidence": "src/db/schema.ts; src/app/api/intake/route.ts:82-84",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
      "s": "✔",
-     "text": "every API route calls auth()",
-     "evidence": "`src/middleware.ts:29-52`",
+     "text": "Full sweep of all 15 route handlers plus studio page: every private handler calls auth() and returns 401; /studio/* also gated in middleware; only 'use server' exports are sign-in/out in page.tsx; public exceptions are intake (keyed/limited), /s/[token] (capability) and worker (CRON bearer).",
+     "evidence": "src/middleware.ts:29-52; src/app/api/**/route.ts; src/app/page.tsx:16-29",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "✔",
-     "text": "owned(id, userId) on every handler",
-     "evidence": "`api/use-cases/[id]/route.ts:10`",
+     "text": "Full sweep: use-cases by (id,userId), kickoff jobs via getOwnedJob/userId-scoped approve/feedback/exports, share-links joined to useCases.userId, kickoff POST scoped by caseId+userId; share page reads by token then link.useCaseId (capability, not caller scope).",
+     "evidence": "src/app/api/use-cases/[id]/route.ts:10-44; src/app/api/kickoff/route.ts:18-36; src/app/api/share-links/[token]/route.ts:15-20; src/lib/kickoff/worker.ts:174-181",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "✗",
-     "text": "in-memory, per-instance limits (SEC-03)",
-     "evidence": "`src/middleware.ts:4-27`",
+     "text": "Rate limits are per-instance in-memory Maps in middleware and the intake route, not a shared store (SEC-03); sign-in has none.",
+     "evidence": "src/middleware.ts:4-27; src/app/api/intake/route.ts",
      "secs": [
       "SEC-03"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "✗",
-     "text": "projection + headers ✔; tokens raw, no expiry (SEC-02)",
-     "evidence": "`src/db/schema.ts:98-103; src/lib/sharing.ts:32-45`",
+     "text": "Share tokens are the raw primary key with no expiry column; revocable via revoked flag, allowlisted projection and no-referrer/noindex/no-store are in place (SEC-02).",
+     "evidence": "src/db/schema.ts:98-103; src/lib/sharing.ts:32-45; next.config.mjs:6-18",
      "secs": [
       "SEC-02"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "✗",
-     "text": "headers only on /s",
-     "evidence": "",
+     "text": "Security headers only set on /s/:token*; no global Referrer-Policy, nosniff, X-Frame-Options/frame-ancestors or HSTS.",
+     "evidence": "next.config.mjs:4-19",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
      "s": "✗",
-     "text": "intake open when key unset; !== compares (SEC-01, SEC-04)",
-     "evidence": "`src/app/api/intake/route.ts:76-80`",
+     "text": "INTAKE_KEY gate is skipped when unset (fails open) and compared with !== from the request body (SEC-01); CRON_SECRET fails closed but uses !== (SEC-04).",
+     "evidence": "src/app/api/intake/route.ts:76-80; src/app/api/kickoff/worker/route.ts:17-19",
      "secs": [
       "SEC-01",
       "SEC-04"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "N/A",
-     "text": "no webhooks",
-     "evidence": "",
+     "text": "No inbound webhooks; the only external callback is the Vercel cron worker.",
+     "evidence": "src/app/api",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
-     "s": "?",
-     "text": "not assessed",
-     "evidence": "",
+     "s": "✗",
+     "text": "No tokens or bodies logged, but the intake notify email silently returns false when AUTH_RESEND_KEY is unset and there is no production fail-loud on missing provider.",
+     "evidence": "src/lib/notify.ts:64-77; src/lib/kickoff/worker.ts:94,128",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": ".env.example omits 6+ vars (SEC-05)",
-     "evidence": "`.env.example`",
+     "text": "No schema-validated env at boot (db uses DATABASE_URL!), and .env.example omits INTAKE_KEY, INTAKE_OWNER_EMAIL, CRON_SECRET, ANTHROPIC_API_KEY, KICKOFF_* (SEC-05).",
+     "evidence": "src/db/index.ts:5; .env.example",
      "secs": [
       "SEC-05"
      ],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
      "s": "✗",
-     "text": "integration tests run against a Neon branch",
-     "evidence": "`vitest.integration.config.ts:4-16`",
+     "text": "Integration tests and CI e2e run against a Neon branch, no code-level guard refusing cloud URLs; e2e does use build+start (production build) but on port 3000.",
+     "evidence": "vitest.integration.config.ts:4-16; .github/workflows/ci.yml:65-106; playwright.config.ts:21-27",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
-     "s": "?",
-     "text": "not assessed",
-     "evidence": "",
+     "s": "N/A",
+     "text": "No privileged/admin role or privileged-change surface exists; user-level CRUD and plan approvals only, so no privileged audit log applies.",
+     "evidence": "src/db/schema.ts",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✗",
-     "text": "port 3000 collides with storage; no ignoreCommand (OPS-01)",
-     "evidence": "`package.json`",
+     "text": "No ignoreCommand in vercel.json, port 3000 (collides with storage) not set in package.json (OPS-01), and cron worker compare is not constant-time (fails closed though).",
+     "evidence": "vercel.json; package.json:5-8; src/app/api/kickoff/worker/route.ts:17-19",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   },
@@ -1672,101 +1740,101 @@
    "cells": {
     "K1": {
      "s": "N/A",
-     "text": "no auth built",
-     "evidence": "`next-auth` is a dependency in `apps/web/package.json` but no `auth.ts`/`auth.config.ts`/route handler exists in any repo (verified via `find -iname \"*auth*\"` — zero hits outside `node_modules`)",
+     "text": "next-auth is declared but no auth wiring exists; scaffold-only app.",
+     "evidence": "use-case-*/apps/web/app (layout.tsx, page.tsx only)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K2": {
      "s": "N/A",
-     "text": "no roles/guards exist",
-     "evidence": "same — no server code at all beyond `layout.tsx`/`page.tsx`",
+     "text": "No roles or guards exist yet.",
+     "evidence": "use-case-*/apps/web/app (layout.tsx, page.tsx only)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K3": {
      "s": "N/A",
-     "text": "no entry points",
-     "evidence": "`apps/web/app/` has exactly `layout.tsx`, `page.tsx`, `globals.css` in each repo — no `api/`, no `actions.ts`, no `'use server'`",
+     "text": "No pages beyond a static placeholder, no server actions or route handlers.",
+     "evidence": "use-case-*/apps/web/app (layout.tsx, page.tsx only)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
      "s": "N/A",
-     "text": "no data model",
-     "evidence": "`packages/db/prisma/schema.prisma` has `generator`/`datasource` blocks only, zero `model` definitions, in all three repos",
+     "text": "packages/db/prisma/schema.prisma has no models in any repo.",
+     "evidence": "use-case-*/packages/db/prisma/schema.prisma",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K5": {
      "s": "N/A",
-     "text": "nothing to rate-limit",
-     "evidence": "no route handlers or forms exist",
+     "text": "No unauthenticated writes or token reads exist.",
+     "evidence": "use-case-*/apps/web/app (layout.tsx, page.tsx only)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K6": {
      "s": "N/A",
-     "text": "no token links",
-     "evidence": "not built",
+     "text": "No capability links built.",
+     "evidence": "use-case-*/apps/web/app (layout.tsx, page.tsx only)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K7": {
      "s": "N/A",
-     "text": "no server",
-     "evidence": "`apps/web/next.config.mjs` has only `transpilePackages`, no `headers()`",
+     "text": "No headers() in next.config.mjs, but no server surface yet; add before first real route.",
+     "evidence": "use-case-*/apps/web/next.config.mjs",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K8": {
      "s": "✗",
-     "text": "live secrets at rest (ticket-deflection only)",
-     "evidence": "`use-case-support-ticket-deflection/.env.local:9-10,14` — real Neon `DATABASE_URL`/`DIRECT_URL` with password, and real `ANTHROPIC_API_KEY=sk-ant-api03-...`, sitting in plaintext. Not git-tracked (`git ls-files` and `git status --porcelain` both clean); grant-proposal and fnol-intake repos have no `.env.local` at all",
+     "text": "support-ticket-deflection/.env.local still holds populated DATABASE_URL, DIRECT_URL and ANTHROPIC_API_KEY at rest (gitignored, untracked); the other two repos have no .env.local.",
+     "evidence": "use-case-support-ticket-deflection/.env.local; use-case-support-ticket-deflection/.gitignore:24-25",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K9": {
      "s": "N/A",
-     "text": "no webhooks",
-     "evidence": "not built",
+     "text": "No webhooks built.",
+     "evidence": "use-case-*/apps/web/app (layout.tsx, page.tsx only)",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K10": {
      "s": "N/A",
-     "text": "nothing logs yet",
-     "evidence": "no server code",
+     "text": "No server code that logs; only scripts in ticket-deflection use console.",
+     "evidence": "use-case-support-ticket-deflection/scripts",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K11": {
      "s": "✗",
-     "text": "no schema validation",
-     "evidence": "no `env.ts`/zod schema found in any repo; `.env.example` in all three documents names only (verified, no values) and is the only env file tracked in git (`git ls-files \\",
+     "text": "No schema-validated env at boot (no env.ts/zod); .env.example lists names only and is the only tracked env file.",
+     "evidence": "use-case-*/.env.example",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K12": {
-     "s": "✔",
-     "text": "(by convention, unexercised)",
-     "evidence": "`.env.test` in all three points at `postgresql://…@localhost:5432/<project>_test` (e.g. `use-case-grant-proposal-assembly/.env.test:1`); `playwright.config.ts` webServer runs `npm run dev:test` not `dev`, with a comment explaining the split-brain risk of using the cloud DB; `package.json` has `db:migrate:all`/`db:status` targets. No code-level guard yet refusing a cloud `DATABASE_URL` (nothing to guard — no app code touches the DB)",
+     "s": "✗",
+     "text": "Tests point at local .env.test but there is no code-level guard refusing cloud DB URLs and Playwright webServer runs dev:test (dev server), not a production build.",
+     "evidence": "use-case-*/playwright.config.ts:10-11; use-case-*/package.json:18",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K13": {
      "s": "N/A",
-     "text": "no privileged changes exist",
-     "evidence": "no models, no writes",
+     "text": "No models or privileged writes exist.",
+     "evidence": "use-case-*/packages/db/prisma/schema.prisma",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K14": {
      "s": "✗",
-     "text": "not yet configured",
-     "evidence": "no `vercel.json`/`ignoreCommand` in any repo; no port configured anywhere (`next.config.mjs`, `package.json`, `playwright.config.ts` all default to `localhost:3000`, which the global CLAUDE.md port table already assigns to \"storage business\")",
+     "text": "No vercel.json/ignoreCommand and no dedicated port: dev/start use default 3000, which is claimed by the storage project.",
+     "evidence": "use-case-*/apps/web/package.json:6,9; use-case-*/playwright.config.ts:5,11",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "rescored 2026-09-25 (agent sweep)"
     }
    }
   }

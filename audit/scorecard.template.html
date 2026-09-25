@@ -16,7 +16,7 @@ th,td{padding:0;text-align:center;border-bottom:1px solid var(--line)}
 th{font-weight:500;font-size:11px;color:var(--mute);padding:8px 2px;letter-spacing:.03em;text-transform:uppercase}
 th small{display:block;font-size:10px;text-transform:none;letter-spacing:0}
 th.n,td.n{text-align:left;padding:8px 12px;position:sticky;left:0;background:var(--surf);min-width:170px;font-weight:500}
-td.n .t{font:12px "IBM Plex Mono",monospace;color:var(--mute);font-weight:400}
+td.n .st{margin-top:2px;font-size:11px}td.n .t{font:12px "IBM Plex Mono",monospace;color:var(--mute);font-weight:400}
 tr.f td{background:var(--okbg)} tr.f td.n{background:var(--okbg)}
 td button{all:unset;cursor:pointer;display:block;width:100%;height:100%;padding:9px 0;font:600 15px "IBM Plex Mono",monospace;box-sizing:border-box}
 td button:focus-visible{outline:2px solid var(--sel);outline-offset:-2px}
@@ -27,14 +27,14 @@ td button[aria-pressed=true]{background:var(--sel);color:var(--bg)!important}
 .detail p{margin:4px 0;max-width:75ch}
 .tag{display:inline-block;font:12px "IBM Plex Mono",monospace;padding:1px 7px;border:1px solid var(--line);border-radius:3px;margin-right:6px;color:var(--mute)}
 .ev{font:12px "IBM Plex Mono",monospace;color:var(--mute);overflow-wrap:anywhere}
-.check{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:12px}#rq{font:500 13px "IBM Plex Sans",sans-serif;color:var(--bg);background:var(--sel);border:0;border-radius:4px;padding:7px 14px;cursor:pointer}#rq:disabled{opacity:.5;cursor:default}#rq:focus-visible{outline:2px solid var(--ok);outline-offset:2px}.scope{border-left:3px solid var(--q);padding:6px 12px;margin:0 0 18px;max-width:75ch;background:var(--surf)}
+.check{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:12px}.rq{margin-top:4px;font:500 11px "IBM Plex Sans",sans-serif;color:var(--bg);background:var(--sel);border:0;border-radius:4px;padding:3px 8px;cursor:pointer}.rq:disabled{opacity:.5;cursor:default}.rq:focus-visible{outline:2px solid var(--ok);outline-offset:2px}.scope{border-left:3px solid var(--q);padding:6px 12px;margin:0 0 18px;max-width:75ch;background:var(--surf)}
 </style>
 <main>
 <h1>Foundation Scorecard</h1>
 <p class="sub">Every code project against the 14 key pieces of the saas foundation (K1–K14). Select a cell for the reason, the evidence and the backlog item that fixes it.</p>
-<div class="scope"><b>Scope.</b> The foundation row was verified today (122 tests pass, v__VER__). Only <b>Clearpath</b> and <b>event toolkit</b> cells changed by a fix were re-checked in code on __ASOF__; every other cell is the 2026-09-23 audit baseline, marked as such in its detail. Nothing here is a fresh full audit.</div>
+<div class="scope"><b>Scope.</b> The foundation row was verified today (122 tests pass, v__VER__). Every other row was re-scored against current code on __ASOF__ by one Sonnet agent per project (read-only, no builds or tests run); each cell says how it was checked. K3/K4 marked "spot-checked" were not full sweeps, and the Opus pass the plan calls for on K3/K4 has not run. The dead design bridge keeps its 2026-09-23 baseline.</div>
 <div class="legend"><span><b class="s-ok mono">✔</b> compliant</span><span><b class="s-bad mono">✗</b> not compliant</span><span><b class="s-na mono">–</b> N/A</span><span><b class="s-q mono">?</b> not verified</span></div>
-<div class="check"><button id="rq" type="button" hidden>Request re-check</button><span id="rs" class="ev">A re-check re-runs <span class="mono">npm test</span> and re-scores the cells whose SEC items were fixed. It is queued here and run from the Claude Code session in the foundation repo.</span></div>
+<p class="ev" id="rs">Each project row has a re-check button. A request is queued here and run from the Claude Code session in the foundation repo; it re-scores that project only.</p>
 <div class="wrap"><table id="m"></table></div>
 <div class="detail" id="d" aria-live="polite"></div>
 </main>
@@ -46,7 +46,7 @@ let h='<thead><tr><th class="n">Project</th>';
 for(const k in D.keys)h+=`<th>${k}<small>${D.keys[k]}</small></th>`;
 h+='<th>✔</th></tr></thead><tbody>';
 D.rows.forEach((r,i)=>{const n=Object.values(r.cells).filter(c=>c.s==="✔").length;
-h+=`<tr class="${i?'':'f'}"><td class="n">${r.name}<div class="t">${i?r.id:'v'+D.foundationVersion}</div></td>`;
+h+=`<tr class="${i?'':'f'}"><td class="n">${r.name}<div class="t">${i?r.id:'v'+D.foundationVersion}</div>${i?`<button class="rq" type="button" data-id="${r.id}" hidden>Re-check</button><div class="ev st" data-st="${r.id}"></div>`:''}</td>`;
 for(const k in D.keys){const c=r.cells[k],g=G[c.s];h+=`<td><button class="${g[1]}" data-r="${i}" data-k="${k}" aria-pressed="false" aria-label="${r.name} ${k}: ${c.s}">${g[0]}</button></td>`}
 h+=`<td class="mono">${n}/14</td></tr>`});
 m.innerHTML=h+'</tbody>';
@@ -57,13 +57,11 @@ d.innerHTML=`<h2>${e(r.name)} · ${b.dataset.k} ${D.keys[b.dataset.k]} <span cla
 m.addEventListener('click',e=>{const b=e.target.closest('button');if(b)show(b)});
 show(m.querySelector('button[data-r="4"][data-k="K6"]'));
 (async()=>{const db=await claude.use("db");if(!db)return;
-const rq=document.getElementById('rq'),rs=document.getElementById('rs');rq.hidden=false;
-const f=t=>new Date(t).toLocaleString();
-db.doc("checks/request").onSnapshot(q=>{const v=q.exists?q.data():null;
-db.doc("checks/last").get().then(l=>{const c=l.exists?l.data():null;
-const pending=v&&(!c||c.doneAt<v.requestedAt);
-rq.disabled=!!pending;
-rs.textContent=pending?'Re-check requested '+f(v.requestedAt)+'. Waiting for the Claude Code session to run it.':(c?'Last check '+f(c.doneAt)+': '+c.summary:'No manual check has run yet.')})},()=>{});
-rq.onclick=async()=>{rq.disabled=true;try{await db.doc("checks/request").set({requestedAt:Date.now()})}catch(e){rq.disabled=false;rs.textContent='Could not queue the request ('+(e.code||'error')+'). You may need edit access.'}}
+const f=t=>new Date(t).toLocaleDateString();
+document.querySelectorAll('.rq').forEach(b=>{b.hidden=false;
+b.onclick=async()=>{b.disabled=true;try{await db.doc("checks/"+b.dataset.id).update({requestedAt:Date.now()})}catch(e){try{await db.doc("checks/"+b.dataset.id).set({requestedAt:Date.now()})}catch(e2){b.disabled=false;document.querySelector('[data-st="'+b.dataset.id+'"]').textContent='Could not queue ('+(e2.code||'error')+')'}}}});
+db.collection("checks").onSnapshot(qs=>{qs.docs.forEach(d=>{const v=d.data()||{},b=document.querySelector('.rq[data-id="'+d.id+'"]'),st=document.querySelector('[data-st="'+d.id+'"]');if(!b)return;
+const pending=v.requestedAt&&(!v.doneAt||v.doneAt<v.requestedAt);b.disabled=!!pending;
+st.textContent=pending?'Queued '+f(v.requestedAt):(v.doneAt?'Checked '+f(v.doneAt)+': '+(v.summary||''):'')})},()=>{});
 })();
 </script>
