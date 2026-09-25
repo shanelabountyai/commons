@@ -15,6 +15,7 @@ OVERRIDES = {
  "clinic": {
   "K7": ("✔", "Global headers: frame-ancestors 'none', nosniff, Referrer-Policy, poweredByHeader off (SEC-05, fixed); HSTS from Vercel.", "clinic/next.config.ts:7-21; 17d5496"),
   "K12": ("✔", "Guard is now a loopback allowlist; cloud needs CLEARPATH_ALLOW_CLOUD_DB (SEC-06, fixed).", "clinic/src/db.ts:14; b72b1f3"),
+  "K3": ("✔", "Every action and route calls requireSession() and the permission matrix; the demo gate (SEC-01, fixed) now fronts everything except /api/cron and /enquire. Identity itself is self-chosen, which is scored under K1.", "clinic/NEXT.md:89; app/(staff)/*/actions.ts"),
   "K6": ("✗", "Tokens stored plaintext: SEC-04 closed as an accepted risk; Referrer-Policy is same-origin, not no-referrer.", "clinic/next.config.ts:21; 39189e3"),
   "K1": ("✗", "Still no real auth: a shared Basic-auth demo gate (SEC-01, fixed) fronts a self-chosen identity picker; cookie unsigned by decision (SEC-03).", "clinic/NEXT.md:89"),
  },

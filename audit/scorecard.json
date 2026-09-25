@@ -494,11 +494,13 @@
      "basis": "baseline 2026-09-23"
     },
     "K3": {
-     "s": "✗",
-     "text": "Every action and route calls `requireSession()` and the matrix, which is consistent (✔ for authorization). Identity is self-asserted, and there is no middleware or demo gate.",
-     "evidence": "`app/(staff)/*/actions.ts` (all exports); `app/(staff)/audit/export/route.ts:10`; no `middleware.ts`/`proxy.ts`",
-     "secs": [],
-     "basis": "baseline 2026-09-23"
+     "s": "✔",
+     "text": "Every action and route calls requireSession() and the permission matrix; the demo gate (SEC-01, fixed) now fronts everything except /api/cron and /enquire. Identity itself is self-chosen, which is scored under K1.",
+     "evidence": "clinic/NEXT.md:89; app/(staff)/*/actions.ts",
+     "secs": [
+      "SEC-01"
+     ],
+     "basis": "verified 2026-09-25"
     },
     "K4": {
      "s": "✔",
