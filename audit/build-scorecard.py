@@ -18,6 +18,7 @@ OVERRIDES = {
   "K3": ("✔", "Every action and route calls requireSession() and the permission matrix; the demo gate (SEC-01, fixed) now fronts everything except /api/cron and /enquire. Identity itself is self-chosen, which is scored under K1.", "clinic/NEXT.md:89; app/(staff)/*/actions.ts"),
   "K6": ("✗", "Tokens stored plaintext: SEC-04 closed as an accepted risk; Referrer-Policy is same-origin, not no-referrer.", "clinic/next.config.ts:21; 39189e3"),
   "K1": ("✗", "Still no real auth: a shared Basic-auth demo gate (SEC-01, fixed) fronts a self-chosen identity picker; cookie unsigned by decision (SEC-03).", "clinic/NEXT.md:89"),
+  "K11": ("✔", "Zod schema over every var the running app reads, fails at boot with the var name on missing/malformed input; OPS-04 was already satisfied (.env.example lists DEMO_ACCESS_PASSWORD, CLEARPATH_SESSION_SECRET and the nonresponse cron).", "clinic/src/env.ts; a2e07eb"),
  },
  "event-toolkit": {
   "K7": ("✔", "Global XFO DENY, CSP frame-ancestors, nosniff, referrer, HSTS (SEC-04, fixed; verified live).", "event-planner-app/apps/web/next.config.ts; c7cf9f2"),

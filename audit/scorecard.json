@@ -556,11 +556,11 @@
      "basis": "baseline 2026-09-23"
     },
     "K11": {
-     "s": "✗",
-     "text": "No boot schema. The checks are scattered: `DATABASE_URL` throws (`src/db.ts:5`), and the throttle secret and base URL throw lazily. `.env.example` lists the vars but its comment omits the nonresponse cron.",
-     "evidence": "`src/db.ts:4-5`; `.env.example:17-20`",
+     "s": "✔",
+     "text": "Zod schema over every var the running app reads, fails at boot with the var name on missing/malformed input; OPS-04 was already satisfied (.env.example lists DEMO_ACCESS_PASSWORD, CLEARPATH_SESSION_SECRET and the nonresponse cron).",
+     "evidence": "clinic/src/env.ts; a2e07eb",
      "secs": [],
-     "basis": "baseline 2026-09-23"
+     "basis": "verified 2026-09-25"
     },
     "K12": {
      "s": "✔",
