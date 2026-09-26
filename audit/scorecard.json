@@ -500,11 +500,15 @@
      "basis": "verified 2026-09-25"
     },
     "K4": {
-     "s": "✗",
-     "text": "Swept 77 entry points: clients, notes, forms, portal and leave are scoped, but appointments are 'always' for clinicians, so a clinician can book a session for another caseload's client and sign a progress note into that record (K4-C1, HIGH); by-id appointment view/update, the group roster and worklists are not caseload-scoped (MED).",
-     "evidence": "src/notes/service.ts:82-103; src/auth/permissions.ts:356; src/scheduling/calendar.ts:84-101; app/(staff)/groups/[id]/page.tsx:15-19",
-     "secs": [],
-     "basis": "Opus K4 sweep 2026-09-26"
+     "s": "✔",
+     "text": "Swept 77 entry points; K4-C1 (HIGH: book another caseload's client, then sign their note) fixed as SEC-07 — notes decide on the client, booking is caseload-scoped; appointment by-id, group roster and worklists scoped (SEC-08–10, MED), series inside guarded() (SEC-11). Two LOWs open: forms issue/read for any client, and a not-found vs forbidden oracle.",
+     "evidence": "clinic 8c060a5; src/notes/service.ts; src/auth/permissions.ts:377; src/scheduling/caseload.test.ts",
+     "secs": [
+      "SEC-07",
+      "SEC-08",
+      "SEC-11"
+     ],
+     "basis": "Opus K4 sweep 2026-09-26, fixed 8c060a5, CI green 62d7f1c"
     },
     "K5": {
      "s": "✔",
@@ -1058,13 +1062,15 @@
      "basis": "rescored 2026-09-25 (agent sweep)"
     },
     "K4": {
-     "s": "✗",
-     "text": "Swept 324 entry points; SEC-02/03 hold, but ~50 pages and report routes scope by property.read instead of the permission they are guarded by (K4-R3), updateUnit writes a unit without checking it belongs to the property (K4-R2), and party changes load applicants by id unscoped (K4-R1) — all HIGH; plus MED unchecked secondary ids.",
-     "evidence": "lib/scope/current-scope.ts:42; lib/units/actions.ts:113-126; lib/leases/party-change-builder.ts:156-160",
+     "s": "✔",
+     "text": "Swept 324 entry points; K4-R1/R2/R3 (HIGH) fixed as SEC-09–11 — applicants scoped to the lease's property, updateUnit scoped by {id, propertyId}, and currentScope has no default so every page passes its guarding permission (source test over all callers); MED secondary ids fixed (SEC-12–15). Open: SEC-16 unrouted inbox (who triages mail from an unknown sender is a design question) and the LOWs.",
+     "evidence": "rental 6d75d45; lib/scope/current-scope.ts; lib/scope/current-scope-callers.test.ts; lib/auth/cross-property-ids.test.ts",
      "secs": [
-      "SEC-02"
+      "SEC-09",
+      "SEC-12",
+      "SEC-16"
      ],
-     "basis": "Opus K4 sweep 2026-09-26"
+     "basis": "Opus K4 sweep 2026-09-26, fixed 6d75d45"
     },
     "K5": {
      "s": "✔",
