@@ -27,6 +27,20 @@ OVERRIDES = {
   "K6": ("✗", "Tokens hashed now (SEC-02); Referrer-Policy is strict-origin-when-cross-origin, not no-referrer, and no no-store.", "apps/web/next.config.ts; 192eec4"),
  },
 }
+# 2026-09-26: Opus exhaustive K4 sweeps of the rows the Sonnet re-score only spot-checked, plus the rental re-check
+# after 681fbb4. Findings: audit/K4-SWEEP-2026-09-26.md. Fourth element is the basis.
+K4S = "Opus K4 sweep 2026-09-26"
+OVERRIDES.setdefault("clinic", {})["K4"] = ("✗", "Swept 77 entry points: clients, notes, forms, portal and leave are scoped, but appointments are 'always' for clinicians, so a clinician can book a session for another caseload's client and sign a progress note into that record (K4-C1, HIGH); by-id appointment view/update, the group roster and worklists are not caseload-scoped (MED).", "src/notes/service.ts:82-103; src/auth/permissions.ts:356; src/scheduling/calendar.ts:84-101; app/(staff)/groups/[id]/page.tsx:15-19", K4S)
+OVERRIDES["alongside-handhold"] = {"K4": ("✔", "Swept 93 by-id consumer routes in 16 modules plus the admin surface: every read and write resolves membership from the row's own lovedOneId and answers 404 for not-yours; secondary ids are checked. Five LOW items (403/400-vs-404 oracles, packet route ignores its path lovedOneId, ban/mute not tied to the report).", "backend/src/permissions/service.ts:19-31; backend/src/family/service.ts:460-466; backend/src/vault/service.ts:539-557", K4S)}
+OVERRIDES["restaurant-reservations"] = {"K4": ("N/A", "Swept 10 guest entry points: single restaurant, no tenant id in the schema, every /m write resolves from the manage token. Two LOW items: an idempotency-key replay returns another guest's booking without an owner check, and manage tokens never expire.", "apps/web/app/book/actions.ts:43; packages/db/placement.ts:103-107; packages/db/guest.ts:122-128", K4S)}
+OVERRIDES["rental-business"] = {
+ "K4": ("✗", "Swept 324 entry points; SEC-02/03 hold, but ~50 pages and report routes scope by property.read instead of the permission they are guarded by (K4-R3), updateUnit writes a unit without checking it belongs to the property (K4-R2), and party changes load applicants by id unscoped (K4-R1) — all HIGH; plus MED unchecked secondary ids.", "lib/scope/current-scope.ts:42; lib/units/actions.ts:113-126; lib/leases/party-change-builder.ts:156-160", K4S),
+ "K1": ("✗", "Magic link now redeemed by POST, single-use, expiring (681fbb4); but tenant and guarantor sign-out is a bare signOut() that never bumps sessionsValidFrom, so a copied JWT lives out its 12h.", "apps/web/lib/portal/actions.ts:12-20; apps/web/lib/auth/actions.ts:222-248", "re-checked 2026-09-26"),
+ "K6": ("✗", "Tokens hashed with TTLs; but Referrer-Policy is same-origin (deliberate, for no-JS Origin checks) and the token pages send no Cache-Control: no-store.", "apps/web/next.config.ts:40; app/pay/[token]/page.tsx", "re-checked 2026-09-26"),
+ "K7": ("✔", "Global nosniff, XFO DENY, HSTS, Referrer-Policy; frame-ancestors 'none' in the CSP; pinned by next-config.test.ts.", "apps/web/next.config.ts:33-45; apps/web/proxy.ts:107-110", "re-checked 2026-09-26"),
+ "K11": ("✗", "assertEnv() runs at boot and names the var, but covers 6 variables; ~18 more the app reads (CRON_SECRET, Stripe, Twilio, webhook secrets) are unchecked.", "apps/web/lib/env.ts:29-36; apps/web/instrumentation.ts", "re-checked 2026-09-26"),
+ "K12": ("✔", "Vitest global setup refuses any DATABASE_URL host but localhost/127.0.0.1; e2e defaults to build + start.", "packages/db/test-database-guard.ts:15-28; playwright.config.ts:197", "re-checked 2026-09-26"),
+}
 FOUNDATION = {
  "K1": ("INV-05,07,17", "src/core/auth/session.ts; src/core/auth/link.ts; tests/invariants/inv-05-sign-out-everywhere.test.ts"),
  "K2": ("INV-24,25,26", "src/core/auth/totp.ts; tests/invariants/inv-24-totp-replay.test.ts"),
@@ -50,7 +64,7 @@ def cell(status, text, ev, basis):
     return {"s": status, "text": text, "evidence": ev, "secs": sorted(set(re.findall(r"SEC-\d+", text + " " + ev)), key=lambda x:int(x[4:])), "basis": basis}
 import os
 RESC = {st: json.load(open(f"rescore/{st}.json")) for st in REPOS if os.path.exists(f"rescore/{st}.json")}
-out = {"asOf": "2026-09-25", "foundationVersion": open("../FOUNDATION_VERSION").read().strip(), "keys": NAMES, "rows": []}
+out = {"asOf": "2026-09-26", "foundationVersion": open("../FOUNDATION_VERSION").read().strip(), "keys": NAMES, "rows": []}
 f = {k: cell("✔", v[0] + " tests green (npm test, 122 pass, 2026-09-25)", v[1], "verified") for k, v in FOUNDATION.items()}
 out["rows"].append({"id": "foundation", "name": "saas foundation (template)", "cells": f})
 for stem, name in REPOS.items():
@@ -63,7 +77,7 @@ for stem, name in REPOS.items():
     cells = {}
     for k in KEYS:
         if k in OVERRIDES.get(stem, {}):
-            s, t, e = OVERRIDES[stem][k]; cells[k] = cell(s, t, e, "verified 2026-09-25")
+            s, t, e, *b = OVERRIDES[stem][k]; cells[k] = cell(s, t, e, b[0] if b else "verified 2026-09-25")
         elif k in RESC.get(stem, {}):
             c = RESC[stem][k]; cells[k] = cell(c["s"], c["text"], c.get("evidence", ""), "rescored 2026-09-25 (agent sweep)")
         elif k in raw:
