@@ -2,7 +2,14 @@
 
 ## ▶ Next session here: talk4me is next in the older queue if picked up; storage SEC-01/02 runs in its own folder (Opus, money)
 
-✅ **Good to clear.** **F-03 done and pushed 2026-09-28, tagged `v1.2.0`** (model: Sonnet — spec-following tooling, no new
+✅ **Good to clear.** **`v1.2.1` released and pushed 2026-10-13** (model: Opus — `security:` release). Four fixes from the
+2026-10-12 review, each with a red-first test: stale invites (`e47af9a`), the email-change oracle (`71b5fd8`), demo sessions
+(`2cc20a8`), and the owner's 2026-10-13 decision that a demo session also cannot create an org or use billing (`4cae624`).
+168 tests pass, typecheck and lint clean. No schema change. **Every clone owes this within 7 days (due 2026-10-20)**, each in
+its own session; `CLONES.md` rows stay as they are until each merges. Not run locally: `foundation:check-modules` and the
+e2e sweep (both build) — CI runs them on the push and on the tag.
+
+**Older checkpoint (superseded above):** **F-03 done and pushed 2026-09-28, tagged `v1.2.0`** (model: Sonnet — spec-following tooling, no new
 logic). A clone declares a module required in the clone-owned `src/app/required-modules.ts`; `foundation:check-modules`
 (`scripts/foundation-modules.ts`'s new `modulesToRemove()`) leaves that module in place and still removes the rest. 3 new
 unit tests (157 total pass), the filter mutation-checked red (dropped it, confirmed the test failed, restored). Verified

@@ -2,7 +2,9 @@
 
 Entries prefixed `security:` are mandatory for anything touching an invariant. Clones must take a `security:` release within 7 days.
 
-## Unreleased (fixes from the 2026-10-12 review; not tagged, `FOUNDATION_VERSION` not bumped — the owner cuts the release)
+## 1.2.1 (2026-10-13)
+
+The four fixes from the 2026-10-12 review. No schema change, no migration, no new env var.
 
 security: (review 2026-10-12 #1, INV-28) A pending invite outlived its issuer's authority: a removed owner could re-enter as
 owner through an owner invite they had sent to a spare address, and a demoted admin's `admin` invites stayed good.
