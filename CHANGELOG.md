@@ -2,6 +2,21 @@
 
 Entries prefixed `security:` are mandatory for anything touching an invariant. Clones must take a `security:` release within 7 days.
 
+## Unreleased
+
+Tests only; no runtime change, no migration, no env var.
+
+- `tests/invariants/inv-12-webhooks.test.ts`: the "a demo session cannot use billing" case (v1.3.0) looked up
+  `owner@acme.demo.test` and org `acme`, which only the template's sample seed creates, so a clone with its own
+  `seed-demo.ts` failed it with P2025 (tradepost, 2026-10-19). It now takes the first demo org's owner by membership, as
+  INV-27 does. Assertions unchanged. The text is identical to tradepost's excused patch (`52c17ca7d099`), so that clone
+  can drop the row from `FOUNDATION_PATCHES.md` once it takes this release.
+- `tests/integration/review-2026-10-12-demo.test.ts` (v1.2.1): the same lookup by membership instead of `acme` addresses,
+  and the fixed counts (6 demo users, 4 with TOTP, 3 memberships) are now "unchanged from before the demo session
+  acted", which is what they were checking. The "add and share a project" half moved to
+  `tests/integration/review-2026-10-12-demo-projects.test.ts`, because it tests the example resource a clone replaces
+  (D-16): a clone that removes `/o/[org]/projects` deletes that file instead of editing this one.
+
 ## 1.3.0 (2026-10-14)
 
 A `scorekeeper` role that holds only a new `results.write` permission (D-21), asked for by bracketry so a volunteer can enter
