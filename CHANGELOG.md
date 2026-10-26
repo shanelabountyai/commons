@@ -2,6 +2,28 @@
 
 Entries prefixed `security:` are mandatory for anything touching an invariant. Clones must take a `security:` release within 7 days.
 
+## 1.4.0 (2026-10-26)
+
+A clone hook for the template's org lists (D-22), asked for by quorum, ledgerleave and coursework, whose archived orgs still
+showed on `/onboarding`. No schema change, no migration, no new env var. Not a `security:` release: no invariant changes,
+and the hook cannot widen what a user sees.
+
+- `src/app/org-hooks.ts` (clone-owned) gains `filterListedOrgs(userId, orgs) => orgs`, beside `beforeOrgDelete`. The
+  default returns every org, so a clone that does nothing lists exactly what it did before.
+- `/onboarding` and `/demo` (each account's org line) now pass the user's orgs through it via the new
+  `keepListedOrgs` (`src/core/tenancy/listed.ts`), which keeps only the page's own rows whose id the hook returned, in
+  their order. An id the user is not in, a duplicate, or a renamed org from the hook never reaches the page; the hook gets
+  frozen copies. Display only: a hidden org's `/o/<slug>` still opens for its members.
+- `listDemoUsers` (`src/core/auth/demo.ts`) also selects each org's `id` and `slug`.
+- `tests/integration/org-list-hook.test.ts` (12): default unchanged on both pages; a hook hiding one org hides it on both;
+  a hook returning an extra org id, a renamed org, or mutating its input changes nothing. Mutation-checked: returning the
+  hook's output instead of intersecting turns 7 red; unwiring the two pages turns 4 red.
+
+Upgrade: merge. `src/app/org-hooks.ts` is clone-owned, so a clone that edited it gets a merge conflict there: keep the
+clone's `beforeOrgDelete` and add the template's `filterListedOrgs` (typecheck fails if it is missing, since the template
+pages import it). Then implement it if the clone hides orgs (an archive table, say) and add one test that a hidden org is
+not on `/onboarding`. No deadline (not `security:`).
+
 ## 1.3.1 (2026-10-20)
 
 security: `next` and `eslint-config-next` 16.3.6 -> 16.3.8 (`npm audit --omit=dev` no longer lists `next`; 16.3.7 and earlier are
