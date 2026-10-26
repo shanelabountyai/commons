@@ -2,9 +2,18 @@
 
 Entries prefixed `security:` are mandatory for anything touching an invariant. Clones must take a `security:` release within 7 days.
 
-## Unreleased
+## 1.3.1 (2026-10-20)
 
-Tests only; no runtime change, no migration, no env var.
+security: `next` and `eslint-config-next` 16.3.6 -> 16.3.8 (`npm audit --omit=dev` no longer lists `next`; 16.3.7 and earlier are
+affected). Fixes: server-side request forgery in Image Optimization (GHSA-cjq9-62q9-8jv4); cache poisoning of SSG and ISR pages
+in self-hosted apps (GHSA-4jqv-mc3x-m676, GHSA-mcj8-r9mp-w47p); information disclosure in App Router metadata image routes
+(GHSA-f87g-xv8r-7p7x) and in the dev server's MCP endpoint (GHSA-39w2-rjm5-chcv); `use cache` fill leaking Draft Mode content
+(GHSA-3w37-wq28-93x7). Only `package.json`, `package-lock.json` and next's own packages (`@next/*`) change; no runtime code,
+migration or env var. Clones must take this within 7 days (by 2026-10-27).
+
+Upgrade: merge, `npm ci`, then typecheck, lint, test and a production build. Also carries the tests-only changes below.
+
+Tests only, no runtime change:
 
 - `tests/invariants/inv-12-webhooks.test.ts`: the "a demo session cannot use billing" case (v1.3.0) looked up
   `owner@acme.demo.test` and org `acme`, which only the template's sample seed creates, so a clone with its own
