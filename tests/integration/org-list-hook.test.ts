@@ -1,4 +1,4 @@
-// v1.3.1: the clone hook `filterListedOrgs` (clone-owned src/app/org-hooks.ts) decides which of a user's orgs the
+// v1.4.0: the clone hook `filterListedOrgs` (clone-owned src/app/org-hooks.ts) decides which of a user's orgs the
 // template's org lists show — /onboarding and each account on /demo. Default: all of them, as before. The template
 // keeps only ids the user already had (core/tenancy/listed.ts), so a hook can hide an org and never add or rename one.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,7 +45,7 @@ beforeEach(async () => {
 
 const hideArchived = (_: string, list: readonly ListedOrg[]) => list.filter((o) => o.id !== orgs.archived.id);
 
-describe('default hook: every org is listed, as before v1.3.1', () => {
+describe('default hook: every org is listed, as before v1.4.0', () => {
   it('/onboarding lists both of ada’s orgs and nobody else’s', async () => {
     const page = await html(Onboarding);
     expect(page).toContain('href="/o/live-co"');

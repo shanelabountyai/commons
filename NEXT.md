@@ -1,22 +1,22 @@
 # NEXT
 
-## ▶ v1.3.1 prepared 2026-10-26 on branch `org-list-hook` (PR to `main`, not merged, NOT tagged)
+## ▶ v1.4.0 prepared 2026-10-26 on branch `org-list-hook` (PR #7 to `main`, not merged, NOT tagged)
 
 Owner decision 2026-10-26 (D-22): clone hook `filterListedOrgs(userId, orgs) => orgs` in clone-owned `src/app/org-hooks.ts`,
 beside `beforeOrgDelete`. `/onboarding` and `/demo` call it through `keepListedOrgs` (`src/core/tenancy/listed.ts`), which
-intersects with the input, so the hook can only hide. Local gate in the sandbox: lint clean (1 pre-existing warning in
-`e2e/billing.spec.ts`), typecheck clean, **207 tests pass (195 before + 12 new)**, e2e 10/10 on the production build,
-`foundation:check-modules` passes (run with a local `rsync` shim, the sandbox has none). Mutation-checked: no intersection
-turns 7 of the 12 red; unwired pages turn 4 red.
+intersects with the input, so the hook can only hide. Local gate: lint clean (1 pre-existing warning), typecheck clean,
+207 tests, e2e 10/10, `foundation:check-modules` passes.
+
+**Version settled (owner, 2026-10-26):** PR #4 (`next` 16.3.8 `security:` bump) merged as **v1.3.1**; this hook is
+renumbered **v1.4.0** (an additive change is a minor under §3.3). `main` merged into this branch; CHANGELOG lists 1.4.0
+above 1.3.1.
 
 **Owner to-do:**
-1. **Version clash:** PR #4 (`release/v1.3.1-next-16.3.8`, the `next` 16.3.8 `security:` bump, open since 2026-10-20 and
-   untagged) also calls itself v1.3.1. Whichever merges second needs its CHANGELOG heading and `FOUNDATION_VERSION`
-   renumbered (or fold the two into one v1.3.1). §3.3 would also read a new hook as an additive *minor* (v1.4.0); it is
-   numbered v1.3.1 here because the owner asked for that.
-2. Merge, then tag from the Mac: `git tag v1.3.1 && git push origin v1.3.1` (the cloud proxy refuses tag pushes).
-3. Each of quorum, ledgerleave, coursework then merges the tag and implements the hook against its `OrgArchive` (steps in the
-   PR body), and its `CLONES.md` row moves to v1.3.1.
+1. Tag v1.3.1 from the Mac on `main` at the PR #4 merge commit `1bc3386`: `git tag v1.3.1 1bc3386 && git push origin v1.3.1`.
+   Clones must take it by 2026-10-27 (`security:`).
+2. Merge PR #7, then tag v1.4.0 at its merge commit and push (the cloud proxy refuses tag pushes).
+3. Each of quorum, ledgerleave, coursework merges v1.4.0 (which carries v1.3.1) and implements the hook against its
+   `OrgArchive` (steps in the PR body); its `CLONES.md` row moves to v1.4.0.
 
 ## ▶ v1.3.0 released 2026-10-14 (model: Opus — permissions)
 

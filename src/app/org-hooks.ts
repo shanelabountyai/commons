@@ -8,7 +8,7 @@ export async function beforeOrgDelete(orgId: string): Promise<void> {
   await cancelOrgSubscription(orgId); // billing
 }
 
-// Clone-owned (v1.3.1): which of a user's orgs the template's org lists show — `/onboarding`, where every
+// Clone-owned (v1.4.0): which of a user's orgs the template's org lists show — `/onboarding`, where every
 // sign-in lands, and each account on `/demo`. Return the ones to show; the default shows them all. A clone
 // that archives orgs returns `orgs` minus the archived ones. The template keeps only ids that were in
 // `orgs` (core/tenancy/listed.ts), so this can hide an org but never add or rename one. Display only:
