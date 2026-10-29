@@ -40,16 +40,16 @@ Steps, in order:
 7. Plan first: write docs/phase-1-plan.md with the order you'll do tasks 1.1 to 1.11 in,
    which donor you'll read for each port in 1.3, how you'll run the ADR-001 measurement in
    1.6 given what the sandbox has, and which commands you expect to be CI-only.
-8. Then build Phase 1 (tasks 1.1–1.11) in TDD order. Commit on the branch, naming files
-   explicitly (never git add -A), one concern per commit. Push `phase-1` and open a PR against main. Do not merge.
-   Open a separate PR on saas-foundation adding the CLONES.md row:
+8. Commit only the scaffold (the new-project rewrite + D-18 module removal) and the kit files
+   on `phase-1`, naming files explicitly (never git add -A). Push `phase-1` and open a PR
+   against main. Do not merge. Open a separate PR on saas-foundation adding the CLONES.md row:
    commons | shanelabountyai/commons (public) | v1.4.0 | 2026-10-29; homelab community forum:
    path-encoded comment trees, Hot/Top/New/Best (Wilson), one-vote constraint, rate limits as
    data, mod queue; port 7500; synthetic only; not deployed; tools/ (Python stdlib oracles),
    fixtures/, rules/ are clone-owned.
-9. At the Phase 1 exit: run the "Before Phase 2" check in docs/phase-1-tasks.md, write
-   docs/phase-2-tasks.md, update NEXT.md, and stop. Show me both PR links, the engine:eval
-   output, the ADR-001 measurement and the contradictions list.
+9. STOP. Update NEXT.md and show me: both PR links, docs/phase-1-plan.md, the contradictions
+   list, and the step 4 record. Do not write fixtures, engine code, Prisma models, migrations
+   or UI until I have reviewed the plan and said go.
 
 Rules from the first commit: engines under src/tree, src/ranking, src/votes, src/limits are
 pure (now is a parameter); tree writes only via the tree module; vote rows are truth; one

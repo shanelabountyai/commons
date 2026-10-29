@@ -1,6 +1,6 @@
 # NEXT
 
-## ▶ Kickoff kit written (2026-10-29). Next: Phase 1 build session per KICKOFF.md.
+## ▶ Kickoff kit written (2026-10-29). Next: Phase 1 planning session per KICKOFF.md (stops after the plan; Shane reviews before any build).
 
 **Kickoff session (2026-10-29, cloud, Shane present).**
 - Owner decisions: public repo, homelab theme, Commons runs alone (D-1..D-3).
