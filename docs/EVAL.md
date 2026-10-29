@@ -143,6 +143,10 @@ Ten forum actions (`newPost, reply, vote, edit, report, moderateContent, moderat
 
 The fixture community loaded through the real writers into a fresh org, then: boards → `selfhosting` under Hot / Top all time (P-GH-50 first) / New, `rankedAt` shown → P-CHAIN with `[deleted]` and `[removed]` in place, 11 comments · 2 top-level shown, continue-thread to a permalink with 6 ancestors → reply, a gated downvote answered `GATED_DOWNVOTE`, an edit inside the 900 s window with no mark → **all 48 markdown-class XSS fixture bodies posted through the comment form: 47 stored and inert in Chromium** (no `script img svg iframe object embed form input style math`, no `on*` attribute, no `javascript:`/`data:`/`vbscript:` URL inside any rendered body; no dialog fired) and **X-37 refused `INPUT_INVALID`** → report → queue shows the case and the 7-voter brigade with author history → remove → restore → log `RESTORE` over `REMOVE`, `DELETE` refused → search by title.
 
+### Two more things the capstone found in CI (production build, PG 17)
+
+The first Phase 4 CI run failed on Playwright: (1) the mod log showed `REMOVE` above `RESTORE` because both landed in the same epoch second and the log had no order beyond `createdAt` — fixed with a `seq` column as the total order (D-56); (2) the template's onboarding spec expected the projects empty state on the org home, which Commons redirects to the forum (D-57). Both reproduced locally only against the production build (`npm run e2e:server`), not the dev server.
+
 ### A bug the capstone found — fixed behind a failing test
 
 X-37 (a NUL byte inside `<script>`) was inert through `src/render` (`xss:check` never writes to the database) but **crashed the write** with Postgres `invalid byte sequence for encoding "UTF8": 0x00` — a 500 where the design promises a coded refusal. `actions.test.ts` got the red test first; `checkText` now refuses U+0000 (D-53, commit `08b65e6`). The fixture already existed; the renderer check alone had not been enough to find it.
