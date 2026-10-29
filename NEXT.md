@@ -1,26 +1,26 @@
 # NEXT
 
-## ▶ Phase 2 DONE; stopped at the gate (2026-10-29). Shane reviews PR #1 and `docs/phase-3-tasks.md`. No Phase 3 work until go.
+## ▶ Phase 3 DONE; stopped at the gate (2026-10-29). Shane reviews PR #1 and `docs/phase-4-tasks.md`. No Phase 4 work until go.
 
-**Phase 2 build session (2026-10-29 2:45 PM CT, Fable, cloud, unattended on Shane's scheduled go).**
-- Built per `docs/phase-2-tasks.md`, one concern per commit on `phase-1`: schema + migration (2.1/2.2) → tree writer (2.3) → vote path + brigade + `votes:verify` (2.5) → `commons:load` (2.4) → `rank:recompute` + cron (2.6) → edits (2.7) → `engine:eval:db` + database tests (2.9) → ADR re-measure + CI (2.8) → docs (2.10). Defaults D-32..D-36, gate D-37; `docs/phase-3-tasks.md` written for review.
-- **Gate output:** `engine:eval:db` 12/12 files from stored rows, 5,000/5,000 paths equal, `votes:verify` clean, one `BrigadeSignal`, `commentCount` exact; `npm test` 238/238 (40 files); lint 0; typecheck clean; `foundation:drift` clean; `engine:lint` OK incl. the new single-writer rule. **CI green on PG 17** (migrate diff clean, eval:db, measurement, vitest, e2e): https://github.com/shanelabountyai/commons/actions/runs/40946970972 on 3161dfe.
-- **ADR-001 on PG 17:** path 0.914 vs closure 1.793 ms median (1.96×); stop not fired; table copied into the ADR.
-- **One CI finding fixed:** `prisma migrate diff` cannot round-trip a `text_pattern_ops` index (run 96f686d posted the diff on PR #1); replaced by `COLLATE "C"` on `path` (D-34), migration amended in place before any merge or deploy.
-- **Sandbox:** everything ran locally except `migrate diff` (CI) and `check-modules` (rsync); Postgres restarted with `service postgresql start`; `engine:eval:db` takes 78 s locally.
+**Phase 3 build session (2026-10-29 ~4 PM CT, Fable, cloud, Shane's "run it now").**
+- Built per `docs/phase-3-tasks.md` (uploads deferred, D-40), one concern per commit on `phase-1`: XSS fixture set first (3.1) → the two sanitizer packages at pinned versions (D-38) and `src/render` as the single sanitizer module with `xss:check` (3.2/3.3) → `LimitHit` table (3.4) → limits store, action door, live gates (3.4/3.5/3.8) → abuse suites and per-code tests (3.7/3.8) → CI (3.9). Defaults D-41..D-46, gate D-47; `docs/phase-4-tasks.md` written for review.
+- **Gate output:** `xss:check` 59/59 inert; `abuse:spam` 2/1/20 allowed (retryAfter 58/3540/50) and `abuse:normal` 0 refused through the live store, equal to `expected_limits.csv`; `npm test` 307/307 (42 files); lint 0; typecheck clean; `foundation:drift` clean; `engine:lint` OK with the single-writer and single-renderer rules. Every number with its command: `docs/EVAL.md` §Phase 3.
+- **Two findings while building, both recorded:** the fixture's first "live" patterns flagged entity-encoded (inert) text, so they were anchored on real tags before the renderer was judged (D-41); markdown-it silently drops content past its nesting limit, so runs of more than 8 quote/list markers are flattened first (D-42).
+- **Audit:** the new packages add no advisories; nine pre-existing ones are template dependencies, `next` at **critical** (D-46). **For saas-foundation:** a `security:` release bumping `next` (and `prisma`, `zod`) is due under the template's own 7-day rule; clones take it after.
+- **Sandbox:** everything ran locally except `migrate diff` and `check-modules` (CI-only, as before).
 
 | CI run | Head | Result |
 |---|---|---|
-| Phase 2 head | 3161dfe | **success** https://github.com/shanelabountyai/commons/actions/runs/40946970972 (PG 17 ADR table posted as a PR comment) |
-| D-34 trigger | 96f686d | failure at migrate diff (the opclass index), diff posted on PR #1 |
+| Phase 3 head | 9bbee84 | **success** https://github.com/shanelabountyai/commons/actions/runs/40954954426 (xss:check, eval:db, ADR, abuse suites, vitest, e2e all green on PG 17) |
+| Phase 2 head | 3161dfe | success https://github.com/shanelabountyai/commons/actions/runs/40946970972 |
 | Phase 1 head | c61c198 | success https://github.com/shanelabountyai/commons/actions/runs/40930385079 |
-| Red proof (PR #2, closed) | 4f35a34 | failure at `engine:eval` https://github.com/shanelabountyai/commons/actions/runs/40930587231 |
 
-**Decided 2026-10-29 (D-38..D-40):** `markdown-it` + `isomorphic-dompurify`; new `LimitHit` table; uploads to Phase 4. **Phase 3 is unblocked and waits for Shane's go.** D-32..D-36 stand unless Shane reverses them in review.
+**Decisions needed from Shane before Phase 4** (`docs/phase-4-tasks.md`): the `moderator` role shape, whether Handhold's report reasons are copied or re-chosen for homelab, and deploy yes/no. Also: confirm or reverse D-41..D-46.
 
-**By hand, done 2026-10-29:** `gate-proof-red` deleted; `v1.4.0` tag pushed; saas-foundation PR #9 merged; build-log card #16 in progress. **Still Shane's:** review and merge PR #1 when ready.
+**By hand (Shane):** review and merge PR #1 when ready (now Phases 1–3); the template's `next` security release.
 
 ---
+
 
 
 
