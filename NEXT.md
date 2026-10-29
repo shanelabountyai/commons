@@ -10,7 +10,7 @@
 
 | CI run | Head | Result |
 |---|---|---|
-| Phase 4 head | (see PR #1 checks) | pending at the time of writing; the session updates this row when the run finishes |
+| Phase 4 head | 63dad8a | **success** https://github.com/shanelabountyai/commons/actions/runs/40967135925 (full Playwright 14/14 incl. the capstone, migrate diff, eval:db, ADR, abuse suites, vitest, all green on PG 17). First Phase 4 run f3afb1b **failed** on Playwright (run 40965329908) → D-56 log order, D-57 onboarding spec |
 | Phase 3 head | 9bbee84 | **success** https://github.com/shanelabountyai/commons/actions/runs/40954954426 |
 | Phase 2 head | 3161dfe | success https://github.com/shanelabountyai/commons/actions/runs/40946970972 |
 | Phase 1 head | c61c198 | success https://github.com/shanelabountyai/commons/actions/runs/40930385079 |
