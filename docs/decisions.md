@@ -69,6 +69,12 @@ The PRD leaves several rules open. This file closes them, and **it outranks PRD 
 | D-36 | **`engine:eval:db` runs against the test database's org `homelab-eval`, truncating the forum tables first;** the template's own tests reset the database afterwards, so `adr:measure:db` must run right after it (CI order). Fixture Users are `u###@example.com` members; a Profile per user carries the handle and `joinedAt`. | Task 2.9 mechanics |
 | D-37 | **Phase 2 gate record (2026-10-29).** `engine:eval:db`: 16,457 rows loaded through the writers (78 s locally), 12/12 expected files reproduced from stored rows, 5,000/5,000 stored paths = `assignPaths`, `votes:verify` 5,500 nodes clean, exactly one `BrigadeSignal` (`P-BRIGADE`, 7 voters), `commentCount` = comments per post. `npm test` 238/238 (40 files; +7 database tests). Local PG 16 re-measure on the real schema: thread 1.004 vs 1.904 ms median (closure/path 1.90×), permalink 0.041 vs 0.067 ms. CI's PG 17 numbers are posted on PR #1 and copied into the ADR. | Phase 2 exit |
 
+### Owner decisions at the Phase 2 gate (Shane, 2026-10-29)
+
+| # | Decision | Why |
+|---|----------|-----|
+| D-38 | **Sanitizer pair: `markdown-it` + `isomorphic-dompurify`** (Phase 3 task 3.2 is pre-answered; the two dependencies may be added when 3.2 is reached, exact versions recorded there). The allowlisted subset and the single sanitizer module are still 3.2's job. | Owner |
+
 ## Open — the first session proposes, Shane decides
 
 None at the Phase 1 gate (O-1..O-3 closed by D-28, D-30, D-31).
