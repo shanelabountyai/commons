@@ -1,6 +1,6 @@
 # ADR-001 — Comment tree storage
 
-**Status:** Proposed. Decided in Phase 1 task 1.6 by measurement (O-1). The default if the measurement is a wash is materialized path.
+**Status:** Accepted 2026-10-29 by measurement (D-26, closes O-1): **materialized path**. Re-measure on the Prisma schema on CI's Postgres 17 before Phase 2 freezes it (D-22).
 
 ## Context
 
@@ -29,8 +29,17 @@ The writes are inserts (reply), status changes (delete/remove), and vote-count c
 
 What would flip it to closure table: the 1,000-comment fixture thread taking materially longer by path scan than by closure join on the same Postgres, or a P1/P2 need to move subtrees (none today).
 
-## Decision record (filled in by task 1.6)
+## Decision record (task 1.6, 2026-10-29)
 
-- Measurement: 1,000-comment fixture thread, full-subtree fetch, median of 20 runs, both strategies, same machine: _pending_
-- Segment width and alphabet: _pending_ (default 6 chars base-36 = 2.18 billion siblings per parent)
-- Decided by: _pending_
+Measured by `npx tsx scripts/adr-001-measure.ts` on **PostgreSQL 16.15** (sandbox; CI is 17, C-3/D-22), the `P-THICK` fixture thread (1,000 comments, max depth 11) loaded both ways into a throwaway database, `EXPLAIN (ANALYZE, BUFFERS)` execution time, 20 runs after one warm-up:
+
+| Query | Materialized path | Closure table |
+|---|---|---|
+| Whole thread (1,000 rows), median / p95 | **0.808 / 0.871 ms**, 10 shared buffers | 1.341 / 1.390 ms, 34 buffers |
+| Permalink subtree (12 rows), median / p95 | **0.036 / 0.068 ms**, 3 buffers | 0.178 / 0.206 ms, 12 buffers |
+| Storage (table + indexes) | **232 KiB** | 672 KiB (152 + 520; 3,376 closure rows) |
+
+- **Decision: materialized path.** Faster on both reads, a third of the storage, one table, and nodes never move. The closure table's one advantage (cheap subtree moves) is a feature Commons doesn't have.
+- **Segment:** 6 characters, base-36 `0-9a-z`, ordinal = creation order among siblings by `(created_at, id)`; 2.18 billion siblings per parent. Depth = segments − 1. Index: `(post_id, path text_pattern_ops)`; subtree = `path LIKE prefix || '%'`; ancestors are parsed from the path with no query.
+- **Caveats, stated:** 1,000 comments fit in shared buffers either way (every run `read 0`), so this measures CPU and plan shape, not I/O; both are sub-2 ms and a product would not feel the difference at this size. The decision rests on the structural argument above as much as the numbers. Measured on 16, not 17.
+- Decided by: the kickoff build session, as the plan's default (D-26), flagged for Shane.

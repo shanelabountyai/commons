@@ -42,11 +42,16 @@ The PRD leaves several rules open. This file closes them, and **it outranks PRD 
 | D-24 | **C-7: `retryAfter = (oldest counted hit in the window + per_seconds) − now`**, in seconds, integer, ≥ 1; pinned by a GL- golden case. | Owner, 2026-10-29 |
 | D-25 | **Fixture shape as proposed in `docs/phase-1-plan.md`** (hashed bodies until Phase 3, named nodes for every golden case, one brigade, seed 20261029). C-2, C-4, C-6, C-8 fixed in the docs this session. | Owner, 2026-10-29 |
 
+### Build session defaults (2026-10-29; each reversible, flagged for Shane)
+
+| # | Decision | Why |
+|---|----------|-----|
+| D-26 | **ADR-001: materialized path** (closes O-1). Thread fetch 0.808 vs 1.341 ms median, permalink 0.036 vs 0.178 ms, 232 vs 672 KiB, on PG 16.15 with the 1,000-comment fixture; numbers and caveats in the ADR. Segment 6 chars base-36, ordinal by `(created_at, id)`. | Task 1.6 measurement |
+
 ## Open — the first session proposes, Shane decides
 
 | # | Question | Default if nobody decides |
 |---|----------|---------------------------|
-| O-1 | Tree storage: materialized path vs. closure table (ADR-001). | Materialized path with fixed-width base-36 segments, **decided by the Phase 1 measurement** in task 1.6, not by preference |
 | O-2 | Does a removed parent's subtree stay votable and replyable? | Votable yes, replyable no (thread-local lock under a removed node) |
 | O-3 | Brigade signal for the mod queue: flag N downvotes from young accounts on one item within M minutes? | Yes: ≥ 5 within 10 min, queued with reason `SUSPECTED_BRIGADE`, no automatic action |
 
