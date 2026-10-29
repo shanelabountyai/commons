@@ -61,7 +61,7 @@ template-owned paths; no new dependencies without asking; never "secure", "spam-
 
 ## Still to do by hand
 
-- `~/.claude/CLAUDE.md`: add the port-table row (commons → 7500) on the Mac.
+- ~~`~/.claude/CLAUDE.md`: add the port-table row (commons → 7500) on the Mac.~~ Done 2026-10-29.
 - Review and merge the two PRs (commons; saas-foundation CLONES row).
 - Build-log card #16: name **Commons**, PRD and repo links, status `in progress`.
 - Decide O-1..O-3 when they come up; the defaults are in force until then.
