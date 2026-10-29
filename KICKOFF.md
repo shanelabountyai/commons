@@ -14,9 +14,10 @@ docs/phase-1-tasks.md.
 Steps, in order:
 1. Preflight. python3 -I tools/golden_answers.py must end "18 cases OK". If not, stop and
    tell me. Check that port 7500 is not in saas-foundation/CLONES.md; if it is, stop.
-2. Clone the template with shared history (NOT the GitHub template button), in a separate
-   directory from the kit checkout:
-     git clone <saas-foundation url> commons-app && cd commons-app
+2. Clone the template with shared history (NOT the GitHub template button), into a SIBLING
+   folder of the kit checkout, never inside it (on the Mac that is ~/Projects/commons-app
+   next to ~/Projects/commons):
+     git clone <saas-foundation url> ../commons-app && cd ../commons-app
      git remote rename origin template
      git checkout -B main v1.4.0
      npm ci
