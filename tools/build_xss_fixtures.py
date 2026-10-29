@@ -13,18 +13,17 @@ import os
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "xss")
 
-# Patterns a rendered fragment must never contain (case-insensitive regex, applied to the HTML string).
+# Patterns a rendered fragment must never contain (case-insensitive regex on the HTML string). The renderer returns
+# serialised DOM, in which text never holds a literal "<", so every pattern is anchored on a real tag: a handler or a
+# bad URL inside entity-encoded TEXT is inert and must not count (D-41). An element outside the allowlist is live.
+ALLOWED = r"(p|br|strong|em|b|i|code|pre|a|ul|ol|li|blockquote|h[1-6]|hr|del|s)"
 LIVE = {
-    "script": r"<script",
-    "handler": r"\son[a-z]+\s*=",
-    "js_url": r"javascript\s*:",
-    "data_url": r"data\s*:",
-    "vbs_url": r"vbscript\s*:",
-    "iframe": r"<(iframe|object|embed|frame|frameset|applet)",
-    "svg": r"<(svg|math|foreignobject|annotation-xml)",
-    "img": r"<img",
-    "form": r"<(form|input|button|textarea|select|option|base|link|meta|style)",
-    "raw_lt": r"<(?![/]?(p|br|strong|em|b|i|code|pre|a|ul|ol|li|blockquote|h[1-6]|hr|del|s)\b)",  # any other tag at all
+    "script": r"<script\b",
+    "handler": r"<[a-z][^>]*\son[a-z]+\s*=",
+    "bad_url": r"<[a-z][^>]*\b(href|src|action|data|xlink:href|formaction)\s*=\s*[\"']?\s*(javascript|data|vbscript)\s*:",
+    "style_attr": r"<[a-z][^>]*\sstyle\s*=",
+    "other_tag": r"<(?!/?" + ALLOWED + r"[\s>/])[a-z!?]",  # any element outside the allowlist, comments, PIs
+    "img": r"<img\b",
 }
 TEXT_LIVE = {"any_tag": r"<[a-z/!?]"}  # plain-text fields contain no markup whatsoever once encoded
 

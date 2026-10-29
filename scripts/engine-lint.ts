@@ -63,9 +63,23 @@ export function lintSingleWriter(root = 'src'): string[] {
   return out;
 }
 
+/** Non-negotiable 1 / task 3.3: the sanitizer libraries and dangerouslySetInnerHTML live in src/render only. */
+export function lintSingleRenderer(root = 'src'): string[] {
+  const out: string[] = [];
+  const files = readdirSync(root, { recursive: true, withFileTypes: true }).filter((d) => d.isFile() && /\.tsx?$/.test(d.name) && !d.parentPath.includes('generated'));
+  for (const d of files) {
+    const p = `${d.parentPath}/${d.name}`;
+    if (p.includes('src/render/')) continue;
+    const code = stripComments(readFileSync(p, 'utf8'));
+    if (/dangerouslySetInnerHTML/.test(code)) out.push(`${p}: dangerouslySetInnerHTML outside src/render`);
+    if (/from ['"](markdown-it|isomorphic-dompurify|dompurify)['"]/.test(code)) out.push(`${p}: imports a sanitizer library outside src/render`);
+  }
+  return out;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const lint = lintEngineDirs();
-  const problems = [...lint.problems, ...lintSingleWriter()];
+  const problems = [...lint.problems, ...lintSingleWriter(), ...lintSingleRenderer()];
   const files = lint.files;
   for (const p of problems) console.error(`engine:lint: ${p}`);
   if (problems.length) process.exit(1);
