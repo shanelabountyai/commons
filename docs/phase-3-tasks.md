@@ -12,4 +12,4 @@ Written at the Phase 2 gate (2026-10-29) for Shane's review. Not started. Phase 
 - [ ] **3.8 Honest refusals.** Every refusal is a typed code with `retryAfter` where relevant, surfaced in the (Phase 4) UI and the API; no silent drops. *Acceptance:* a table of codes in `docs/domain-brief.md` and a test per code.
 - [ ] **3.9 Phase 3 gate.** `docs/EVAL.md` §Phase 3; NEXT.md; `docs/phase-4-tasks.md` (reports with reason codes, mod queue with context, content and user state machines, append-only mod log, ban refusal `BANNED_UNTIL`, Handhold read first (D-19), pages and the seeded-community capstone demo) written and review requested.
 
-**Decided (D-38):** sanitizer pair = `markdown-it` + `isomorphic-dompurify`. **Decided (D-38..D-40):** sanitizer pair `markdown-it` + `isomorphic-dompurify`; limits storage = new `LimitHit` table; uploads deferred to Phase 4. **Nothing open before 3.1.** Phase 3 starts on Shane's go.
+**Decided (D-38..D-40):** sanitizer pair `markdown-it` + `isomorphic-dompurify`; limits storage = new `LimitHit` table; uploads deferred to Phase 4. **Nothing open before 3.1.** Phase 3 starts on Shane's go.
