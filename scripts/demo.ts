@@ -12,7 +12,8 @@ import { toDate } from '@/forum/db';
 import { loadForum } from '@/forum/load';
 import { actOnContent, queue, reviewSignal, submitReport, type ModeratorCtx } from '@/forum/moderation';
 import { recomputeRanks } from '@/forum/rank';
-import { boardPosts, type PostSort } from '@/forum/view';
+import { boardPosts } from '@/forum/view';
+import type { PostSort } from '@/ranking';
 import { parseLimitRules, parseModerationRules, parseRankingRules } from '@/rules';
 
 const arg = (name: string, dflt: string) => {
@@ -25,7 +26,8 @@ const SLUG = arg('--org', `demo-${new Date().toISOString().slice(0, 16).replace(
 const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
 const ranking = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8')));
 const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
-const tx = <T>(f: Parameters<typeof db.$transaction<T>>[0]) => db.$transaction(f, { timeout: 600_000, maxWait: 10_000 });
+type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
+const tx = <T>(f: (x: Tx) => Promise<T>) => db.$transaction(f, { timeout: 600_000, maxWait: 10_000 });
 const h = (s: string) => console.log(`\n== ${s}`);
 const now = Math.floor(Date.now() / 1000);
 
