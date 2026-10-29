@@ -28,7 +28,7 @@ Read first: `prd-commons.md` (what), `docs/decisions.md` (authoritative; outrank
 - End each session by updating NEXT.md: what was built, decided, left open, and the gate output.
 
 ## Session 0 — reuse check
-The house reuse scan (`~/Projects/reuse-scan.py`) isn't reachable from a cloud session. Record in `docs/decisions.md`: "Reuse scan skipped (cloud session); overlap taken from `docs/portfolio-overlap.md`; donors read before each port in task 1.3." Re-run it when the repo is next opened on the Mac.
+The house reuse scan (`~/Projects/reuse-scan.py`) ran on the Mac on 2026-10-29 (D-19; Handhold found as the moderation donor). A cloud session can't run it: don't record "skipped", point at D-19. Re-run it when the repo is next opened on the Mac and before Phase 4.
 
 ## Stack
 TypeScript on a clone of saas-foundation **v1.4.0**: Next.js 16, Prisma 7, PostgreSQL 17, vitest, Playwright. **Port 7500** (D-5, verified free in the port table 2026-10-29). Foundation modules per D-18. Template-owned paths (`src/core/**`, `tests/invariants/**`, core migrations, security routes) are never edited here; `npm run foundation:drift` enforces it. Local `DATABASE_URL`s carry `?connection_limit=10&pool_timeout=20`. `vercel.json` carries the house `ignoreCommand` even though no deploy is planned. CI runs with `TZ=America/Chicago`. Python only in `tools/` (stdlib only, `python3 -I`).

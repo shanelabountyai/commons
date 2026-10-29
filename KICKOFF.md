@@ -34,8 +34,7 @@ Steps, in order:
 4. npm run foundation:drift must pass before any Commons code exists. Try npm run db:setup
    and npm test (Quorum's sandbox notes are in D-16). If something can't run, record exactly
    which command failed and why in NEXT.md and continue: CI decides.
-5. Reuse scan: skipped (not reachable from the cloud). Record that in docs/decisions.md
-   with the sentence from CLAUDE.md §Session 0.
+5. Reuse scan: already run on the Mac (D-19). Don't repeat it; note that in docs/decisions.md.
 6. Read every doc. List anything that contradicts itself or can't be built as written, and
    any donor path in docs/portfolio-overlap.md you could not find. Don't resolve these yourself.
 7. Plan first: write docs/phase-1-plan.md with the order you'll do tasks 1.1 to 1.11 in,

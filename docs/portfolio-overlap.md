@@ -9,7 +9,7 @@ Checked 2026-10-29 against the build-log card list, `saas-foundation/CLONES.md`,
 | comment trees | **No.** Coursework has a prerequisite DAG (graph, many parents); nothing has a single-parent tree of user content with pagination and permalinks | Path-encoded trees, render cut, continue-thread, removed-node rules |
 | ranking algorithms | **No.** Pulseboard aggregates; Triage classifies; nothing orders content by a decaying score | Hot / Top / New / Best (Wilson), oracle-checked |
 | moderation queue | **Yes (found by the reuse scan, D-19).** Handhold (`~/Projects/alongside/backend/src/community/`) has reports with reason rows, a mod queue with moderator step-up, and an append-only `ModerationAction` audit with a test. Triage routes inbound items to a queue | Reports with reason codes, state machines for content and users, append-only mod log |
-| rate limiting | **No.** The foundation has auth rate limits on sign-in only (check `src/core`) | Per-user, per-action sliding windows from data, young-account gates, honest retry-after |
+| rate limiting | **Partly.** The foundation's `src/core/rate-limit.ts` is a general fixed-window Postgres counter (`hit(key, {limit, windowMs})`, `RateLimit` table, hourly sweep) used by login, MFA, invites and share reads. Not sliding, not pure: a Phase 3 **storage** donor, not an engine donor | Per-user, per-action sliding windows from data, young-account gates, honest retry-after |
 
 Suggested card chips once it ships: `comment trees (path-encoded)` · `hot / top / new / best (Wilson)` · `one account, one vote` · `rate limits as data` · `XSS fixture suite inert` · `mod queue + append-only log`.
 

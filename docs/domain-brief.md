@@ -31,10 +31,18 @@ Vocabulary, formulas and the golden-case index. `docs/decisions.md` outranks thi
 
 - **R-1 Hot** (posts): `s = ups − downs`; `order = log10(max(|s|, 1))`; `sign = 1, 0, −1` by `s`; `hot = round(sign·order + (created − 1134028003)/45000, 7)`. Independent of `now`.
 - **R-2 Top**: net score, among nodes with `now − window ≤ created ≤ now`; `all` has no lower bound. Future-dated nodes are excluded.
-- **R-3 New**: `created desc`, ties per D-9.
+- **R-3 New**: `created desc`, ties `id asc` only (the `created desc` half of D-9's tiebreak is the sort itself).
 - **R-4 Best** (comments): Wilson lower bound with `n = ups + downs`, `p̂ = ups/n`, `z = 1.959963984540054`:
   `(p̂ + z²/2n − z·√((p̂(1−p̂) + z²/4n)/n)) / (1 + z²/n)`; `n = 0 → 0.0`.
 - **R-5** Rankings are recomputed by a batch job every 300 s and stored with `ranked_at`; pages show freshness. The pure functions are the source; the stored value is a cache.
+
+## 3a. Gates and limits (L-) — the oracle is `tools/limitslib.py`
+
+- **L-1 Young account** (D-15, D-23): `age_seconds < 24·3600` **or** `contributions < 5`. Exactly 24 h old with 5 contributions is not young.
+- **L-2 Downvote gate** (D-15, D-23): allowed when `age_seconds ≥ 24·3600` **and** `contributions ≥ 3`; otherwise `GATED_DOWNVOTE`.
+- **L-3 Sliding window**: an action is allowed when the number of counted hits with `now − per_seconds < hit_at ≤ now` is below `max` (`young_max` for a young account). Refused hits are not counted.
+- **L-4 retryAfter** (D-24): `max(1, oldest_counted_hit_in_window + per_seconds − now)`, integer seconds.
+- **L-5 Contributions** are posts and comments authored and not removed, counted as of `now`.
 
 ## 4. Golden cases (`python3 -I tools/golden_answers.py` → `18 cases OK`)
 
@@ -50,7 +58,9 @@ Vocabulary, formulas and the golden-case index. `docs/decisions.md` outranks thi
 | GW-06..GW-08 | wilson(70,100) ≈ 0.6042, wilson(1,1) ≈ 0.2065, wilson(10,10) ≈ 0.7225 (±5e-5) |
 | GT-01..GT-03 | Top window edges: exactly 24 h is in `day`; 24 h + 1 s is not; future-dated is in no window |
 
-Task 1.2 adds tree cases (GR-) and the fixture hashes as §5.
+Task 1.2 adds tree cases (GR-), gate and limit cases (GL-, pinning L-1..L-4 at both boundaries) and the fixture hashes as §5.
+
+**Embedding goldens as fixture nodes (C-8):** the author's fixed +1 (D-12) is one of the counted ups. `P-GH-50` has 49 other up-voters; `C-GW-1-1` has only the author's vote; `C-GW-70-100` has 69 other ups and 30 downs; `C-GW-10-10` has 9 other ups.
 
 ## 5. Fixture hashes
 
