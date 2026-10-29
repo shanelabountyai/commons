@@ -44,6 +44,23 @@ Vocabulary, formulas and the golden-case index. `docs/decisions.md` outranks thi
 - **L-4 retryAfter** (D-24): `max(1, oldest_counted_hit_in_window + per_seconds − now)`, integer seconds.
 - **L-5 Contributions** are posts and comments authored and not removed, counted as of `now`.
 
+## 3b. Refusal codes (Phase 3, task 3.8) — every refusal is typed; nothing is dropped silently
+
+| Code | Thrown by | Means | Carries | Test |
+|---|---|---|---|---|
+| `NOT_MEMBER` | action door | the profile is not in this forum | — | `actions.test.ts` |
+| `BANNED_UNTIL` | action door | the profile's ban has not lifted (D-14); existing content stays | the lift instant | `actions.test.ts` |
+| `INPUT_INVALID` | action door, fixture loaders | empty or oversize text (title ≤ 300, body ≤ 50,000 chars), malformed fixture row | field | `actions.test.ts`, `eval.test.ts` |
+| `RATE_LIMITED` | action door (`RateLimited`) | the sliding window is full (L-3) | `action`, `retryAfter` seconds (L-4) | `actions.test.ts`, `abuse:spam` |
+| `TREE_INVALID` | tree writer, tree engine | parent not a comment of the same post, or post not in the org (T-1) | — | `forum.test.ts`, `tree.test.ts` |
+| `PARENT_REMOVED` | tree writer | a reply under a moderator-removed comment (D-30) | — | `forum.test.ts` |
+| `UNKNOWN_NODE` | vote path, editor | the node does not exist in this org | — | `actions.test.ts` |
+| `NOT_AUTHOR` | editor | only the author edits (2.7) | — | `forum.test.ts` |
+| `WRITE_ONCE` | fixture loader | the org already holds a different fixture | — | `commons:load` |
+| `RULES_INVALID` | rules loader | a bad `rules/*.json` | field | `rules.test.ts` |
+
+Vote outcomes `SELF_VOTE` and `GATED_DOWNVOTE` are not refusals: the request is accepted, recorded as a `VoteEvent` with that outcome, and changes no count (V-1, V-2).
+
 ## 4. Golden cases (`python3 -I tools/golden_answers.py` → `44 cases OK`)
 
 | Id | What it pins |
