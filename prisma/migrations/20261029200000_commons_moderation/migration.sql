@@ -8,7 +8,11 @@ ADD COLUMN "modState" TEXT NOT NULL DEFAULT 'ACTIVE';
 
 -- AlterTable
 ALTER TABLE "Post" ADD COLUMN "lockedAt" TIMESTAMPTZ(6),
-ADD COLUMN "pinnedAt" TIMESTAMPTZ(6);
+ADD COLUMN "pinnedAt" TIMESTAMPTZ(6),
+ADD COLUMN "bodyHash" TEXT;
+
+-- AlterTable
+ALTER TABLE "Comment" ADD COLUMN "bodyHash" TEXT;
 
 -- AlterTable
 ALTER TABLE "BrigadeSignal" ADD COLUMN "reviewedAt" TIMESTAMPTZ(6);
@@ -86,6 +90,12 @@ CREATE TABLE "Upload" (
 
     CONSTRAINT "Upload_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE INDEX "Post_orgId_bodyHash_createdAt_idx" ON "Post"("orgId", "bodyHash", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Comment_orgId_bodyHash_createdAt_idx" ON "Comment"("orgId", "bodyHash", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "Report_nodeKind_nodeId_idx" ON "Report"("nodeKind", "nodeId");

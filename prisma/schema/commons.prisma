@@ -87,11 +87,13 @@ model Post {
   commentCount Int        @default(0)
   lockedAt     DateTime?  @db.Timestamptz(6)
   pinnedAt     DateTime?  @db.Timestamptz(6)
+  bodyHash     String?
   comments     Comment[]
   uploads      Upload[]
 
   @@unique([orgId, publicId])
   @@index([boardId, createdAt])
+  @@index([orgId, bodyHash, createdAt])
 }
 
 /// path = one 6-char base-36 segment per comment ancestor including itself; depth = segments − 1 (ADR-001). The
@@ -118,9 +120,11 @@ model Comment {
   status    NodeStatus @default(visible)
   ups       Int        @default(1)
   downs     Int        @default(0)
+  bodyHash  String?
 
   @@unique([orgId, publicId])
   @@unique([postId, path])
+  @@index([orgId, bodyHash, createdAt])
 }
 
 /// The current vote: one row per voter and node (D-29); absent means no vote (a toggle-off deletes the row).
