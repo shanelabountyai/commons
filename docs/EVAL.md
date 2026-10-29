@@ -102,6 +102,33 @@ Closure / path = 1.90× on the thread fetch; the task's stop (closure better by 
 
 The hand-written migration and `prisma/schema` agree (after D-34: the `text_pattern_ops` index could not be round-tripped and was replaced by a `COLLATE "C"` path column; `EXPLAIN` shows the unique btree serving the prefix scan as `path >= p AND path < p+1`).
 
+## Phase 3 — hostility (2026-10-29)
+
+### XSS fixture set through the renderer — `npm run xss:check`
+
+59 cases (`fixtures/xss/cases.json`, frozen in MANIFEST; 50 markdown bodies, 9 plain-text fields), each with the tag-anchored live patterns it must not produce (D-41) and the text that must survive: **59/59 inert**, slowest the 200 kB body at 54 ms. The allowed subset renders (X-45), markdown links carry `rel="nofollow ugc noopener"` (X-46), `javascript:`/`data:`/`vbscript:` links in five encodings lose their href, raw HTML is text, code fences show scripts as text, 500 nested quotes and 2,000 nested list markers keep their content (D-42). A planted passthrough in a throwaway copy fails 10 cases. The same 59 run in vitest (`tests/engine/render.test.ts`).
+
+### Limits through the live store — `npm run abuse:spam`, `npm run abuse:normal`
+
+Both replay the Phase 1 scripts through `guardAndRecord` on a throwaway org in the test database (dropped afterwards) and diff against `expected_limits.csv`:
+
+| Script | Attempts | Allowed | Refused | First retryAfter |
+|---|---|---|---|---|
+| spam-young-comments | 60 | 2 | 58 | 58 s |
+| spam-young-posts | 20 | 1 | 19 | 3,540 s |
+| spam-young-votes | 100 | 20 | 80 | 50 s |
+| normal-u050 posts / comments / votes | 2 / 29 / 55 | 2 / 29 / 55 | 0 / 0 / 0 | — |
+
+Identical to the pure engine's numbers: the store supplies the history, the engine decides, and refusals write no rows (D-45).
+
+### Action door — `npm test` (`tests/integration/actions.test.ts`, 6 tests; suite 307/307 in 42 files)
+
+A young account hits its lower limits with `retryAfter` 58 and no row written; `BANNED_UNTIL` writes nothing and lifts on time; `NOT_MEMBER`; `INPUT_INVALID` for an empty title and a 50,001-char body; `UNKNOWN_NODE`; `GATED_DOWNVOTE` through the door, then `APPLIED` after 24 h and 3 contributions; the sweep drops every row past the longest window. One test per refusal code (brief §3b).
+
+### Dependencies — `npm audit`
+
+`markdown-it 15.0.3` and `isomorphic-dompurify 4.6.0` add no advisories. Nine pre-existing advisories belong to template dependencies, including `next` at critical; flagged for the template (D-46), not changed here.
+
 ## What these numbers are not
 
-They are not a benchmark of the forum, a measure of spam resistance, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 3 adds the XSS suite and the spam-bot script against a running app; Phase 2 re-measures ADR-001 on CI's Postgres 17 with the Prisma schema.
+They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 3 adds the XSS suite and the spam-bot script against a running app; Phase 2 re-measures ADR-001 on CI's Postgres 17 with the Prisma schema.
