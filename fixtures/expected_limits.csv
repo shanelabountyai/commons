@@ -1,0 +1,7 @@
+script,action,attempts,allowed,refused,first_retry_after
+spam-young-comments,comment,60,2,58,58
+spam-young-posts,post,20,1,19,3540
+spam-young-votes,vote,100,20,80,50
+normal-u050-posts,post,2,2,0,
+normal-u050-comments,comment,29,29,0,
+normal-u050-votes,vote,55,55,0,
