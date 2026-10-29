@@ -1,25 +1,27 @@
 # NEXT
 
-## ▶ Phase 1 DONE; stopped at the gate (2026-10-29). Shane reviews PR #1 and `docs/phase-2-tasks.md`. No Phase 2 work until go.
+## ▶ Phase 2 DONE; stopped at the gate (2026-10-29). Shane reviews PR #1 and `docs/phase-3-tasks.md`. No Phase 3 work until go.
 
-**Phase 1 build session (2026-10-29, Fable, cloud; Shane approved D-21..D-25 and said go).**
-- Built in TDD order, one concern per commit on `phase-1`: 1.2 fixtures + oracles → 1.1 scripts + CI gate → 1.3 ports → 1.4 rules loader → 1.5 ranking → 1.6 tree + ADR-001 → 1.7/1.8 votes + limits → 1.9 `engine:eval` → 1.10 `docs/EVAL.md` → 1.11 CI proof. Decisions D-26 (materialized path, measured) and D-27 (gate record); lineage table filled; `docs/phase-2-tasks.md` written for review.
-- **Gate output:** `engine:eval` 12 files, 19,568 rows, 0 differences; `ranking:golden` 44 OK; `engine:lint` OK; `fixtures:check` OK; `npm test` 231/231 (39 files) under `TZ=America/Chicago`; lint 0; typecheck clean; `foundation:drift` clean against v1.4.0 (modules removed: billing). Every number with its command: `docs/EVAL.md`.
-- **Before Phase 2 check:** gravity 45000 → 90000 in a copy of `rules/ranking.json`: `expected_post_order_hot.csv` 0/497 and named first; the other 11 files unchanged; no code change.
-- **ADR-001:** materialized path, by measurement on PG 16.15 (thread 0.808 vs 1.341 ms median; permalink 0.036 vs 0.178 ms; 232 vs 672 KiB). Re-measure on CI's PG 17 in Phase 2 (task 2.8).
-- **Sandbox:** everything ran locally except `foundation:check-modules` (no rsync) and `prisma migrate deploy` (engine download blocked; `psql -f` instead). Postgres had to be restarted between turns (`service postgresql start`).
+**Phase 2 build session (2026-10-29 2:45 PM CT, Fable, cloud, unattended on Shane's scheduled go).**
+- Built per `docs/phase-2-tasks.md`, one concern per commit on `phase-1`: schema + migration (2.1/2.2) → tree writer (2.3) → vote path + brigade + `votes:verify` (2.5) → `commons:load` (2.4) → `rank:recompute` + cron (2.6) → edits (2.7) → `engine:eval:db` + database tests (2.9) → ADR re-measure + CI (2.8) → docs (2.10). Defaults D-32..D-36, gate D-37; `docs/phase-3-tasks.md` written for review.
+- **Gate output:** `engine:eval:db` 12/12 files from stored rows, 5,000/5,000 paths equal, `votes:verify` clean, one `BrigadeSignal`, `commentCount` exact; `npm test` 238/238 (40 files); lint 0; typecheck clean; `foundation:drift` clean; `engine:lint` OK incl. the new single-writer rule. **CI green on PG 17** (migrate diff clean, eval:db, measurement, vitest, e2e): https://github.com/shanelabountyai/commons/actions/runs/40946970972 on 3161dfe.
+- **ADR-001 on PG 17:** path 0.914 vs closure 1.793 ms median (1.96×); stop not fired; table copied into the ADR.
+- **One CI finding fixed:** `prisma migrate diff` cannot round-trip a `text_pattern_ops` index (run 96f686d posted the diff on PR #1); replaced by `COLLATE "C"` on `path` (D-34), migration amended in place before any merge or deploy.
+- **Sandbox:** everything ran locally except `migrate diff` (CI) and `check-modules` (rsync); Postgres restarted with `service postgresql start`; `engine:eval:db` takes 78 s locally.
 
 | CI run | Head | Result |
 |---|---|---|
-| Red proof, `gate-proof-red` (one swapped expected row), PR #2 | 4f35a34 | **failure at `npm run engine:eval`** https://github.com/shanelabountyai/commons/actions/runs/40930587231 |
-| Green, `phase-1` 1.9 head | c61c198 | **success** https://github.com/shanelabountyai/commons/actions/runs/40930385079 |
-| Green, `phase-1` scaffold | cc87280 | success https://github.com/shanelabountyai/commons/actions/runs/40927088953 |
+| Phase 2 head | 3161dfe | **success** https://github.com/shanelabountyai/commons/actions/runs/40946970972 (PG 17 ADR table posted as a PR comment) |
+| D-34 trigger | 96f686d | failure at migrate diff (the opclass index), diff posted on PR #1 |
+| Phase 1 head | c61c198 | success https://github.com/shanelabountyai/commons/actions/runs/40930385079 |
+| Red proof (PR #2, closed) | 4f35a34 | failure at `engine:eval` https://github.com/shanelabountyai/commons/actions/runs/40930587231 |
 
-**Decided 2026-10-29 (D-28..D-31):** ADR-001 confirmed; `Vote` current row + append-only event log; removed subtree votable, not replyable (`PARENT_REMOVED`); brigade signal recorded (≥5 gated downvotes in 600 s → one `SUSPECTED_BRIGADE` row), never acted on. **Phase 2 is unblocked and waits for Shane's go.**
+**Decisions needed from Shane before Phase 3** (`docs/phase-3-tasks.md`): the markdown + sanitizer pair (a new dependency; 3.2 asks in-session), limits storage (new `LimitHit` sliding-window table vs the foundation's fixed-window counter), and whether uploads stay in Phase 3 or move to Phase 4 with the UI. Also: confirm or reverse D-32..D-36.
 
-**By hand (Shane):** push the template tag from a Mac clone that has both remotes (`git push origin v1.4.0`) so CI stops naming it by SHA; merge saas-foundation PR #9 (CLONES row); PR #2 is closed; **delete the `gate-proof-red` branch** (the proxy refuses branch deletes, 403); PR #1 stays unmerged until reviewed; build-log card #16 → in progress with the repo and PRD links.
+**By hand (Shane):** delete `gate-proof-red`; push the `v1.4.0` tag from the Mac; merge saas-foundation PR #9; PR #1 stays unmerged until reviewed; build-log card #16 → in progress (repo + PRD links).
 
 ---
+
 
 
 **Kickoff session (2026-10-29, cloud, Shane present).**
