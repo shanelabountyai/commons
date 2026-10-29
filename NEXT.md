@@ -1,6 +1,27 @@
 # NEXT
 
-## ▶ Phase 3 DONE; stopped at the gate (2026-10-29). Shane reviews PR #1 and `docs/phase-4-tasks.md`. No Phase 4 work until go.
+## ▶ Phase 4 DONE — the build is closed; stopped at the gate (2026-10-29). Shane reviews PR #1 (Phases 1–4) and `docs/CLOSEOUT.md`. Nothing merges from a session.
+
+**Phase 4 build session (2026-10-29 ~5–6 PM CT, Fable, cloud, Shane's "go now").**
+- Built per `docs/phase-4-tasks.md`, one concern per commit on `phase-1`: `rules/moderation.json` + schema + append-only trigger (4.1) → report / act / queue / state machines (4.2) → duplicate signal (4.5) → pages, mod queue, profile, search, uploads (4.3, 4.4, 4.6, 4.7) → browser capstone with axe (4.8) → `commons:demo` + `docs/DEMO.md` (4.8) → EVAL §4, WRITEUP, CLOSEOUT (4.9). Defaults D-48..D-54, gate D-55.
+- **Gate output:** `npm test` 316/316 (44 files); harness 14/14 (10 forum actions under INV-01..04/22); `next build` clean; lint 0; typecheck clean; drift clean; `engine:lint` OK; `engine:eval` 0 differences; `xss:check` 59/59; `fixtures:check` OK; e2e capstone 5/5 in 3.2 min, axe 0 violations light+dark on 10 page loads; demo numbers in `docs/DEMO.md`. Every number with its command: `docs/EVAL.md` §Phase 4.
+- **Found while building, all recorded:** the moderator role has to be a Profile flag because `Role` is template-owned (D-48); the append-only trigger also refuses deleting an org that holds log rows (D-49); XSS fixture X-37 (a NUL byte) was inert on the page but a Postgres 500 on write — failing test first, then refused at the door (D-53); `npm audit` 15 advisories, 0 from Phase 4 (D-54).
+- **Sandbox:** everything ran locally (PG 16.15, Chromium from /opt/pw-browsers) except `migrate diff` and `check-modules` (CI-only, as before). Three demo orgs (`demo-2026102922*`) remain in the local `commons` database; they cannot be deleted (D-49) and don't matter.
+
+| CI run | Head | Result |
+|---|---|---|
+| Phase 4 head | (see PR #1 checks) | pending at the time of writing; the session updates this row when the run finishes |
+| Phase 3 head | 9bbee84 | **success** https://github.com/shanelabountyai/commons/actions/runs/40954954426 |
+| Phase 2 head | 3161dfe | success https://github.com/shanelabountyai/commons/actions/runs/40946970972 |
+| Phase 1 head | c61c198 | success https://github.com/shanelabountyai/commons/actions/runs/40930385079 |
+
+**Decisions for Shane:** confirm or reverse D-48..D-54 (and D-41..D-46 if not yet). Deploy stays a separate decision: not planned; D-51 names the one seam (two file functions in `src/forum/uploads.ts`).
+
+**By hand (Shane):** `docs/CLOSEOUT.md` § By hand — review/merge PR #1, reuse scan on the Mac, the two upstream items for saas-foundation (security release; a `Role` extension point), build-log card #16, brief + LinkedIn.
+
+---
+
+## Phase 3 DONE; stopped at the gate (2026-10-29). (superseded by the block above)
 
 **Phase 3 build session (2026-10-29 ~4 PM CT, Fable, cloud, Shane's "run it now").**
 - Built per `docs/phase-3-tasks.md` (uploads deferred, D-40), one concern per commit on `phase-1`: XSS fixture set first (3.1) → the two sanitizer packages at pinned versions (D-38) and `src/render` as the single sanitizer module with `xss:check` (3.2/3.3) → `LimitHit` table (3.4) → limits store, action door, live gates (3.4/3.5/3.8) → abuse suites and per-code tests (3.7/3.8) → CI (3.9). Defaults D-41..D-46, gate D-47; `docs/phase-4-tasks.md` written for review.

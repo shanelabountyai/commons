@@ -129,6 +129,32 @@ A young account hits its lower limits with `retryAfter` 58 and no row written; `
 
 `markdown-it 15.0.3` and `isomorphic-dompurify 4.6.0` add no advisories. Nine pre-existing advisories belong to template dependencies, including `next` at critical; flagged for the template (D-46), not changed here.
 
+## Phase 4 — people and moderators (2026-10-29)
+
+### Moderation and uploads — `npm test` (`tests/integration/moderation.test.ts` 6, `uploads.test.ts` 2; suite 316/316 in 44 files)
+
+Report → case opens once per node and counts reporters; remove → restore keeps both `ModerationAction` rows and `UPDATE`/`DELETE` on the table are refused by trigger `commons_append_only`; an illegal transition (`CLEAR` on a removed post, a second `LOCK`, `WARN` on a banned member) is `TRANSITION_INVALID` naming both states; the full table in `rules/moderation.json` is checked by name; a non-moderator member is `NOT_MODERATOR`; a 24 h ban refuses the banned member's post with `BANNED_UNTIL` and the lift time, and lifts; lock refuses `reply` with `THREAD_LOCKED`; the fixture's brigade is one queue item; the same ≥ 40-char body posted twice inside 24 h is accepted and raises one `DuplicateSignal`; reviewing clears both signals from the queue. Uploads: PNG/JPEG/WebP by declared type **and** magic bytes (SVG bytes declared as `image/png` are `INPUT_INVALID`, and `image/svg+xml` is not an allowed type), 2,000,000-byte cap, author-only, bytes outside the database.
+
+### Template invariants over the forum actions — `tests/invariants/inv-01-04-22-actions.test.ts`, 14/14 (all invariant files 81/81)
+
+Ten forum actions (`newPost, reply, vote, edit, report, moderateContent, moderateThread, moderateUser, reviewBrigade, reviewDuplicate`) and the template's own, discovered by glob and run through INV-01 (wrapped), INV-02 (cross-org ≡ not found), INV-03 (secondary rows scoped), INV-04 (no echo before authz) and INV-22 (membership checked, not asserted); the five planted controls still turn each invariant red.
+
+### The pages in a browser — `e2e/commons.spec.ts`, 5/5 in 3.2 min, axe 0 violations light and dark on 10 page loads
+
+The fixture community loaded through the real writers into a fresh org, then: boards → `selfhosting` under Hot / Top all time (P-GH-50 first) / New, `rankedAt` shown → P-CHAIN with `[deleted]` and `[removed]` in place, 11 comments · 2 top-level shown, continue-thread to a permalink with 6 ancestors → reply, a gated downvote answered `GATED_DOWNVOTE`, an edit inside the 900 s window with no mark → **all 48 markdown-class XSS fixture bodies posted through the comment form: 47 stored and inert in Chromium** (no `script img svg iframe object embed form input style math`, no `on*` attribute, no `javascript:`/`data:`/`vbscript:` URL inside any rendered body; no dialog fired) and **X-37 refused `INPUT_INVALID`** → report → queue shows the case and the 7-voter brigade with author history → remove → restore → log `RESTORE` over `REMOVE`, `DELETE` refused → search by title.
+
+### A bug the capstone found — fixed behind a failing test
+
+X-37 (a NUL byte inside `<script>`) was inert through `src/render` (`xss:check` never writes to the database) but **crashed the write** with Postgres `invalid byte sequence for encoding "UTF8": 0x00` — a 500 where the design promises a coded refusal. `actions.test.ts` got the red test first; `checkText` now refuses U+0000 (D-53, commit `08b65e6`). The fixture already existed; the renderer check alone had not been enough to find it.
+
+### The demo — `npm run commons:demo` (every number in `docs/DEMO.md`)
+
+Seed 16,457 rows through the writers in 71 s. Hot vs Top vs New on one board at the fixture instant (net 0 at 10 h above net 14 at 27 h under Hot, by the formula). Spam wave from a 1 h-old account: 60 comments → 2 allowed / 58 `RATE_LIMITED` / retryAfter 58 s, 5 posts → 1 / 4, one `DUPLICATE` signal. Brigade: 7 gated downvotes from 2 h-old accounts → counted downs still 0, one `BRIGADE(7)` item; `REVIEW_SIGNAL`, `REMOVE`, `RESTORE` logged; `DELETE` refused, rows still 3.
+
+### Build, lint, drift, audit
+
+`next build` clean (Next 16, all forum routes dynamic); `eslint` 0; `tsc` clean; `foundation:drift` clean against v1.4.0; `engine:lint` OK (purity, single writer, single renderer). `npm audit`: 15 advisories, **0 added by Phase 4** (lockfile unchanged this phase; six new ones published against existing template dependencies since Phase 3) — template-owned, flagged for saas-foundation (D-54).
+
 ## What these numbers are not
 
-They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 3 adds the XSS suite and the spam-bot script against a running app; Phase 2 re-measures ADR-001 on CI's Postgres 17 with the Prisma schema.
+They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
