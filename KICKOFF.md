@@ -66,4 +66,4 @@ template-owned paths; no new dependencies without asking; never "secure", "spam-
 - Review and merge the two PRs (commons; saas-foundation CLONES row).
 - Build-log card #16: name **Commons**, PRD and repo links, status `in progress`.
 - Decide O-1..O-3 when they come up; the defaults are in force until then.
-- Re-run `reuse-scan.py` the next time the repo is open on the Mac and record the result.
+- ~~Re-run `reuse-scan.py` the next time the repo is open on the Mac and record the result.~~ Done 2026-10-29, D-19.

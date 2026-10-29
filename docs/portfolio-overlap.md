@@ -8,7 +8,7 @@ Checked 2026-10-29 against the build-log card list, `saas-foundation/CLONES.md`,
 |---|---|---|
 | comment trees | **No.** Coursework has a prerequisite DAG (graph, many parents); nothing has a single-parent tree of user content with pagination and permalinks | Path-encoded trees, render cut, continue-thread, removed-node rules |
 | ranking algorithms | **No.** Pulseboard aggregates; Triage classifies; nothing orders content by a decaying score | Hot / Top / New / Best (Wilson), oracle-checked |
-| moderation queue | Partly: Triage routes inbound items to a queue | Reports with reason codes, state machines for content and users, append-only mod log |
+| moderation queue | **Yes (found by the reuse scan, D-19).** Handhold (`~/Projects/alongside/backend/src/community/`) has reports with reason rows, a mod queue with moderator step-up, and an append-only `ModerationAction` audit with a test. Triage routes inbound items to a queue | Reports with reason codes, state machines for content and users, append-only mod log |
 | rate limiting | **No.** The foundation has auth rate limits on sign-in only (check `src/core`) | Per-user, per-action sliding windows from data, young-account gates, honest retry-after |
 
 Suggested card chips once it ships: `comment trees (path-encoded)` · `hot / top / new / best (Wilson)` · `one account, one vote` · `rate limits as data` · `XSS fixture suite inert` · `mod queue + append-only log`.
@@ -26,6 +26,7 @@ Suggested card chips once it ships: `comment trees (path-encoded)` · `hot / top
 | Append-only tables via triggers | Quorum D-19, Housefile | quorum migrations | Votes (soft toggle as new rows or a guarded table, Phase 2 decides), mod log, edit history |
 | State machine as data, illegal transitions refused | Quorum D-22 violations, Adjuster | quorum `src/` violations | Content + user moderation states (Phase 4) |
 | Outbox notices queued, never sent | Quorum D-44 | quorum | Ban and report notices |
+| Reports with reason codes as rows, mod queue, append-only moderation audit + its test | Handhold (D-19) | `~/Projects/alongside/backend/prisma/schema.prisma` `ReportReason`..`ModerationAction`; `tests/community.security.test.ts` §10.11 | Moderation vocabulary (1.3) and Phase 4. Not a donor for trees, the sanitizer or the limits engine (see D-19) |
 
 ## New — each with the fixture that proves it
 
