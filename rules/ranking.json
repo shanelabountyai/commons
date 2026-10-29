@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "hot": { "epoch_seconds": 1134028003, "gravity_seconds": 45000 },
+  "best": { "z": 1.959963984540054 },
+  "top": { "windows_seconds": { "day": 86400, "week": 604800, "all": null } },
+  "recompute": { "interval_seconds": 300 }
+}
