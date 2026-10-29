@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "young_account": { "max_age_hours": 24, "max_contributions": 5 },
+  "downvote_gate": { "min_age_hours": 24, "min_contributions": 3 },
+  "windows": [
+    { "action": "post",    "per_seconds": 3600, "max": 5,  "young_max": 1 },
+    { "action": "comment", "per_seconds": 60,   "max": 6,  "young_max": 2 },
+    { "action": "vote",    "per_seconds": 60,   "max": 30, "young_max": 10 },
+    { "action": "report",  "per_seconds": 86400, "max": 20, "young_max": 5 }
+  ],
+  "edit_window_seconds": 900,
+  "max_depth_rendered": 6,
+  "upload": { "max_bytes": 2000000, "types": ["image/png", "image/jpeg", "image/webp"] }
+}
