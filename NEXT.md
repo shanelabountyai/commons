@@ -17,7 +17,7 @@
 
 **Decisions needed from Shane before Phase 2:** review `docs/phase-2-tasks.md`; O-2 (replies under a removed node), O-3 (brigade signal data shape), and `Vote` as one current row per voter/node vs derived from `VoteEvent`. Confirm or reverse D-26.
 
-**By hand (Shane):** push the template tag from a Mac clone that has both remotes (`git push origin v1.4.0`) so CI stops naming it by SHA; merge saas-foundation PR #9 (CLONES row); PR #2 is closed and `gate-proof-red` deleted by the session; PR #1 stays unmerged until reviewed; build-log card #16 → in progress with the repo and PRD links.
+**By hand (Shane):** push the template tag from a Mac clone that has both remotes (`git push origin v1.4.0`) so CI stops naming it by SHA; merge saas-foundation PR #9 (CLONES row); PR #2 is closed; **delete the `gate-proof-red` branch** (the proxy refuses branch deletes, 403); PR #1 stays unmerged until reviewed; build-log card #16 → in progress with the repo and PRD links.
 
 ---
 
