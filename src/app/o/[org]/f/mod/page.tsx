@@ -38,7 +38,7 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
     reports: await db.report.count({ where: { nodeKind: 'POST', nodeId: { in: (await db.post.findMany({ where: { authorId: profileId }, select: { id: true } })).map((p) => p.id) } } }),
     actions: await db.moderationAction.count({ where: { subjectId: profileId } }),
   });
-  const log = await db.moderationAction.findMany({ where: { orgId: ctx.orgId }, orderBy: { createdAt: 'desc' }, take: 50, include: { actor: { select: { handle: true } }, subject: { select: { handle: true } } } });
+  const log = await db.moderationAction.findMany({ where: { orgId: ctx.orgId }, orderBy: { seq: 'desc' }, take: 50, include: { actor: { select: { handle: true } }, subject: { select: { handle: true } } } });
 
   return (
     <main>

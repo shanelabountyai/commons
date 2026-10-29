@@ -20,7 +20,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ org: s
   const v = await profilePage(ctx.orgId, handle);
   if (!v) notFound();
   const isMod = canModerate(me);
-  const log = isMod ? await db.moderationAction.findMany({ where: { subjectId: v.profile.id }, orderBy: { createdAt: 'desc' }, take: 20, include: { actor: { select: { handle: true } } } }) : [];
+  const log = isMod ? await db.moderationAction.findMany({ where: { subjectId: v.profile.id }, orderBy: { seq: 'desc' }, take: 20, include: { actor: { select: { handle: true } } } }) : [];
   return (
     <main>
       <h1>

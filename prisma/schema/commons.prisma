@@ -278,6 +278,9 @@ model ModerationAction {
   reason          String
   until           DateTime? @db.Timestamptz(6)
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  /// Total order of the log (D-56): createdAt is epoch seconds (D-7) and two actions in one second must still
+  /// read in the order they happened.
+  seq             BigInt   @unique @default(autoincrement())
 
   @@index([orgId, createdAt])
   @@index([nodeKind, nodeId])
