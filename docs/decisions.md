@@ -46,6 +46,7 @@ The PRD leaves several rules open. This file closes them, and **it outranks PRD 
 
 | # | Decision | Why |
 |---|----------|-----|
+| D-27 | **Phase 1 gate record (2026-10-29).** `engine:eval` 12 files / 19,568 rows / 0 differences on the first run; `ranking:golden` 44 OK; `engine:lint` OK (4 files); `fixtures:check` OK; `npm test` 231/231 (189 template + 42 engine); lint 0; typecheck clean; drift clean. Negative proofs: a swapped row exits 1 naming row 3 rank; a planted `Date.now()` fails lint; gravity 90000 turns only `expected_post_order_hot.csv` red (0/497). CI: red run on `gate-proof-red` failed at the `engine:eval` step; green run on the Phase 1 head. Links in NEXT.md. Tag `v1.4.0` could not be pushed to origin (403); CI names it by SHA until Shane pushes it from the Mac. | Phase 1 exit |
 | D-26 | **ADR-001: materialized path** (closes O-1). Thread fetch 0.808 vs 1.341 ms median, permalink 0.036 vs 0.178 ms, 232 vs 672 KiB, on PG 16.15 with the 1,000-comment fixture; numbers and caveats in the ADR. Segment 6 chars base-36, ordinal by `(created_at, id)`. | Task 1.6 measurement |
 
 ## Open — the first session proposes, Shane decides
@@ -55,8 +56,17 @@ The PRD leaves several rules open. This file closes them, and **it outranks PRD 
 | O-2 | Does a removed parent's subtree stay votable and replyable? | Votable yes, replyable no (thread-local lock under a removed node) |
 | O-3 | Brigade signal for the mod queue: flag N downvotes from young accounts on one item within M minutes? | Yes: ≥ 5 within 10 min, queued with reason `SUSPECTED_BRIGADE`, no automatic action |
 
-## Lineage (filled in by the session as it ports)
+## Lineage (task 1.3)
 
-| Port | Donor path | Commit |
-|------|-----------|--------|
-| — | — | — |
+| Port | Donor path | Commons path |
+|------|-----------|--------------|
+| Purity lint (banned-import grep, comment stripping, CLI shape) | quorum `scripts/tally-lint.ts` (after Gavel `scripts/rules-lint.ts`), purity half only; Quorum's float and tiebreak bans dropped because rankings are floats (D-9) | `scripts/engine-lint.ts` |
+| RFC 4180 CSV reader | quorum `src/tally/csv.ts` | `src/fixtures/csv.ts` |
+| `RulesInvalid` / `InputInvalid` | quorum `src/tally/errors.ts` | `src/shared/errors.ts` |
+| `fixtures:check` script, Python-oracle + MANIFEST workflow | quorum `package.json`, `tools/` | `package.json`, `tools/verify_fixtures.py` |
+| CI `paths-ignore`, `concurrency`, `fetch-depth: 0`, tag-by-SHA fallback, gate ordering (`engine:eval` before `fixtures:check`) | quorum `.github/workflows/ci.yml` | `.github/workflows/ci.yml` |
+| Pure-engine layout, `now` as a parameter | quorum `src/tally/` (Bracketry's pattern; Bracketry itself private, unread) | `src/tree`, `src/ranking`, `src/votes`, `src/limits` |
+| Rules as data with closed zod schemas | quorum `src/tally/rules.ts` | `src/rules/index.ts` |
+
+Not ported (unreadable from the cloud, D-20): Handhold (moderation, Phase 4), Pulseboard (rollups, Phase 2), Housefile and Adjuster (triggers, state machines; Quorum carries the same patterns and was read instead).
+

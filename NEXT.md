@@ -1,19 +1,26 @@
 # NEXT
 
-## ▶ STOPPED after the plan (2026-10-29). Shane reviews `docs/phase-1-plan.md`; no product code until he says go.
+## ▶ Phase 1 DONE; stopped at the gate (2026-10-29). Shane reviews PR #1 and `docs/phase-2-tasks.md`. No Phase 2 work until go.
 
-**Cloud kickoff session (2026-10-29, Fable, Shane present) — KICKOFF steps 1–9.**
-- Preflight: `18 cases OK`; 7500 not in CLONES.md.
-- Template cloned with shared history (68 commits), remote `template`; untouched **v1.4.0 (e0053a1) pushed as `origin/main`**; work on **`phase-1`**: scaffold (new-project rewrite), kit copied from `kickoff` f74131b, scope banner in README, billing removed per D-18, share links unwired, notifications kept (D-20).
-- Gate output (local): `foundation:drift` clean against v1.4.0 (modules removed: billing); `lint` 0 problems; `typecheck` clean; **vitest 189/189 (34 files)** under `TZ=America/Chicago`.
-- Sandbox record (D-20): Prisma engine downloads blocked (403) → `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true npx prisma generate`; with that stub `migrate deploy` is a silent no-op, so migrations were applied with `psql -f`; local Postgres is **16.15** (CI: 17); `foundation:check-modules` needs `rsync` (CI-only); Chromium at `/opt/pw-browsers`.
-- Reuse scan not repeated (D-19). Secret check before push: only `.env.example` plus two template source files whose names contain "secret".
-- **Written for review:** `docs/phase-1-plan.md` — build order, donors per port, ADR-001 measurement plan on PG 16, CI-only list, **8 contradictions C-1..C-8**, 4 donor paths unreadable from the cloud, proposed fixture shape, defaults to be taken on go.
-- PRs (neither merged): commons **#1** https://github.com/shanelabountyai/commons/pull/1 (`phase-1` → `main`); saas-foundation **#9** https://github.com/shanelabountyai/saas-foundation/pull/9 (CLONES.md row).
+**Phase 1 build session (2026-10-29, Fable, cloud; Shane approved D-21..D-25 and said go).**
+- Built in TDD order, one concern per commit on `phase-1`: 1.2 fixtures + oracles → 1.1 scripts + CI gate → 1.3 ports → 1.4 rules loader → 1.5 ranking → 1.6 tree + ADR-001 → 1.7/1.8 votes + limits → 1.9 `engine:eval` → 1.10 `docs/EVAL.md` → 1.11 CI proof. Decisions D-26 (materialized path, measured) and D-27 (gate record); lineage table filled; `docs/phase-2-tasks.md` written for review.
+- **Gate output:** `engine:eval` 12 files, 19,568 rows, 0 differences; `ranking:golden` 44 OK; `engine:lint` OK; `fixtures:check` OK; `npm test` 231/231 (39 files) under `TZ=America/Chicago`; lint 0; typecheck clean; `foundation:drift` clean against v1.4.0 (modules removed: billing). Every number with its command: `docs/EVAL.md`.
+- **Before Phase 2 check:** gravity 45000 → 90000 in a copy of `rules/ranking.json`: `expected_post_order_hot.csv` 0/497 and named first; the other 11 files unchanged; no code change.
+- **ADR-001:** materialized path, by measurement on PG 16.15 (thread 0.808 vs 1.341 ms median; permalink 0.036 vs 0.178 ms; 232 vs 672 KiB). Re-measure on CI's PG 17 in Phase 2 (task 2.8).
+- **Sandbox:** everything ran locally except `foundation:check-modules` (no rsync) and `prisma migrate deploy` (engine download blocked; `psql -f` instead). Postgres had to be restarted between turns (`service postgresql start`).
 
-**Decisions needed from Shane before go:** C-1 (fixtures:check between 1.1 and 1.2), C-3 (measure ADR-001 on PG 16 or defer), C-5 (young-account boundary + key names), C-7 (retryAfter definition); C-2, C-4, C-6, C-8 are doc fixes the session can make on go. Also: veto or accept the proposed fixture shape.
+| CI run | Head | Result |
+|---|---|---|
+| Red proof, `gate-proof-red` (one swapped expected row), PR #2 | 4f35a34 | **failure at `npm run engine:eval`** https://github.com/shanelabountyai/commons/actions/runs/40930587231 |
+| Green, `phase-1` 1.9 head | c61c198 | **success** https://github.com/shanelabountyai/commons/actions/runs/40930385079 |
+| Green, `phase-1` scaffold | cc87280 | success https://github.com/shanelabountyai/commons/actions/runs/40927088953 |
+
+**Decisions needed from Shane before Phase 2:** review `docs/phase-2-tasks.md`; O-2 (replies under a removed node), O-3 (brigade signal data shape), and `Vote` as one current row per voter/node vs derived from `VoteEvent`. Confirm or reverse D-26.
+
+**By hand (Shane):** push the template tag from a Mac clone that has both remotes (`git push origin v1.4.0`) so CI stops naming it by SHA; merge saas-foundation PR #9 (CLONES row); PR #2 is closed and `gate-proof-red` deleted by the session; PR #1 stays unmerged until reviewed; build-log card #16 → in progress with the repo and PRD links.
 
 ---
+
 
 **Kickoff session (2026-10-29, cloud, Shane present).**
 - Owner decisions: public repo, homelab theme, Commons runs alone (D-1..D-3).
