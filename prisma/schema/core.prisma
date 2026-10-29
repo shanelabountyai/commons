@@ -96,6 +96,11 @@ model Org {
   editHistory    EditHistory[] // app
   rankSnapshots  RankSnapshot[] // app
   limitHits      LimitHit[] // app
+  reports        Report[] // app
+  moderationCases ModerationCase[] // app
+  moderationActions ModerationAction[] // app
+  duplicateSignals DuplicateSignal[] // app
+  uploads        Upload[] // app
 }
 
 model Membership {

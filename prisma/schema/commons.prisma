@@ -38,12 +38,18 @@ model Profile {
   handle      String
   joinedAt    DateTime      @default(now()) @db.Timestamptz(6)
   bannedUntil DateTime?     @db.Timestamptz(6)
+  isModerator Boolean       @default(false)
+  modState    String        @default("ACTIVE")
   posts       Post[]
   comments    Comment[]
   votes       Vote[]
   voteEvents  VoteEvent[]
   edits       EditHistory[]
   limitHits   LimitHit[]
+  reports     Report[]
+  modActions  ModerationAction[] @relation("ModerationActor")
+  modSubject  ModerationAction[] @relation("ModerationSubject")
+  uploads     Upload[]
 
   @@unique([orgId, userId])
   @@unique([orgId, handle])
@@ -79,7 +85,10 @@ model Post {
   ups          Int        @default(1)
   downs        Int        @default(0)
   commentCount Int        @default(0)
+  lockedAt     DateTime?  @db.Timestamptz(6)
+  pinnedAt     DateTime?  @db.Timestamptz(6)
   comments     Comment[]
+  uploads      Upload[]
 
   @@unique([orgId, publicId])
   @@index([boardId, createdAt])
@@ -159,6 +168,7 @@ model BrigadeSignal {
   windowStart DateTime @db.Timestamptz(6)
   voterCount  Int
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  reviewedAt  DateTime? @db.Timestamptz(6)
 
   @@unique([nodeKind, nodeId, windowStart])
 }
@@ -211,4 +221,96 @@ model LimitHit {
 
   @@index([profileId, action, at])
   @@index([at])
+}
+
+/// Phase 4 (task 4.1). A report by a profile on a node, with a reason from rules/moderation.json (closed set, CHECK
+/// in the migration). One report per reporter per node.
+model Report {
+  id         String   @id @default(uuid()) @db.Uuid
+  orgId      String   @db.Uuid
+  org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  reporterId String   @db.Uuid
+  reporter   Profile  @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  nodeKind   NodeKind
+  nodeId     String   @db.Uuid
+  reason     String
+  detail     String   @default("")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([reporterId, nodeKind, nodeId])
+  @@index([nodeKind, nodeId])
+}
+
+/// The content state machine (rules/moderation.json content_states): one case per node, opened by the first report
+/// or by a signal; state moves only through ModerationAction rows.
+model ModerationCase {
+  id         String    @id @default(uuid()) @db.Uuid
+  orgId      String    @db.Uuid
+  org        Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  nodeKind   NodeKind
+  nodeId     String    @db.Uuid
+  state      String    @default("OPEN")
+  openedAt   DateTime  @default(now()) @db.Timestamptz(6)
+  resolvedAt DateTime? @db.Timestamptz(6)
+
+  @@unique([nodeKind, nodeId])
+  @@index([orgId, state, openedAt])
+}
+
+/// Append-only (trigger): every moderator action, on content or on a user, with actor, reason and the transition.
+model ModerationAction {
+  id              String   @id @default(uuid()) @db.Uuid
+  orgId           String   @db.Uuid
+  org             Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  actorId         String   @db.Uuid
+  actor           Profile  @relation("ModerationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  kind            String
+  nodeKind        NodeKind?
+  nodeId          String?  @db.Uuid
+  subjectId       String?  @db.Uuid
+  subject         Profile? @relation("ModerationSubject", fields: [subjectId], references: [id], onDelete: Restrict)
+  fromState       String
+  toState         String
+  reason          String
+  until           DateTime? @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([orgId, createdAt])
+  @@index([nodeKind, nodeId])
+  @@index([subjectId])
+}
+
+/// Task 4.5: a near-duplicate body inside the window; accepted, queued, never acted on automatically.
+model DuplicateSignal {
+  id          String    @id @default(uuid()) @db.Uuid
+  orgId       String    @db.Uuid
+  org         Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  nodeKind    NodeKind
+  nodeId      String    @db.Uuid
+  matchKind   NodeKind
+  matchId     String    @db.Uuid
+  bodyHash    String
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  reviewedAt  DateTime? @db.Timestamptz(6)
+
+  @@index([orgId, reviewedAt, createdAt])
+  @@index([orgId, bodyHash, createdAt])
+}
+
+/// Task 4.7 (from D-40): an attachment on a post. Bytes live outside the database (local disk in dev); only the
+/// record is here. Type and size are checked against rules/limits.json before anything is written.
+model Upload {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @db.Uuid
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  profileId String   @db.Uuid
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  postId    String?  @db.Uuid
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: SetNull)
+  mime      String
+  bytes     Int
+  sha256    String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([postId])
 }

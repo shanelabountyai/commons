@@ -64,3 +64,22 @@ export function windowFor(rules: LimitRules, action: Action): WindowRule {
   if (!w) throw new RulesInvalid('windows', `no window for ${action}`); // unreachable after parse; kept for callers with partial rules
   return w;
 }
+
+// Moderation as data (Phase 4, task 4.1): report reasons, the two state machines, ban durations, the duplicate window.
+const stateMachine = z.record(z.string().regex(/^[A-Z_]+$/), z.array(z.string().regex(/^[A-Z_]+$/)));
+export const ModerationRulesSchema = z
+  .object({
+    version: z.literal(1),
+    report_reasons: z.array(z.object({ code: z.string().regex(/^[a-z_]+$/), label: z.string().min(1) }).strict()).nonempty(),
+    content_states: stateMachine.refine((m) => Object.values(m).flat().every((s) => s in m), { message: 'every target state must be a key' }),
+    user_states: stateMachine.refine((m) => Object.values(m).flat().every((s) => s in m), { message: 'every target state must be a key' }),
+    ban_durations_hours: z.array(nonNegInt).nonempty(), // 0 = permanent
+    duplicate: z.object({ window_seconds: positiveInt, min_chars: positiveInt }).strict(),
+    queue: z.object({ page_size: positiveInt }).strict(),
+  })
+  .strict();
+export type ModerationRules = z.infer<typeof ModerationRulesSchema>;
+export const parseModerationRules = (input: unknown): ModerationRules => parse(ModerationRulesSchema, input, 'rules/moderation.json');
+
+/** A transition is legal iff the machine lists `to` under `from`. Pure. */
+export const canTransition = (machine: Record<string, string[]>, from: string, to: string): boolean => (machine[from] ?? []).includes(to);
