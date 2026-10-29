@@ -49,12 +49,18 @@ The PRD leaves several rules open. This file closes them, and **it outranks PRD 
 | D-27 | **Phase 1 gate record (2026-10-29).** `engine:eval` 12 files / 19,568 rows / 0 differences on the first run; `ranking:golden` 44 OK; `engine:lint` OK (4 files); `fixtures:check` OK; `npm test` 231/231 (189 template + 42 engine); lint 0; typecheck clean; drift clean. Negative proofs: a swapped row exits 1 naming row 3 rank; a planted `Date.now()` fails lint; gravity 90000 turns only `expected_post_order_hot.csv` red (0/497). CI: red run on `gate-proof-red` failed at the `engine:eval` step; green run on the Phase 1 head. Links in NEXT.md. Tag `v1.4.0` could not be pushed to origin (403); CI names it by SHA until Shane pushes it from the Mac. | Phase 1 exit |
 | D-26 | **ADR-001: materialized path** (closes O-1). Thread fetch 0.808 vs 1.341 ms median, permalink 0.036 vs 0.178 ms, 232 vs 672 KiB, on PG 16.15 with the 1,000-comment fixture; numbers and caveats in the ADR. Segment 6 chars base-36, ordinal by `(created_at, id)`. | Task 1.6 measurement |
 
+### Owner decisions at the Phase 1 gate (Shane, 2026-10-29)
+
+| # | Decision | Why |
+|---|----------|-----|
+| D-28 | **ADR-001 confirmed: materialized path** (D-26 stands). Phase 2 task 2.8 re-measures on CI's Postgres 17 as a check, not as the decision. | Owner |
+| D-29 | **`Vote` is one current row per voter and node with `@@unique([voterId, nodeId])`, plus an append-only `VoteEvent` log.** The constraint is the one-account-one-vote guarantee at the database (non-negotiable 4); the log keeps history and feeds `votes:verify`. | Owner |
+| D-30 | **O-2 closed: a removed comment's subtree is votable but not replyable.** New replies under a removed node are refused `PARENT_REMOVED`; existing children stay. | Owner |
+| D-31 | **O-3 closed: brigade signal recorded, never acted on.** Five or more `GATED_DOWNVOTE` events on one node within 600 s write one `SUSPECTED_BRIGADE` signal row (node, window start, voter count) for the mod queue. Phase 2 lands the table and the detector in the vote path; Phase 4 lands the queue. The fixture's `P-BRIGADE` (7 in 480 s) must produce exactly one signal. | Owner |
+
 ## Open — the first session proposes, Shane decides
 
-| # | Question | Default if nobody decides |
-|---|----------|---------------------------|
-| O-2 | Does a removed parent's subtree stay votable and replyable? | Votable yes, replyable no (thread-local lock under a removed node) |
-| O-3 | Brigade signal for the mod queue: flag N downvotes from young accounts on one item within M minutes? | Yes: ≥ 5 within 10 min, queued with reason `SUSPECTED_BRIGADE`, no automatic action |
+None at the Phase 1 gate (O-1..O-3 closed by D-28, D-30, D-31).
 
 ## Lineage (task 1.3)
 
