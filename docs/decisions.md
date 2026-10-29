@@ -73,6 +73,7 @@ The PRD leaves several rules open. This file closes them, and **it outranks PRD 
 
 | # | Decision | Why |
 |---|----------|-----|
+| D-40 | **Uploads move to Phase 4** with the UI; Phase 3 is XSS fixtures, sanitizer, limits storage and the abuse suites. The size and type rules stay in `rules/limits.json`. | Owner |
 | D-39 | **Limits storage: a new `LimitHit(profileId, action, at)` table**, one row per allowed action, indexed, swept hourly; the pure engine reads the window from it. The foundation's fixed-window counter stays for auth. | Owner |
 | D-38 | **Sanitizer pair: `markdown-it` + `isomorphic-dompurify`** (Phase 3 task 3.2 is pre-answered; the two dependencies may be added when 3.2 is reached, exact versions recorded there). The allowlisted subset and the single sanitizer module are still 3.2's job. | Owner |
 

@@ -16,9 +16,9 @@
 | Phase 1 head | c61c198 | success https://github.com/shanelabountyai/commons/actions/runs/40930385079 |
 | Red proof (PR #2, closed) | 4f35a34 | failure at `engine:eval` https://github.com/shanelabountyai/commons/actions/runs/40930587231 |
 
-**Decisions needed from Shane before Phase 3** (`docs/phase-3-tasks.md`): the markdown + sanitizer pair (a new dependency; 3.2 asks in-session), limits storage (new `LimitHit` sliding-window table vs the foundation's fixed-window counter), and whether uploads stay in Phase 3 or move to Phase 4 with the UI. Also: confirm or reverse D-32..D-36.
+**Decided 2026-10-29 (D-38..D-40):** `markdown-it` + `isomorphic-dompurify`; new `LimitHit` table; uploads to Phase 4. **Phase 3 is unblocked and waits for Shane's go.** D-32..D-36 stand unless Shane reverses them in review.
 
-**By hand (Shane):** delete `gate-proof-red`; push the `v1.4.0` tag from the Mac; merge saas-foundation PR #9; PR #1 stays unmerged until reviewed; build-log card #16 → in progress (repo + PRD links).
+**By hand, done 2026-10-29:** `gate-proof-red` deleted; `v1.4.0` tag pushed; saas-foundation PR #9 merged; build-log card #16 in progress. **Still Shane's:** review and merge PR #1 when ready.
 
 ---
 
