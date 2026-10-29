@@ -1,0 +1,197 @@
+// Commons' own tables (clone-owned; Phase 2, task 2.1). Shape: D-7 (epoch seconds inside the engines; here
+// TIMESTAMPTZ, converted at the boundary), D-12/D-29 (the author's fixed +1 is a Vote row; one current Vote row
+// per voter and node, enforced by the unique index, plus an append-only VoteEvent log), D-13 (removed nodes keep
+// their rows and their subtree), D-26/D-28 (materialized path, 6-char base-36 segments, text_pattern_ops index),
+// D-30 (replies under a removed node refused in the writer, not here), D-31 (BrigadeSignal, recorded never acted
+// on). The migration's hand-written half adds the CHECKs and the append-only triggers; `prisma migrate diff` in CI
+// asserts this file and the migrations agree.
+
+enum NodeKind {
+  POST
+  COMMENT
+}
+
+/// Mirrors src/tree Status. visible | deleted (author) | removed (moderator), D-13.
+enum NodeStatus {
+  visible
+  deleted
+  removed
+}
+
+/// Mirrors src/votes Outcome (UNKNOWN_NODE cannot reach a row: the writer refuses it first).
+enum VoteOutcome {
+  APPLIED
+  TOGGLED_OFF
+  SWITCHED
+  SELF_VOTE
+  GATED_DOWNVOTE
+}
+
+/// One forum = one org (D-18). A Profile is a user's identity inside one forum: the handle, the account age the
+/// gates read (L-1, L-2), and the ban. Fixture users become Profiles over template Users on example.com (D-1).
+model Profile {
+  id          String        @id @default(uuid()) @db.Uuid
+  orgId       String        @db.Uuid
+  org         Org           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId      String        @db.Uuid
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  handle      String
+  joinedAt    DateTime      @default(now()) @db.Timestamptz(6)
+  bannedUntil DateTime?     @db.Timestamptz(6)
+  posts       Post[]
+  comments    Comment[]
+  votes       Vote[]
+  voteEvents  VoteEvent[]
+  edits       EditHistory[]
+
+  @@unique([orgId, userId])
+  @@unique([orgId, handle])
+}
+
+model Board {
+  id    String @id @default(uuid()) @db.Uuid
+  orgId String @db.Uuid
+  org   Org    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  slug  String
+  title String
+  posts Post[]
+
+  @@unique([orgId, slug])
+}
+
+/// ups/downs/commentCount are caches; Vote rows and Comment rows are truth (votes:verify, non-negotiable 3).
+/// ups starts at 1: the author's fixed +1 (D-12) is written as a Vote row at creation.
+model Post {
+  id           String     @id @default(uuid()) @db.Uuid
+  orgId        String     @db.Uuid
+  org          Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  boardId      String     @db.Uuid
+  board        Board      @relation(fields: [boardId], references: [id], onDelete: Restrict)
+  authorId     String     @db.Uuid
+  author       Profile    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  publicId     String
+  title        String
+  body         String
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+  editedAt     DateTime?  @db.Timestamptz(6)
+  status       NodeStatus @default(visible)
+  ups          Int        @default(1)
+  downs        Int        @default(0)
+  commentCount Int        @default(0)
+  comments     Comment[]
+
+  @@unique([orgId, publicId])
+  @@index([boardId, createdAt])
+}
+
+/// path = one 6-char base-36 segment per comment ancestor including itself; depth = segments − 1 (ADR-001).
+/// Written only by src/tree/write.ts (non-negotiable 2).
+model Comment {
+  id        String     @id @default(uuid()) @db.Uuid
+  orgId     String     @db.Uuid
+  org       Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  postId    String     @db.Uuid
+  post      Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentId  String?    @db.Uuid
+  parent    Comment?   @relation("CommentTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  Comment[]  @relation("CommentTree")
+  authorId  String     @db.Uuid
+  author    Profile    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  publicId  String
+  path      String
+  depth     Int
+  body      String
+  createdAt DateTime   @default(now()) @db.Timestamptz(6)
+  editedAt  DateTime?  @db.Timestamptz(6)
+  status    NodeStatus @default(visible)
+  ups       Int        @default(1)
+  downs     Int        @default(0)
+
+  @@unique([orgId, publicId])
+  @@unique([postId, path])
+  @@index([postId, path(ops: raw("text_pattern_ops"))])
+}
+
+/// The current vote: one row per voter and node (D-29); absent means no vote (a toggle-off deletes the row).
+/// value is +1 or −1 (CHECK in the migration). nodeId points at a Post or a Comment by nodeKind.
+model Vote {
+  id       String   @id @default(uuid()) @db.Uuid
+  orgId    String   @db.Uuid
+  org      Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  voterId  String   @db.Uuid
+  voter    Profile  @relation(fields: [voterId], references: [id], onDelete: Cascade)
+  nodeKind NodeKind
+  nodeId   String   @db.Uuid
+  value    Int
+  castAt   DateTime @db.Timestamptz(6)
+
+  @@unique([voterId, nodeKind, nodeId])
+  @@index([nodeKind, nodeId])
+}
+
+/// Append-only (trigger): every vote attempt with its outcome (V-1..V-4). The author's creation +1 is not an event.
+model VoteEvent {
+  id       String      @id @default(uuid()) @db.Uuid
+  orgId    String      @db.Uuid
+  org      Org         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  voterId  String      @db.Uuid
+  voter    Profile     @relation(fields: [voterId], references: [id], onDelete: Cascade)
+  nodeKind NodeKind
+  nodeId   String      @db.Uuid
+  value    Int
+  castAt   DateTime    @db.Timestamptz(6)
+  outcome  VoteOutcome
+  note     String      @default("")
+
+  @@index([nodeKind, nodeId, castAt])
+  @@index([orgId, castAt])
+}
+
+/// D-31: ≥ 5 GATED_DOWNVOTE events on one node within 600 s → one row per node per window. Recorded, never acted on.
+model BrigadeSignal {
+  id          String   @id @default(uuid()) @db.Uuid
+  orgId       String   @db.Uuid
+  org         Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  nodeKind    NodeKind
+  nodeId      String   @db.Uuid
+  windowStart DateTime @db.Timestamptz(6)
+  voterCount  Int
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([nodeKind, nodeId, windowStart])
+}
+
+/// Append-only (trigger): the body as it was before each edit (P0-6, task 2.7).
+model EditHistory {
+  id           String   @id @default(uuid()) @db.Uuid
+  orgId        String   @db.Uuid
+  org          Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  nodeKind     NodeKind
+  nodeId       String   @db.Uuid
+  editorId     String   @db.Uuid
+  editor       Profile  @relation(fields: [editorId], references: [id], onDelete: Restrict)
+  previousBody String
+  editedAt     DateTime @db.Timestamptz(6)
+  withinWindow Boolean
+
+  @@index([nodeKind, nodeId, editedAt])
+}
+
+/// The ranking cache (R-5): one row per node, replaced by rank:recompute; rankedAt is the freshness pages show.
+model RankSnapshot {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @db.Uuid
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  nodeKind  NodeKind
+  nodeId    String   @db.Uuid
+  rankedAt  DateTime @db.Timestamptz(6)
+  hot       Float
+  best      Float
+  net       Int
+  ups       Int
+  downs     Int
+  createdAt DateTime @db.Timestamptz(6)
+
+  @@unique([nodeKind, nodeId])
+  @@index([orgId, nodeKind, hot])
+}
