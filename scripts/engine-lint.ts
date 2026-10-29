@@ -50,8 +50,23 @@ export function lintEngineDirs(dirs = ENGINE_DIRS): { problems: string[]; files:
   return { problems, files };
 }
 
+/** D-33 / non-negotiable 2: only src/forum/tree-write.ts creates Post or Comment rows. */
+export function lintSingleWriter(root = 'src'): string[] {
+  const out: string[] = [];
+  const files = readdirSync(root, { recursive: true, withFileTypes: true }).filter((d) => d.isFile() && /\.tsx?$/.test(d.name) && !d.parentPath.includes('generated'));
+  for (const d of files) {
+    const p = `${d.parentPath}/${d.name}`;
+    if (p.endsWith('src/forum/tree-write.ts')) continue;
+    const code = stripComments(readFileSync(p, 'utf8'));
+    if (/\b(post|comment)\.(create|createMany|upsert)\s*\(/.test(code)) out.push(`${p}: creates Post/Comment rows outside src/forum/tree-write.ts`);
+  }
+  return out;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { problems, files } = lintEngineDirs();
+  const lint = lintEngineDirs();
+  const problems = [...lint.problems, ...lintSingleWriter()];
+  const files = lint.files;
   for (const p of problems) console.error(`engine:lint: ${p}`);
   if (problems.length) process.exit(1);
   let rulesNote = 'rules schema check pending task 1.4';

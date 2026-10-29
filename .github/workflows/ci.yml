@@ -64,6 +64,37 @@ jobs:
       - run: npm run fixtures:check
       - run: createdb commons_test
       - run: npx prisma migrate deploy
+      # Phase 2 (task 2.1): the Commons migration is hand-written (the sandbox cannot run `migrate dev`), so prove the
+      # migration history and prisma/schema agree. A non-empty diff is posted on the PR and the step fails.
+      # Ported from quorum ci.yml.
+      - run: |
+          createdb commons_shadow
+          set +e
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema --exit-code --script > migrate-diff.txt 2>&1
+          rc=$?
+          cat migrate-diff.txt
+          if [ "$rc" -ne 0 ] && [ -n "${{ github.event.pull_request.number }}" ]; then
+            { echo "**migrations vs schema differ** (\`prisma migrate diff\` exit $rc on ${{ github.sha }}):"; echo; echo '```sql'; cat migrate-diff.txt; echo '```'; } > comment.md
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md || true
+          fi
+          exit $rc
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/commons_shadow
+      # Phase 2 gate (tasks 2.9, 2.8): the fixture through the real writers, stored rows against the 12 expected files;
+      # then ADR-001 re-measured on this runner's Postgres 17 and posted on the PR (exit 2 = the task's stop).
+      - run: npm run engine:eval:db
+      - run: |
+          set +e
+          npm run adr:measure:db --silent > adr-measure.md 2>&1
+          rc=$?
+          cat adr-measure.md
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file adr-measure.md || true
+          fi
+          exit $rc
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: npx vitest run
       # Production build, served — the way it ships. login.spec.ts drives a real page.
       - run: npx playwright install --with-deps chromium
