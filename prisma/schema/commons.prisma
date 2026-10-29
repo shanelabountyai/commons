@@ -43,6 +43,7 @@ model Profile {
   votes       Vote[]
   voteEvents  VoteEvent[]
   edits       EditHistory[]
+  limitHits   LimitHit[]
 
   @@unique([orgId, userId])
   @@unique([orgId, handle])
@@ -195,4 +196,19 @@ model RankSnapshot {
 
   @@unique([nodeKind, nodeId])
   @@index([orgId, nodeKind, hot])
+}
+
+/// D-39 / L-3: one row per ALLOWED action, the sliding window's history. Refused attempts are not rows (they are not
+/// counted, L-3). Swept by cron past the longest window. The pure engine reads `at`s from here and decides.
+model LimitHit {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @db.Uuid
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  profileId String   @db.Uuid
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  action    String
+  at        DateTime @db.Timestamptz(6)
+
+  @@index([profileId, action, at])
+  @@index([at])
 }

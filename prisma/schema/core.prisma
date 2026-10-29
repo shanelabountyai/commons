@@ -95,6 +95,7 @@ model Org {
   brigadeSignals BrigadeSignal[] // app
   editHistory    EditHistory[] // app
   rankSnapshots  RankSnapshot[] // app
+  limitHits      LimitHit[] // app
 }
 
 model Membership {
