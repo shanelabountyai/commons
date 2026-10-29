@@ -34,6 +34,9 @@ async function admit(tx: Tx, orgId: string, profileId: string, at: number): Prom
 function checkText(field: string, value: string, max: number): void {
   if (value.length === 0) throw new ForumRefused('INPUT_INVALID', `${field} is empty`);
   if (value.length > max) throw new ForumRefused('INPUT_INVALID', `${field} is ${value.length} chars; the limit is ${max}`);
+  // Postgres text cannot hold NUL; without this the write dies with a 500 instead of a refusal (X-37, found by the
+  // Phase 4 capstone). Other control characters are left to the renderer, which encodes them.
+  if (value.includes('\u0000')) throw new ForumRefused('INPUT_INVALID', `${field} contains a NUL byte`);
 }
 
 /** Task 4.5: normalised body hash; a match inside the window by a different node is accepted and queued (P1-3). */

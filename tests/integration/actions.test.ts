@@ -58,6 +58,13 @@ describe('the action door', () => {
   it('NOT_MEMBER: a profile from another org is refused before anything else', async () => {
     await expect(tx((t) => submitPost(t, { orgId, profileId: P.stranger!, boardId, publicId: 'A-S1', title: 't', body: 'b', at: T0 + 20 }, rules))).rejects.toMatchObject({ code: 'NOT_MEMBER' });
   });
+  it('INPUT_INVALID: a NUL byte in a body is refused at the door, not by Postgres (xss fixture X-37, found by the e2e capstone)', async () => {
+    const x37 = (JSON.parse(readFileSync('fixtures/xss/cases.json', 'utf8')) as { cases: { id: string; input: string }[] }).cases.find((c) => c.id === 'X-37')!;
+    expect(x37.input).toContain('\u0000');
+    await expect(tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-N1', title: 't', body: x37.input, at: T0 + 25 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
+    await expect(tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-N2', title: 'a\u0000b', body: 'b', at: T0 + 26 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
+  });
+
   it('INPUT_INVALID: empty title, oversize body', async () => {
     await expect(tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-I1', title: '', body: 'b', at: T0 + 30 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
     await expect(tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-I2', title: 't', body: 'x'.repeat(50_001), at: T0 + 31 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
