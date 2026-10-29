@@ -65,6 +65,8 @@ jobs:
       - run: npm run engine:lint
       - run: npm run ranking:golden
       - run: npm run engine:eval
+      # Phase 3 (task 3.3): the XSS fixture set through the real renderer, before any database step.
+      - run: npm run xss:check
       - run: npm run fixtures:check
       - run: createdb commons_test
       - run: npx prisma migrate deploy
@@ -99,6 +101,9 @@ jobs:
           exit $rc
         env:
           GH_TOKEN: ${{ github.token }}
+      # Phase 3 (task 3.7): the limit scripts through the live LimitHit store.
+      - run: npm run abuse:spam
+      - run: npm run abuse:normal
       - run: npx vitest run
       # Production build, served — the way it ships. login.spec.ts drives a real page.
       - run: npx playwright install --with-deps chromium
