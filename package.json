@@ -38,6 +38,7 @@
     "engine:eval:db": "dotenv -e .env.test -e .env.local -- tsx scripts/engine-eval-db.ts",
     "adr:measure:db": "dotenv -e .env.test -e .env.local -- tsx scripts/adr-001-measure-db.ts",
     "commons:load": "dotenv -e .env.local -- tsx scripts/commons-load.ts",
+    "commons:demo": "dotenv -e .env.local -- tsx scripts/demo.ts",
     "votes:verify": "dotenv -e .env.local -- tsx scripts/votes-verify.ts",
     "rank:recompute": "dotenv -e .env.local -- tsx scripts/rank-recompute.ts",
     "foundation:status": "tsx scripts/foundation-status.ts",
