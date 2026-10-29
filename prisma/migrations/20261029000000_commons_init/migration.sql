@@ -167,9 +167,6 @@ CREATE INDEX "Post_boardId_createdAt_idx" ON "Post"("boardId", "createdAt");
 CREATE UNIQUE INDEX "Post_orgId_publicId_key" ON "Post"("orgId", "publicId");
 
 -- CreateIndex
-CREATE INDEX "Comment_postId_path_idx" ON "Comment"("postId", "path" text_pattern_ops);
-
--- CreateIndex
 CREATE UNIQUE INDEX "Comment_orgId_publicId_key" ON "Comment"("orgId", "publicId");
 
 -- CreateIndex
@@ -262,6 +259,10 @@ ALTER TABLE "VoteEvent" ADD CONSTRAINT "VoteEvent_value_check" CHECK ("value" IN
 -- Counts never go negative.
 ALTER TABLE "Post" ADD CONSTRAINT "Post_counts_check" CHECK ("ups" >= 0 AND "downs" >= 0 AND "commentCount" >= 0);
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_counts_check" CHECK ("ups" >= 0 AND "downs" >= 0);
+-- ADR-001 / D-34: byte-order collation on path, so the (postId, path) unique btree serves LIKE-prefix subtree scans
+-- and ORDER BY path without text_pattern_ops (which `prisma migrate diff` cannot round-trip). Prisma does not model
+-- column collation, so this is invisible to the schema diff.
+ALTER TABLE "Comment" ALTER COLUMN "path" TYPE TEXT COLLATE "C";
 -- ADR-001: a path is a whole number of 6-char base-36 segments, and depth is derived from it.
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_path_check" CHECK ("path" ~ '^([0-9a-z]{6})+$' AND "depth" = length("path") / 6 - 1);
 -- A root comment has an empty parent; a reply has one.

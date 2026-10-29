@@ -1,7 +1,7 @@
 // Commons' own tables (clone-owned; Phase 2, task 2.1). Shape: D-7 (epoch seconds inside the engines; here
 // TIMESTAMPTZ, converted at the boundary), D-12/D-29 (the author's fixed +1 is a Vote row; one current Vote row
 // per voter and node, enforced by the unique index, plus an append-only VoteEvent log), D-13 (removed nodes keep
-// their rows and their subtree), D-26/D-28 (materialized path, 6-char base-36 segments, text_pattern_ops index),
+// their rows and their subtree), D-26/D-28/D-34 (materialized path, 6-char base-36 segments, COLLATE "C" path),
 // D-30 (replies under a removed node refused in the writer, not here), D-31 (BrigadeSignal, recorded never acted
 // on). The migration's hand-written half adds the CHECKs and the append-only triggers; `prisma migrate diff` in CI
 // asserts this file and the migrations agree.
@@ -84,8 +84,10 @@ model Post {
   @@index([boardId, createdAt])
 }
 
-/// path = one 6-char base-36 segment per comment ancestor including itself; depth = segments − 1 (ADR-001).
-/// Written only by src/tree/write.ts (non-negotiable 2).
+/// path = one 6-char base-36 segment per comment ancestor including itself; depth = segments − 1 (ADR-001). The
+/// column is COLLATE "C" (hand-written half, D-34), so the (postId, path) unique btree serves `LIKE prefix || '%'`
+/// and `ORDER BY path` in byte order without an operator class Prisma cannot round-trip.
+/// Written only by src/forum/tree-write.ts (non-negotiable 2, D-33).
 model Comment {
   id        String     @id @default(uuid()) @db.Uuid
   orgId     String     @db.Uuid
@@ -109,7 +111,6 @@ model Comment {
 
   @@unique([orgId, publicId])
   @@unique([postId, path])
-  @@index([postId, path(ops: raw("text_pattern_ops"))])
 }
 
 /// The current vote: one row per voter and node (D-29); absent means no vote (a toggle-off deletes the row).
