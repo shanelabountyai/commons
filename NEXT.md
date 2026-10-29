@@ -9,7 +9,7 @@
 - Sandbox record (D-20): Prisma engine downloads blocked (403) → `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true npx prisma generate`; with that stub `migrate deploy` is a silent no-op, so migrations were applied with `psql -f`; local Postgres is **16.15** (CI: 17); `foundation:check-modules` needs `rsync` (CI-only); Chromium at `/opt/pw-browsers`.
 - Reuse scan not repeated (D-19). Secret check before push: only `.env.example` plus two template source files whose names contain "secret".
 - **Written for review:** `docs/phase-1-plan.md` — build order, donors per port, ADR-001 measurement plan on PG 16, CI-only list, **8 contradictions C-1..C-8**, 4 donor paths unreadable from the cloud, proposed fixture shape, defaults to be taken on go.
-- PRs: see the table below. Neither merged.
+- PRs (neither merged): commons **#1** https://github.com/shanelabountyai/commons/pull/1 (`phase-1` → `main`); saas-foundation **#9** https://github.com/shanelabountyai/saas-foundation/pull/9 (CLONES.md row).
 
 **Decisions needed from Shane before go:** C-1 (fixtures:check between 1.1 and 1.2), C-3 (measure ADR-001 on PG 16 or defer), C-5 (young-account boundary + key names), C-7 (retryAfter definition); C-2, C-4, C-6, C-8 are doc fixes the session can make on go. Also: veto or accept the proposed fixture shape.
 
