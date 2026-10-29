@@ -32,6 +32,10 @@
     "fixtures:check": "python3 -I tools/verify_fixtures.py && python3 -I tools/golden_answers.py && git diff --exit-code fixtures/ && test -z \"$(git status --porcelain fixtures/)\"",
     "engine:lint": "tsx scripts/engine-lint.ts",
     "engine:eval": "tsx scripts/engine-eval.ts",
+    "engine:eval:db": "dotenv -e .env.test -e .env.local -- tsx scripts/engine-eval-db.ts",
+    "commons:load": "dotenv -e .env.local -- tsx scripts/commons-load.ts",
+    "votes:verify": "dotenv -e .env.local -- tsx scripts/votes-verify.ts",
+    "rank:recompute": "dotenv -e .env.local -- tsx scripts/rank-recompute.ts",
     "foundation:status": "tsx scripts/foundation-status.ts",
     "foundation:check-modules": "tsx scripts/foundation-check-modules.ts"
   },
