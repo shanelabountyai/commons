@@ -58,6 +58,17 @@ The PRD leaves several rules open. This file closes them, and **it outranks PRD 
 | D-30 | **O-2 closed: a removed comment's subtree is votable but not replyable.** New replies under a removed node are refused `PARENT_REMOVED`; existing children stay. | Owner |
 | D-31 | **O-3 closed: brigade signal recorded, never acted on.** Five or more `GATED_DOWNVOTE` events on one node within 600 s write one `SUSPECTED_BRIGADE` signal row (node, window start, voter count) for the mod queue. Phase 2 lands the table and the detector in the vote path; Phase 4 lands the queue. The fixture's `P-BRIGADE` (7 in 480 s) must produce exactly one signal. | Owner |
 
+### Build session defaults, Phase 2 (2026-10-29; each reversible, flagged for Shane)
+
+| # | Decision | Why |
+|---|----------|-----|
+| D-32 | **Edit window boundary:** an edit is unmarked iff `at − createdAt < edit_window_seconds`; an edit at exactly 900 s carries the `edited` mark. Same strictness pattern as L-1. Pinned by a test. | Task 2.7 asked for the boundary to be pinned |
+| D-33 | **The Post/Comment writer lives in `src/forum/tree-write.ts`, not `src/tree/write.ts`.** `src/tree` stays pure and `engine:lint` keeps banning Prisma there; a new lint rule refuses `post.create` / `comment.create` anywhere else under `src/`. The ordinal is taken under a per-parent advisory lock (`pg_advisory_xact_lock`). | Non-negotiables 2 and 5 pulled against the task's file name; purity won |
+| D-34 | **`Comment.path` is `COLLATE "C"`; no `text_pattern_ops` index.** CI's `prisma migrate diff` (run 96f686d) could not round-trip the operator class and would recreate the index every time. With byte-order collation the `(postId, path)` unique btree serves `LIKE prefix || '%'` (`EXPLAIN`: index cond `path >= p AND path < p+1`) and `ORDER BY path`, which is what the engine assumes. Prisma does not model collation, so the diff is clean. The init migration was amended in place: nothing is merged or deployed. | CI finding |
+| D-35 | **Fixture statuses are applied after creation** (`commons:load` writes every node visible, then sets deleted/removed), because D-30 refuses a reply under an already-removed parent and the fixture's `C-CHAIN-6` sits under the later-removed `C-CHAIN-5`. In life the removal comes after the reply. Phase 4's moderation path owns status changes. | Fixture vs D-30 |
+| D-36 | **`engine:eval:db` runs against the test database's org `homelab-eval`, truncating the forum tables first;** the template's own tests reset the database afterwards, so `adr:measure:db` must run right after it (CI order). Fixture Users are `u###@example.com` members; a Profile per user carries the handle and `joinedAt`. | Task 2.9 mechanics |
+| D-37 | **Phase 2 gate record (2026-10-29).** `engine:eval:db`: 16,457 rows loaded through the writers (78 s locally), 12/12 expected files reproduced from stored rows, 5,000/5,000 stored paths = `assignPaths`, `votes:verify` 5,500 nodes clean, exactly one `BrigadeSignal` (`P-BRIGADE`, 7 voters), `commentCount` = comments per post. `npm test` 238/238 (40 files; +7 database tests). Local PG 16 re-measure on the real schema: thread 1.004 vs 1.904 ms median (closure/path 1.90×), permalink 0.041 vs 0.067 ms. CI's PG 17 numbers are posted on PR #1 and copied into the ADR. | Phase 2 exit |
+
 ## Open — the first session proposes, Shane decides
 
 None at the Phase 1 gate (O-1..O-3 closed by D-28, D-30, D-31).

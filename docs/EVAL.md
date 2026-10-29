@@ -68,6 +68,40 @@ Everything fit in shared buffers (`read 0`), so this measures plan shape and CPU
 
 `npm test` 231/231 (39 files; 189 template + 42 engine) under `TZ=America/Chicago`; `lint` 0; `typecheck` clean; `foundation:drift` clean against v1.4.0 (modules removed: billing).
 
+## Phase 2 — the database under the engines (2026-10-29)
+
+### Stored rows against the same 12 files — `npm run engine:eval:db`
+
+The fixture goes in through the real writers (tree writer under advisory locks, the vote path with live V-rules), ranks are recomputed at `NOW`, then what is **stored** is diffed: orderings from `RankSnapshot`, counts from the `ups`/`downs` caches, outcomes from `VoteEvent`, renders from the stored `path`/`depth`.
+
+| Check | Result |
+|---|---|
+| 12 expected files | 12/12, 19,568 rows, 0 differences |
+| Stored `path` = engine `assignPaths`, stored `depth` = segments − 1 | 5,000 / 5,000 |
+| `votes:verify` (cache = Vote rows = event replay) | 5,500 nodes, 0 mismatches |
+| `BrigadeSignal` rows (D-31) | exactly 1: `P-BRIGADE`, 7 voters, window start T0 + 1 h |
+| `commentCount` = comments per post (D-13) | 500 / 500 |
+| Load through the writers | 16,457 rows in 78 s (local PG 16; one transaction) |
+
+### Database tests — `npm test` (`tests/integration/forum.test.ts`, 7 tests; suite 238/238 in 40 files)
+
+Append-only triggers refuse UPDATE and DELETE on `VoteEvent` and `EditHistory`; 50 concurrent replies to one parent get 50 distinct ordinals and `commentCount` 51; a parent from another post is `TREE_INVALID`, a removed parent `PARENT_REMOVED`, a deleted parent accepts (D-30); the unique index refuses a second current vote row and the CHECK refuses `value = 2`; V-1..V-4 live with the caches tracking; five gated downvotes in 600 s write one signal and the sixth updates it; the edit boundary at exactly 900 s (D-32) and `NOT_AUTHOR`.
+
+### ADR-001 on the real schema — `npm run adr:measure:db` (task 2.8)
+
+Local PG 16.15, the Prisma `Comment` table (5,000 rows loaded) vs a TEMP closure table from the same rows:
+
+| Query | Materialized path | Closure table |
+|---|---|---|
+| Whole thread, median / p95 | 1.004 / 1.100 ms | 1.904 / 2.100 ms |
+| Permalink subtree, median / p95 | 0.041 / 0.051 ms | 0.067 / 0.080 ms |
+
+Closure / path = 1.90× on the thread fetch; the task's stop (closure better by 2×) did not fire. **CI's Postgres 17 run posts the same table on PR #1** (step after `engine:eval:db`); see `docs/adr-001-tree-storage.md` for the copied numbers. Both thread queries read 296 buffers: at 5,000 rows the planner scans the table rather than the index, so this measures sort and join cost, not index selectivity.
+
+### Schema proof — CI `prisma migrate diff`
+
+The hand-written migration and `prisma/schema` agree (after D-34: the `text_pattern_ops` index could not be round-tripped and was replaced by a `COLLATE "C"` path column; `EXPLAIN` shows the unique btree serving the prefix scan as `path >= p AND path < p+1`).
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 3 adds the XSS suite and the spam-bot script against a running app; Phase 2 re-measures ADR-001 on CI's Postgres 17 with the Prisma schema.
