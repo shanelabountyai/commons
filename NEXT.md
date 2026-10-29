@@ -1,6 +1,19 @@
 # NEXT
 
-## ▶ Kickoff kit written (2026-10-29). Next: Phase 1 planning session per KICKOFF.md (stops after the plan; Shane reviews before any build).
+## ▶ STOPPED after the plan (2026-10-29). Shane reviews `docs/phase-1-plan.md`; no product code until he says go.
+
+**Cloud kickoff session (2026-10-29, Fable, Shane present) — KICKOFF steps 1–9.**
+- Preflight: `18 cases OK`; 7500 not in CLONES.md.
+- Template cloned with shared history (68 commits), remote `template`; untouched **v1.4.0 (e0053a1) pushed as `origin/main`**; work on **`phase-1`**: scaffold (new-project rewrite), kit copied from `kickoff` f74131b, scope banner in README, billing removed per D-18, share links unwired, notifications kept (D-20).
+- Gate output (local): `foundation:drift` clean against v1.4.0 (modules removed: billing); `lint` 0 problems; `typecheck` clean; **vitest 189/189 (34 files)** under `TZ=America/Chicago`.
+- Sandbox record (D-20): Prisma engine downloads blocked (403) → `PRISMA_SCHEMA_ENGINE_BINARY=/bin/true npx prisma generate`; with that stub `migrate deploy` is a silent no-op, so migrations were applied with `psql -f`; local Postgres is **16.15** (CI: 17); `foundation:check-modules` needs `rsync` (CI-only); Chromium at `/opt/pw-browsers`.
+- Reuse scan not repeated (D-19). Secret check before push: only `.env.example` plus two template source files whose names contain "secret".
+- **Written for review:** `docs/phase-1-plan.md` — build order, donors per port, ADR-001 measurement plan on PG 16, CI-only list, **8 contradictions C-1..C-8**, 4 donor paths unreadable from the cloud, proposed fixture shape, defaults to be taken on go.
+- PRs: see the table below. Neither merged.
+
+**Decisions needed from Shane before go:** C-1 (fixtures:check between 1.1 and 1.2), C-3 (measure ADR-001 on PG 16 or defer), C-5 (young-account boundary + key names), C-7 (retryAfter definition); C-2, C-4, C-6, C-8 are doc fixes the session can make on go. Also: veto or accept the proposed fixture shape.
+
+---
 
 **Kickoff session (2026-10-29, cloud, Shane present).**
 - Owner decisions: public repo, homelab theme, Commons runs alone (D-1..D-3).
