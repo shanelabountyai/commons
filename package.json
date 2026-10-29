@@ -28,6 +28,10 @@
     "db:setup": "tsx scripts/db-setup.ts",
     "new-project": "tsx scripts/new-project.ts",
     "foundation:drift": "tsx scripts/foundation-drift.ts",
+    "ranking:golden": "python3 -I tools/golden_answers.py",
+    "fixtures:check": "python3 -I tools/verify_fixtures.py && python3 -I tools/golden_answers.py && git diff --exit-code fixtures/ && test -z \"$(git status --porcelain fixtures/)\"",
+    "engine:lint": "tsx scripts/engine-lint.ts",
+    "engine:eval": "tsx scripts/engine-eval.ts",
     "foundation:status": "tsx scripts/foundation-status.ts",
     "foundation:check-modules": "tsx scripts/foundation-check-modules.ts"
   },
