@@ -107,15 +107,23 @@ jobs:
       - run: npx vitest run
       # Production build, served — the way it ships. login.spec.ts drives a real page.
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test
-      # The runner's logs are not readable from a cloud session (D-16); the failure context is, as an artifact.
+      - run: npx playwright test --reporter=line 2>&1 | tee playwright.txt; exit ${PIPESTATUS[0]}
+        shell: bash
+      # Neither the runner's logs nor its artifacts are reachable from a cloud session (D-16, D-69); a PR comment is.
       - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-results
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
+        run: |
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            {
+              echo "**Playwright failed** on ${{ github.sha }}. Reporter tail, then each failure context (first 120 lines):"
+              echo; echo '```'; grep -v 'axe \(light\|dark\) 0' playwright.txt | tail -60; echo '```'
+              for f in $(find test-results -name error-context.md | head -5); do
+                echo; echo "<details><summary>$f</summary>"; echo; echo '```'; head -120 "$f"; echo '```'; echo "</details>"
+              done
+            } > pw-comment.md
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file pw-comment.md || true
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   # Spec §4 / §13.3: both modules deleted by the manifest, and the tree must still generate, typecheck, build and pass drift.
   modules-removed:
