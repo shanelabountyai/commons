@@ -53,7 +53,7 @@ describe('report → case → queue → remove → restore', () => {
     const post = await tx((t) => submitPost(t, { orgId, profileId: P.author!, boardId, publicId: 'M-P1', title: 't', body: 'a body long enough to be hashed for duplicates later on', at: T0 }, limits, mod));
     const r = await tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'spam', at: T0 + 10 }, limits, mod));
     expect(r.reportsOnNode).toBe(1);
-    await expect(tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'spam', at: T0 + 11 }, limits, mod))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
+    await expect(tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'spam', at: T0 + 11 }, limits, mod))).rejects.toMatchObject({ code: 'ALREADY_REPORTED' }); // 4.1.14: its own code since the patch
     await expect(tx((t) => submitReport(t, { orgId, profileId: P.plain!, node: { kind: 'POST', id: post.id }, reason: 'not-a-reason', at: T0 + 12 }, limits, mod))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
     const q = await queue(db, orgId, 50);
     expect(q.filter((i) => i.kind === 'CASE')).toHaveLength(1);
@@ -137,6 +137,14 @@ describe('context for moderators (4.1.8, 4.1.9)', () => {
     await tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'COMMENT', id: c.id }, reason: 'spam', at: T0 + 602 }, limits, mod));
     const after = await authorHistory(db, P.author!);
     expect(after.reports).toBe(before.reports + 1);
+  });
+
+  it('4.1.14: a second report by the same member is ALREADY_REPORTED; the detail text reaches the queue item', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.author!, boardId, publicId: 'M-P7', title: 't', body: 'a post reported with detail', at: T0 + 900 }, limits, mod));
+    await tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'other', detail: 'links to a crypto miner disguised as a NAS script', at: T0 + 901 }, limits, mod));
+    await expect(tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'spam', at: T0 + 902 }, limits, mod))).rejects.toMatchObject({ code: 'ALREADY_REPORTED' });
+    const item = (await queue(db, orgId, 50)).find((i) => i.kind === 'CASE' && i.node.id === post.id);
+    expect(item && item.kind === 'CASE' ? item.details : null).toEqual(['links to a crypto miner disguised as a NAS script']);
   });
 
   it('edit history is readable for moderators: previous bodies, newest first, with the window flag (P0-6)', async () => {

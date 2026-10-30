@@ -59,6 +59,15 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
               <p className="meta">
                 by <Link href={`/o/${ctx.slug}/f/u/${c.author.handle}`}><Text value={c.author.handle} /></Link> ({c.author.modState}; {hist.reports} reports on their posts, {hist.actions} prior actions) · status {c.status} · opened {when(item.kind === 'CASE' ? item.openedAt : item.createdAt)}
               </p>
+              {item.kind === 'CASE' && item.details.length > 0 && (
+                <ul aria-label="What reporters said">
+                  {item.details.map((d, i) => (
+                    <li key={i} className="meta">
+                      <Text value={d} />
+                    </li>
+                  ))}
+                </ul>
+              )}
               <Markdown body={c.body} />
               {item.kind === 'CASE' && (
                 <ActionForm action={moderateContent.bind(null, ctx.slug)}>

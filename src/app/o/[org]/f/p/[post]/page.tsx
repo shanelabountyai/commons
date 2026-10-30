@@ -149,6 +149,10 @@ export default async function Thread({ params, searchParams }: { params: Promise
             ))}
           </select>
         </label>
+        <label>
+          Say what (optional, for &ldquo;Something else&rdquo; especially)
+          <textarea name="detail" maxLength={2000} rows={2} aria-label={`Detail for reporting ${label}`} />
+        </label>
         <button type="submit">Report</button>
       </ActionForm>
     );

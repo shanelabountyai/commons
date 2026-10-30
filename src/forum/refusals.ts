@@ -36,5 +36,7 @@ export function refusalText(e: unknown): string | null {
       return 'Only the author can do that. (NOT_AUTHOR)';
     case 'WRITE_ONCE':
       return `${detail} (WRITE_ONCE)`;
+    case 'ALREADY_REPORTED':
+      return 'You already reported this; a moderator will look at it. (ALREADY_REPORTED)';
   }
 }

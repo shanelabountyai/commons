@@ -16,6 +16,9 @@ describe('refusal text', () => {
     expect(refusalText(new ForumRefused('INPUT_INVALID', 'body contains a NUL byte'))).toBe('Check the form: body contains a NUL byte. (INPUT_INVALID)');
     expect(refusalText(new ForumRefused('UNKNOWN_NODE', 'POST x'))).toBeNull();
   });
+  it('4.1.14: a second report is ALREADY_REPORTED, not a form error', () => {
+    expect(refusalText(new ForumRefused('ALREADY_REPORTED', 'POST x'))).toBe('You already reported this; a moderator will look at it. (ALREADY_REPORTED)');
+  });
   it('an unknown error is not translated', () => {
     expect(refusalText(new Error('boom'))).toBeNull();
   });

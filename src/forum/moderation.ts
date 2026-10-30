@@ -65,7 +65,7 @@ export async function submitReport(tx: Tx, r: SubmitReport, limits: LimitRules, 
   const g = await guardAndRecord(tx, { orgId: r.orgId, profileId: r.profileId, action: 'report', at: r.at }, limits);
   if (g.verdict === 'refuse') throw Object.assign(new Error(`RATE_LIMITED: report; retry after ${g.retryAfter} s`), { code: 'RATE_LIMITED', action: 'report', retryAfter: g.retryAfter });
   const existing = await tx.report.findUnique({ where: { reporterId_nodeKind_nodeId: { reporterId: r.profileId, nodeKind: r.node.kind, nodeId: r.node.id } } });
-  if (existing) throw new ForumRefused('INPUT_INVALID', 'you already reported this');
+  if (existing) throw new ForumRefused('ALREADY_REPORTED', `${r.node.kind} ${r.node.id}`); // 4.1.14: its own code, not a form error
   await tx.report.create({ data: { orgId: r.orgId, reporterId: r.profileId, nodeKind: r.node.kind, nodeId: r.node.id, reason: r.reason, detail: (r.detail ?? '').slice(0, 2000), createdAt: toDate(r.at) } });
   const c = await openCase(tx, r.orgId, r.node, r.at);
   const reportsOnNode = await tx.report.count({ where: { nodeKind: r.node.kind, nodeId: r.node.id } });
@@ -156,7 +156,7 @@ export async function reviewSignal(tx: Tx, m: ModeratorCtx, signal: { kind: 'BRI
 // ---------------------------------------------------------------------------------------------------- queue
 
 export type QueueItem =
-  | { kind: 'CASE'; id: string; node: NodeRef; state: string; openedAt: Date; reports: number; reasons: string[] }
+  | { kind: 'CASE'; id: string; node: NodeRef; state: string; openedAt: Date; reports: number; reasons: string[]; details: string[] }
   | { kind: 'BRIGADE'; id: string; node: NodeRef; createdAt: Date; voterCount: number }
   | { kind: 'DUPLICATE'; id: string; node: NodeRef; createdAt: Date; match: NodeRef };
 
@@ -169,8 +169,8 @@ export async function queue(tx: Tx, orgId: string, limit: number): Promise<Queue
   ]);
   const items: QueueItem[] = [];
   for (const c of cases) {
-    const reports = await tx.report.findMany({ where: { nodeKind: c.nodeKind, nodeId: c.nodeId }, select: { reason: true } });
-    items.push({ kind: 'CASE', id: c.id, node: { kind: c.nodeKind, id: c.nodeId }, state: c.state, openedAt: c.openedAt, reports: reports.length, reasons: [...new Set(reports.map((r) => r.reason))].sort() });
+    const reports = await tx.report.findMany({ where: { nodeKind: c.nodeKind, nodeId: c.nodeId }, select: { reason: true, detail: true }, orderBy: { createdAt: 'asc' } });
+    items.push({ kind: 'CASE', id: c.id, node: { kind: c.nodeKind, id: c.nodeId }, state: c.state, openedAt: c.openedAt, reports: reports.length, reasons: [...new Set(reports.map((r) => r.reason))].sort(), details: reports.map((r) => r.detail.trim()).filter(Boolean) });
   }
   for (const b of brigades) items.push({ kind: 'BRIGADE', id: b.id, node: { kind: b.nodeKind, id: b.nodeId }, createdAt: b.createdAt, voterCount: b.voterCount });
   for (const d of dups) items.push({ kind: 'DUPLICATE', id: d.id, node: { kind: d.nodeKind, id: d.nodeId }, createdAt: d.createdAt, match: { kind: d.matchKind, id: d.matchId } });
