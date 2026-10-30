@@ -19,6 +19,13 @@ type CommentSort = (typeof COMMENT_SORTS)[number];
 
 type Row = RenderedRow & { node: ThreadNode; path: string };
 
+/** 4.1.13 (WCAG 2.4.2): titled after the post; guard first, scoped lookup (FR-06, INV-03). Removed posts keep a neutral title. */
+export async function generateMetadata({ params }: { params: Promise<{ org: string; post: string }> }) {
+  const ctx = await requireOrg((await params).org);
+  const p = await db.post.findUnique({ where: { orgId_publicId: { orgId: ctx.orgId, publicId: (await params).post } }, select: { title: true, status: true } });
+  return { title: p ? `${p.status === 'visible' ? p.title : `[${p.status}]`} · Commons` : 'Commons' };
+}
+
 export default async function Thread({ params, searchParams }: { params: Promise<{ org: string; post: string }>; searchParams: Promise<{ sort?: string; page?: string; upload?: string }> }) {
   const ctx = await requireOrg((await params).org);
   const me = await ensureProfile(ctx);
@@ -184,7 +191,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
   }
 
   return (
-    <main>
+    <main id="main" tabIndex={-1}>
       <p className="meta">
         <Link href={`/o/${ctx.slug}/f`}>Boards</Link> › <Link href={`/o/${ctx.slug}/f/${post.board.slug}`}><Text value={post.board.title} /></Link> ›
       </p>

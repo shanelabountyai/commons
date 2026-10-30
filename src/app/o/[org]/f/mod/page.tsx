@@ -15,6 +15,8 @@ const brigadeRule = parseLimitRules(JSON.parse(readFileSync('rules/limits.json',
 
 /** Task 4.4: open cases with content in context, reporter count and author history; brigade and duplicate signals;
  *  the append-only log. Moderators only ("not yours" ≡ not found for everyone else). */
+export const metadata = { title: 'Moderation queue · Commons' };
+
 export default async function ModQueue({ params }: { params: Promise<{ org: string }> }) {
   const ctx = await requireOrg((await params).org);
   const me = await ensureProfile(ctx);
@@ -38,7 +40,7 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
   const log = await db.moderationAction.findMany({ where: { orgId: ctx.orgId }, orderBy: { seq: 'desc' }, take: 50, include: { actor: { select: { handle: true } }, subject: { select: { handle: true } } } });
 
   return (
-    <main>
+    <main id="main" tabIndex={-1}>
       <h1>Moderation queue</h1>
       <p className="meta">
         {items.length} open item{items.length === 1 ? '' : 's'}: cases from reports, brigade signals (≥ {brigadeRule.min_voters} gated downvotes in {Math.round(brigadeRule.window_seconds / 60)} min), duplicate signals. Nothing here was acted on automatically.

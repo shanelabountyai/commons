@@ -3,14 +3,14 @@ import { requireOrg } from '@/core/authz/guards';
 import { ScopeNote, Text } from '@/components/forum';
 import { boards, ensureProfile } from '@/forum/view';
 
-export const metadata = { title: 'Boards' };
+export const metadata = { title: 'Boards · Commons' };
 
 export default async function Boards({ params }: { params: Promise<{ org: string }> }) {
   const ctx = await requireOrg((await params).org);
   await ensureProfile(ctx);
   const bs = await boards(ctx.orgId);
   return (
-    <main>
+    <main id="main" tabIndex={-1}>
       <h1>Boards</h1>
       <ScopeNote />
       {bs.length === 0 && <p>No boards yet. Load the fixture (<code>npm run commons:load -- --org {ctx.slug}</code>) or ask an admin to create one.</p>}
