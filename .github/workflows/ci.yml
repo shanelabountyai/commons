@@ -62,6 +62,7 @@ jobs:
       # Phase 1 gate (docs/phase-1-tasks.md 1.11): purity lint, the Python oracle, the engines against the frozen
       # fixtures. fixtures:check runs AFTER engine:eval so a product-code write into fixtures/ fails the run.
       - run: python3 --version
+      - run: npm run repo:ignored # D-69: a source file matched by .gitignore never reaches CI
       - run: npm run engine:lint
       - run: npm run ranking:golden
       - run: npm run engine:eval
