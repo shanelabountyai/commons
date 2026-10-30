@@ -9,6 +9,7 @@ import { MAX_BODY_CHARS } from '@/render';
 import type { LimitRules, ModerationRules } from '@/rules';
 import { ForumRefused, toDate, toEpoch, type NodeRef, type Tx } from './db';
 import { guardAndRecord } from './limits-store';
+import { editNode, type EditInput } from './edit';
 import { createComment, createPost } from './tree-write';
 import { castVote, type CastResult } from './votes';
 
@@ -25,7 +26,8 @@ export class RateLimited extends Error {
 
 export const MAX_TITLE_CHARS = 300;
 
-async function admit(tx: Tx, orgId: string, profileId: string, at: number): Promise<void> {
+/** Step 1 of the door, shared with reports (4.1.2) and moderation checks (4.1.11). */
+export async function admit(tx: Tx, orgId: string, profileId: string, at: number): Promise<void> {
   const p = await tx.profile.findUnique({ where: { id: profileId }, select: { orgId: true, bannedUntil: true } });
   if (!p || p.orgId !== orgId) throw new ForumRefused('NOT_MEMBER', `profile ${profileId} is not in org ${orgId}`);
   if (p.bannedUntil && toEpoch(p.bannedUntil) > at) throw new ForumRefused('BANNED_UNTIL', String(toEpoch(p.bannedUntil)));
@@ -80,6 +82,19 @@ export async function submitComment(tx: Tx, s: SubmitComment, rules: LimitRules,
   const row = await createComment(tx, { orgId: s.orgId, postId: s.postId, parentId: s.parentId, authorId: s.profileId, publicId: s.publicId, body: s.body, createdAt: s.at });
   await tx.comment.update({ where: { id: row.id }, data: { bodyHash: bodyHash(s.body) } });
   return { ...row, duplicate: await duplicateSignal(tx, s.orgId, { kind: 'COMMENT', id: row.id }, s.body, s.at, mod) };
+}
+
+/** 4.1.1 (D-64): edits come through the same door as creates — membership and ban, then text checks, then the
+ * writer; the body is rehashed so the duplicate detector sees edited bodies. Edits have no sliding window (D-32
+ * governs the mark, not a rate). */
+export async function submitEdit(tx: Tx, s: EditInput, rules: LimitRules): Promise<{ withinWindow: boolean }> {
+  await admit(tx, s.orgId, s.editorId, s.at);
+  checkText('body', s.body, MAX_BODY_CHARS);
+  const r = await editNode(tx, s, rules);
+  const h = bodyHash(s.body);
+  if (s.node.kind === 'POST') await tx.post.update({ where: { id: s.node.id }, data: { bodyHash: h } });
+  else await tx.comment.update({ where: { id: s.node.id }, data: { bodyHash: h } });
+  return r;
 }
 
 export type SubmitVote = { orgId: string; profileId: string; node: { kind: 'POST' | 'COMMENT'; id: string }; value: 1 | -1; at: number };

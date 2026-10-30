@@ -12,9 +12,8 @@ import { orgAction, ref } from '@/core/authz/action';
 import type { OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
-import { RateLimited, submitComment, submitPost, submitVote } from '@/forum/actions';
+import { RateLimited, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { ForumRefused } from '@/forum/db';
-import { editNode } from '@/forum/edit';
 import { actOnContent, actOnThread, actOnUser, NotModerator, reviewSignal, submitReport, TransitionInvalid } from '@/forum/moderation';
 import { ensureProfile, nowEpoch } from '@/forum/view';
 import { parseLimitRules, parseModerationRules } from '@/rules';
@@ -113,7 +112,7 @@ export const edit = orgAction(null, nodeSchema.extend({ body: z.string().min(1).
   const { node, postPublicId } = await resolveNode(ctx.orgId, i);
   try {
     await db.$transaction(async (tx) => {
-      const r = await editNode(tx, { orgId: ctx.orgId, editorId: me.profileId, node, body: i.body, at: nowEpoch() }, limits);
+      const r = await submitEdit(tx, { orgId: ctx.orgId, editorId: me.profileId, node, body: i.body, at: nowEpoch() }, limits);
       await audit(ctx, 'forum.edited', { targetType: node.kind.toLowerCase(), targetId: node.id, data: { withinWindow: r.withinWindow } }, tx);
     });
   } catch (e) {

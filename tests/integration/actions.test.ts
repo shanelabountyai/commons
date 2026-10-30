@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db } from '@/core/db';
-import { RateLimited, submitComment, submitPost, submitVote } from '@/forum/actions';
+import { RateLimited, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { toDate } from '@/forum/db';
 import { guardAndRecord, sweepLimitHits } from '@/forum/limits-store';
 import { parseLimitRules } from '@/rules';
@@ -63,6 +63,21 @@ describe('the action door', () => {
     expect(x37.input).toContain('\u0000');
     await expect(tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-N1', title: 't', body: x37.input, at: T0 + 25 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
     await expect(tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-N2', title: 'a\u0000b', body: 'b', at: T0 + 26 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
+  });
+
+  it('4.1.1: edits go through the same door — a banned author is BANNED_UNTIL, a NUL byte is INPUT_INVALID, a stranger is NOT_MEMBER (D-44, D-53)', async () => {
+    const own = await tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-E1', title: 't', body: 'original', at: T0 + 27 }, rules));
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'POST', id: own.id }, body: 'bad\u0000byte', at: T0 + 28 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'POST', id: own.id }, body: '', at: T0 + 28 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.stranger!, node: { kind: 'POST', id: own.id }, body: 'x', at: T0 + 28 }, rules))).rejects.toMatchObject({ code: 'NOT_MEMBER' });
+    // the banned member authored a post before the ban (seeded row); editing it now is refused with the lift time
+    const theirs = await db.post.create({ data: { orgId, boardId, authorId: P.banned!, publicId: 'A-E2', title: 't', body: 'b', createdAt: toDate(T0 - 2 * DAY) } });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.banned!, node: { kind: 'POST', id: theirs.id }, body: 'edited', at: T0 + 29 }, rules))).rejects.toMatchObject({ code: 'BANNED_UNTIL', message: `BANNED_UNTIL: ${T0 + DAY}` });
+    const ok = await tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'POST', id: own.id }, body: 'Edited body, long enough to be hashed for the duplicate detector later', at: T0 + 30 }, rules));
+    expect(ok.withinWindow).toBe(true);
+    const row = await db.post.findUniqueOrThrow({ where: { id: own.id }, select: { body: true, bodyHash: true } });
+    expect(row.body).toMatch(/^Edited body/);
+    expect(row.bodyHash).not.toBeNull(); // rehashed on edit so the duplicate detector sees edited bodies
   });
 
   it('INPUT_INVALID: empty title, oversize body', async () => {
