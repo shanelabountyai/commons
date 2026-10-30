@@ -216,7 +216,7 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   const post = page.locator('article[aria-label="Post"]');
   await post.locator('summary').first().click();
   await post.getByLabel(/Attach an image/).setInputFiles({ name: 'evil.png', mimeType: 'image/png', buffer: Buffer.from('<svg onload=alert(1)></svg>') });
-  await post.getByRole('button', { name: 'Attach' }).click();
+  await post.getByRole('button', { name: 'Attach', exact: true }).click();
   await expect(page.locator('p[role="alert"]')).toBeVisible(); // not inside a closed <details>
   await expect(page.locator('p[role="alert"]')).toContainText('INPUT_INVALID');
 });

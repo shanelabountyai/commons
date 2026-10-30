@@ -70,14 +70,23 @@ export const reply = orgAction(null, z.object({ postId: ref('post'), parentId: r
  *  harness can scope them; the post's publicId is read back for the redirect. */
 const nodeSchema = z.object({ postId: ref('post'), commentId: ref('comment').optional() });
 type NodeInput = z.infer<typeof nodeSchema>;
-async function resolveNode(orgId: string, i: NodeInput): Promise<{ node: { kind: 'POST' | 'COMMENT'; id: string }; postPublicId: string }> {
+async function resolveNode(orgId: string, i: NodeInput): Promise<{ node: { kind: 'POST' | 'COMMENT'; id: string }; postPublicId: string; anchor: string }> {
   const post = await db.post.findFirst({ where: { id: i.postId, orgId }, select: { id: true, publicId: true } });
   if (!post) notFound(); // INV-04: not yours ≡ not found
-  if (!i.commentId) return { node: { kind: 'POST', id: post.id }, postPublicId: post.publicId };
-  const c = await db.comment.findFirst({ where: { id: i.commentId, orgId, postId: post.id }, select: { id: true } });
+  if (!i.commentId) return { node: { kind: 'POST', id: post.id }, postPublicId: post.publicId, anchor: '' };
+  const c = await db.comment.findFirst({ where: { id: i.commentId, orgId, postId: post.id }, select: { id: true, publicId: true } });
   if (!c) notFound();
-  return { node: { kind: 'COMMENT', id: c.id }, postPublicId: post.publicId };
+  return { node: { kind: 'COMMENT', id: c.id }, postPublicId: post.publicId, anchor: `#${c.publicId}` };
 }
+
+/** 4.1.7 / 4.1.14: every vote outcome is said back, effect first, code kept (V-1..V-5). */
+const VOTE_NOTICE: Record<string, string> = {
+  APPLIED: 'Vote counted. (APPLIED)',
+  SWITCHED: 'Vote switched. (SWITCHED)',
+  TOGGLED_OFF: 'Vote removed — press again to vote the same way. (TOGGLED_OFF)',
+  GATED_DOWNVOTE: `Your downvote was recorded but not counted: accounts need ${limits.downvote_gate.min_age_hours} h and ${limits.downvote_gate.min_contributions} contributions to downvote. (GATED_DOWNVOTE)`,
+  SELF_VOTE: 'Your own +1 on your own content is fixed and cannot change. (SELF_VOTE)',
+};
 
 export const vote = orgAction(null, nodeSchema.extend({ value: z.enum(['1', '-1']) }), async (ctx, i) => {
   const me = await ensureProfile(ctx);
@@ -89,14 +98,13 @@ export const vote = orgAction(null, nodeSchema.extend({ value: z.enum(['1', '-1'
     refused(e);
   }
   revalidatePath(`${base(ctx.slug)}/p/${postPublicId}`);
-  if (outcome === 'GATED_DOWNVOTE') return { notice: 'Recorded, not counted: new accounts cannot downvote yet (24 h and 3 contributions). (GATED_DOWNVOTE)' };
-  if (outcome === 'SELF_VOTE') return { notice: 'Your own vote on your own post is fixed. (SELF_VOTE)' };
-  redirect(`${base(ctx.slug)}/p/${postPublicId}`);
+  // no redirect (4.1.7): the counts refresh in the same response, the <details> panel stays open, the outcome is announced
+  return { notice: VOTE_NOTICE[outcome] ?? `${outcome}. (${outcome})` };
 });
 
 export const edit = orgAction(null, nodeSchema.extend({ body: z.string().min(1).max(50_000) }), async (ctx, i) => {
   const me = await ensureProfile(ctx);
-  const { node, postPublicId } = await resolveNode(ctx.orgId, i);
+  const { node, postPublicId, anchor } = await resolveNode(ctx.orgId, i);
   try {
     await db.$transaction(async (tx) => {
       const r = await submitEdit(tx, { orgId: ctx.orgId, editorId: me.profileId, node, body: i.body, at: nowEpoch() }, limits);
@@ -105,7 +113,8 @@ export const edit = orgAction(null, nodeSchema.extend({ body: z.string().min(1).
   } catch (e) {
     refused(e);
   }
-  redirect(`${base(ctx.slug)}/p/${postPublicId}`);
+  revalidatePath(`${base(ctx.slug)}/p/${postPublicId}`); // a hash-only redirect would not refetch without this
+  redirect(`${base(ctx.slug)}/p/${postPublicId}${anchor}`); // 4.1.7: back to the node, not the top of the thread
 });
 
 export const report = orgAction(null, nodeSchema.extend({ reason: z.string().min(1), detail: z.string().max(2000).default('') }), async (ctx, i) => {
@@ -129,7 +138,7 @@ const modSchema = z.object({ reason: z.string().min(1).max(1000), back: z.string
 
 export const moderateContent = orgAction(null, nodeSchema.extend({ ...modSchema.shape, action: z.enum(['REMOVE', 'RESTORE', 'CLEAR', 'REOPEN']) }), async (ctx, i) => {
   const me = await ensureProfile(ctx);
-  const { node } = await resolveNode(ctx.orgId, i);
+  const { node, anchor } = await resolveNode(ctx.orgId, i);
   try {
     await db.$transaction(async (tx) => {
       const r = await actOnContent(tx, me, i.action, node, i.reason, nowEpoch(), mod);
@@ -139,7 +148,7 @@ export const moderateContent = orgAction(null, nodeSchema.extend({ ...modSchema.
     refused(e);
   }
   revalidatePath(`${base(ctx.slug)}/mod`);
-  redirect(i.back || `${base(ctx.slug)}/mod`);
+  redirect(i.back ? `${i.back}${anchor}` : `${base(ctx.slug)}/mod`);
 });
 
 export const moderateThread = orgAction(null, z.object({ postId: ref('post'), action: z.enum(['LOCK', 'UNLOCK', 'PIN', 'UNPIN']), ...modSchema.shape }), async (ctx, i) => {

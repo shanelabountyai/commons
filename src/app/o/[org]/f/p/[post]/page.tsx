@@ -44,7 +44,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
         const r = rows[i]!;
         const [kids, next] = render(i + 1, depth + 1);
         items.push(
-          <li key={r.id} id={r.id} className="c">
+          <li key={r.id} id={r.id} className="c" tabIndex={-1}>
             <CommentView r={r} />
             {kids.length > 0 && <ol>{kids}</ol>}
           </li>,
@@ -164,7 +164,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
         </h1>
         <div className="meta">
           {post.ups - post.downs} points · by <Link href={`/o/${ctx.slug}/f/u/${post.author.handle}`}><Text value={post.author.handle} /></Link> · {when(post.createdAt)}
-          {post.editedAt && ' · edited'} · {post.commentCount} comments · hot {t.postScore.hot.toFixed(2)} (ranked {ago(t.rankedAt)})
+          {post.editedAt && ' · edited'} · {post.commentCount} comments · ranked {ago(t.rankedAt)}{isMod && <> · hot {t.postScore.hot.toFixed(2)} (moderators only, D-9)</>}
         </div>
         {post.status === 'visible' ? <Markdown body={post.body} /> : <p className="removed">This post was {post.status}{isMod ? '; the body is below for moderators.' : '.'}</p>}
         {post.status !== 'visible' && isMod && <Markdown body={post.body} />}
@@ -178,7 +178,8 @@ export default async function Thread({ params, searchParams }: { params: Promise
             ))}
           </ul>
         )}
-        <details>
+        {sp.upload && <p role="alert">{sp.upload}</p>}
+        <details open={sp.upload ? true : undefined}>
           <summary>Vote, report{post.author.id === me.profileId ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
           <span className="votes">
             <ActionForm action={bound(vote)}>
@@ -205,7 +206,6 @@ export default async function Thread({ params, searchParams }: { params: Promise
                 <input type="file" name="file" accept={limits.upload.types.join(',')} required />
               </label>
               <button type="submit">Attach</button>
-              {sp.upload && <p role="alert">{sp.upload}</p>}
             </form>
           )}
           {isMod && (
