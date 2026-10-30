@@ -1,6 +1,14 @@
 # NEXT
 
-## ▶ Phase 4 DONE — the build is closed; stopped at the gate (2026-10-29). Shane reviews PR #1 (Phases 1–4) and `docs/CLOSEOUT.md`. Nothing merges from a session.
+## ▶ Review gate done; Phase 4.1 planned, NOT started (2026-10-30). Shane reviews `docs/phase-4.1-tasks.md` and PR #2, then says go.
+
+**Review session (2026-10-29 late → 2026-10-30, cloud).** Four read-only review agents (UX, accessibility, design, forum/T&S SME) and a PO consolidation over the Phase 4 head; reports verbatim in `docs/reviews/`. Lead verified the three SME defect claims against the code before the PO pass (D-64). Shane decided D-58..D-63 one at a time. PR #1 merged by Shane as `5f0ba21`; branch `phase-4.1` off `main`; PR #2 opened with the plan only.
+- **Next action (needs "go"):** Phase 4.1 — 15 rows in `docs/phase-4.1-tasks.md`, failing test first for each, one concern per commit. Then Phase 5 PRDs (`docs/prd/`, one per task in `docs/phase-5-tasks.md`), reviewed one at a time before any build.
+- **Nothing ran in this session** beyond review and the gate docs; the Phase 4 gate numbers (D-55) stand.
+
+---
+
+## Phase 4 DONE — the build is closed; stopped at the gate (2026-10-29). (superseded by the block above; PR #1 merged 2026-10-30)
 
 **Phase 4 build session (2026-10-29 ~5–6 PM CT, Fable, cloud, Shane's "go now").**
 - Built per `docs/phase-4-tasks.md`, one concern per commit on `phase-1`: `rules/moderation.json` + schema + append-only trigger (4.1) → report / act / queue / state machines (4.2) → duplicate signal (4.5) → pages, mod queue, profile, search, uploads (4.3, 4.4, 4.6, 4.7) → browser capstone with axe (4.8) → `commons:demo` + `docs/DEMO.md` (4.8) → EVAL §4, WRITEUP, CLOSEOUT (4.9). Defaults D-48..D-54, gate D-55.
