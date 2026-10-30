@@ -242,7 +242,9 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   await post.getByRole('button', { name: 'Attach', exact: true }).click();
   const req = await posted;
   expect(req.url(), `POST went to ${req.url()} (headers: ${JSON.stringify(req.headers())})`).toMatch(/\/f\/uploads\?post=/);
-  await expect(page.locator('p[role="alert"]')).toBeVisible(); // not inside a closed <details>
+  const res = await req.response();
+  const detail = `POST ${req.url()} → ${res?.status()} ${JSON.stringify(res?.headers() ?? {})}; page now ${page.url()}; body: ${(await page.textContent('body'))?.slice(0, 300)}`;
+  await expect(page.locator('p[role="alert"]'), detail).toBeVisible(); // not inside a closed <details>
   await expect(page.locator('p[role="alert"]')).toContainText('INPUT_INVALID');
 });
 
