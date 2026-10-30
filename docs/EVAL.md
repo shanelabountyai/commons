@@ -181,7 +181,7 @@ New since Phase 4: a plain member's thread view shows no hot score; an upvote an
 
 ### Gate
 
-`engine:lint` OK (with the door rule); `ranking:golden` 44 OK; `engine:eval` 12 files / 19,568 rows / 0 differences; `fixtures:check` OK (18 files, 12 reproduce); `foundation:drift` clean; `tsc` clean; `eslint` 0; invariant harness 14/14 with two new actions (`deleteOwn`, `moderatorFlag`); `npm audit` 15 advisories, 0 added (lockfile unchanged).
+CI green at `df78efb` (https://github.com/shanelabountyai/commons/actions/runs/41139192206) after four runs red on 4.1.6 alone — the upload route handlers had never been committed (D-69); `npm run repo:ignored` now guards it. `engine:lint` OK (with the door rule); `ranking:golden` 44 OK; `engine:eval` 12 files / 19,568 rows / 0 differences; `fixtures:check` OK (18 files, 12 reproduce); `foundation:drift` clean; `tsc` clean; `eslint` 0; invariant harness 14/14 with two new actions (`deleteOwn`, `moderatorFlag`); `npm audit` 15 advisories, 0 added (lockfile unchanged).
 
 ## What these numbers are not
 

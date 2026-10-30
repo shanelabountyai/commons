@@ -5,16 +5,17 @@
 **Phase 4.1 session (2026-10-30, cloud, Shane's "go").** 15 defect rows from the review gate, each fixed behind a red test, one concern per commit on `phase-4.1` (21 commits incl. the plan). Decisions D-65..D-68.
 - **Gate output:** `npm test` 332/332 (46 files); harness 14/14 with `deleteOwn` and `moderatorFlag`; `xss:check` 61/61 (D-61 cases added, red first); `engine:eval` 0 differences; `fixtures:check` OK (manifest regenerated, 12 expected CSVs byte-identical); `engine:lint` OK with the new single-door rule (proven red on the old edit import); drift clean; tsc clean; eslint 0; full Playwright 18/18 against the production build in 2.6 min, axe 0 light+dark incl. 320 px and after an action; audit 15 advisories, 0 added. Every number with its command: `docs/EVAL.md` §Phase 4.1.
 - **Found while patching:** the two D-61 fixture cases pushed the capstone's thread past 50 top-level comments, so the XSS walk now checks storage and scans every page; the dev server's first compile can outlast a 5 min test (seen once; CI uses the production build).
+- **Found by CI, not locally (D-69):** the template's `.gitignore` `uploads/` had hidden `src/app/o/[org]/f/uploads/*` from every commit since Phase 4; local runs passed because the files were on disk. Now committed; `npm run repo:ignored` guards the class; CI posts Playwright failure context as a PR comment (the only channel a cloud session can read).
 - **Sandbox:** everything ran locally; Postgres had to be restarted (`service postgresql start`) after the overnight idle.
 
 | CI run | Head | Result |
 |---|---|---|
-| Phase 4.1 head | (PR #3 checks) | pending at the time of writing; the session updates this row when the run finishes |
+| Phase 4.1 head | df78efb | **success** https://github.com/shanelabountyai/commons/actions/runs/41139192206 (repo:ignored, lints, eval, fixtures, migrate diff, eval:db, ADR, abuse suites, vitest, full Playwright 18/18 on PG 17). Four earlier runs on this branch failed only on 4.1.6: the upload route files had never been committed (D-69) |
 | Phase 4 head | 63dad8a | **success** https://github.com/shanelabountyai/commons/actions/runs/40967135925 (merged as 5f0ba21) |
 
 **Decisions for Shane:** merge PR #3 or not; confirm or reverse D-65..D-68. Then the Phase 5 PRDs (`docs/phase-5-tasks.md`, D-59), presented one at a time before any build.
 
-**Upstream for saas-foundation (new this phase):** D-67 (ActionForm loses typed input and focus on refusal).
+**Upstream for saas-foundation (new this phase):** D-67 (ActionForm loses typed input and focus on refusal); D-69 (`uploads/` in the template .gitignore is too broad).
 
 ---
 
