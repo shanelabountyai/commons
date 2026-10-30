@@ -44,7 +44,7 @@ test('boards and a board under Hot, Top and New, ranked by the job', async ({ pa
   await expect(page.getByRole('link', { name: 'networking' })).toBeVisible();
   await page.getByRole('link', { name: 'selfhosting' }).click();
   await expectAccessible(page, 'board hot', 'Hot');
-  await expect(page.getByText(/ranked \d+ min ago/)).toBeVisible();
+  await expect(page.getByText(/ranked (just now|\d+ (min|h|d) ago)/)).toBeVisible(); // 4.1.13: scaled units
   const hotFirst = await page.locator('ol li.post a').first().textContent();
   await page.getByRole('link', { name: 'Top all time' }).click();
   await expect(page.getByRole('link', { name: 'Top all time' })).toHaveAttribute('aria-current', 'page');
@@ -107,37 +107,52 @@ test('every XSS fixture body posted through the real form renders inert in a rea
     FROM "Profile" p, "Board" b, generate_series(1, 6) g WHERE p."orgId" = $1 AND p."handle" LIKE 'owner%' AND b."orgId" = $1 AND b.slug = 'help'`, [orgId]);
   let accepted = 0;
   const refusedIds: string[] = [];
+  const stored = async () => Number((await db.query(`SELECT count(*) AS n FROM "Comment" c JOIN "Post" p ON p.id = c."postId" WHERE p."orgId" = $1 AND p."publicId" = 'P-0001'`, [orgId])).rows[0].n);
+  const alert = page.locator('p[role="alert"]'); // the form's own; Next's route announcer is also role=alert
   for (const c of bodies) {
     await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]); // one case per attempt; the limit itself is proven by abuse:spam
-    const before = await page.locator('ol.thread li.c').count();
+    const before = await stored();
     await page.getByLabel('New comment').fill(c.input);
     await page.getByRole('button', { name: 'Comment', exact: true }).click();
-    // either the comment is stored and rendered inert, or the door refuses it with a code — never a 500
-    const alert = page.locator('p[role="alert"]'); // the form's own; Next's route announcer is also role=alert
-    await expect(page.locator('ol.thread li.c').nth(before).or(alert)).toBeVisible();
-    if ((await page.locator('ol.thread li.c').count()) > before) accepted += 1;
-    else {
+    // either the comment is stored (it may land on page 2 once the thread passes 50 top-level comments) or the door refuses it with a code — never a 500
+    await expect.poll(async () => (await stored()) > before || (await alert.count()) > 0, { message: `case ${c.id}` }).toBe(true);
+    if ((await stored()) > before) {
+      accepted += 1;
+      await expect(page).toHaveURL(/\/f\/p\/P-0001/);
+    } else {
       await expect(alert).toContainText('INPUT_INVALID');
       refusedIds.push(c.id);
-      await page.goto(`/o/${SLUG}/f/p/P-0001`);
     }
+    await page.goto(`/o/${SLUG}/f/p/P-0001`);
   }
   expect(refusedIds).toEqual(['X-37']); // the NUL-byte body is refused at the door (actions.test.ts); everything else is stored
   expect(accepted).toBe(bodies.length - 1);
-  const live = await page.evaluate(() => {
-    const bad: string[] = [];
-    // the rendered bodies only (div.body is the one sanitizer output); the thread's own forms sit beside them
-    for (const el of Array.from(document.querySelectorAll('ol.thread div.body *'))) {
-      const tag = el.tagName.toLowerCase();
-      if (['script', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'style', 'math'].includes(tag)) bad.push(tag);
-      for (const a of Array.from(el.attributes)) {
-        if (/^on/i.test(a.name)) bad.push(`${tag}@${a.name}`);
-        if ((a.name === 'href' || a.name === 'src') && /^\s*(javascript|data|vbscript):/i.test(a.value)) bad.push(`${tag}@${a.name}=${a.value.slice(0, 20)}`);
-      }
-    }
-    return bad;
-  });
-  expect(await page.locator('ol.thread div.body').count()).toBeGreaterThanOrEqual(accepted);
+  // every page of the thread: no live markup survives inside any rendered body
+  const live: string[] = [];
+  let rendered = 0;
+  for (let pg = 1; pg <= 3; pg += 1) {
+    await page.goto(`/o/${SLUG}/f/p/P-0001?page=${pg}`);
+    const n = await page.locator('ol.thread div.body').count();
+    if (n === 0) break;
+    rendered += n;
+    live.push(
+      ...(await page.evaluate(() => {
+        const bad: string[] = [];
+        // the rendered bodies only (div.body is the one sanitizer output); the thread's own forms sit beside them
+        for (const el of Array.from(document.querySelectorAll('ol.thread div.body *'))) {
+          const tag = el.tagName.toLowerCase();
+          if (['script', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'style', 'math', 'h1', 'h2', 'h3'].includes(tag)) bad.push(tag);
+          for (const a of Array.from(el.attributes)) {
+            if (/^on/i.test(a.name)) bad.push(`${tag}@${a.name}`);
+            if (a.name === 'target') bad.push(`${tag}@target`); // D-61
+            if ((a.name === 'href' || a.name === 'src') && /^\s*(javascript|data|vbscript):/i.test(a.value)) bad.push(`${tag}@${a.name}=${a.value.slice(0, 20)}`);
+          }
+        }
+        return bad;
+      })),
+    );
+  }
+  expect(rendered).toBeGreaterThanOrEqual(accepted);
   expect(live).toEqual([]);
   expect(fired).toBe(false);
   await expectAccessible(page, 'thread with hostile bodies', 'P-0001 title');
@@ -223,7 +238,7 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
 
 test('4.1.12: a refused comment keeps what was typed (RATE_LIMITED on a young account)', async ({ page }) => {
   await member.signIn(db, page);
-  await page.goto(`/o/${SLUG}/f/p/P-0001`);
+  await page.goto(`/o/${SLUG}/f/p/P-0002`);
   await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]);
   for (const n of [1, 2]) {
     await page.getByLabel('New comment').fill(`Quick comment ${n}`);
