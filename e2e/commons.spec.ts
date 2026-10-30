@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import pg from 'pg';
 import { expectAccessible } from './axe';
-import { ownerFor } from './commons-helpers';
+import { memberFor, ownerFor } from './commons-helpers';
 
 test.use({ bypassCSP: true }); // axe is injected; the app's CSP (INV-15) rightly refuses that
 test.describe.configure({ mode: 'serial', timeout: 300_000 });
@@ -14,12 +14,14 @@ test.describe.configure({ mode: 'serial', timeout: 300_000 });
 const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
 const SLUG = `homelab-e2e-${Date.now()}`;
 const owner = ownerFor(SLUG);
+const member = memberFor(SLUG);
 let orgId = '';
 const xssCases = (JSON.parse(readFileSync('fixtures/xss/cases.json', 'utf8')) as { cases: { id: string; class: string; input: string }[] }).cases;
 
 test.beforeAll(async () => {
   test.setTimeout(900_000); // the fixture load through the writers is ~1k posts and ~10k comments; hooks default to 30 s
   orgId = await owner.setup(db);
+  await member.setup(db, orgId);
   // the fixture community through the real writers (same path as engine:eval:db), in one transaction
   const { loadFixtures } = await import('../src/fixtures/load');
   const { loadForum } = await import('../src/forum/load');
@@ -174,4 +176,47 @@ test('report → queue (with the fixture brigade) → remove → restore → app
   await page.goto(`/o/${SLUG}/f/search?q=P-BRIGADE`);
   await expectAccessible(page, 'search', 'Search');
   await expect(page.getByRole('link', { name: 'P-BRIGADE title' })).toBeVisible();
+});
+
+// ---- Phase 4.1 defect patch: each assertion below was red before its fix (docs/phase-4.1-tasks.md) ----
+
+test('4.1.5–4.1.7: a member sees no hot score; a vote answers with its outcome and keeps the panel open; edit returns to the node', async ({ page }) => {
+  await member.signIn(db, page);
+  await page.goto(`/o/${SLUG}/f/p/P-GW`);
+  await expect(page.locator('article[aria-label="Post"] .meta')).not.toContainText(/\bhot \d/); // D-9: the score is for the eval and moderators
+  await expect(page.locator('article[aria-label="Post"] .meta')).toContainText(/ranked/);
+  // a 0-minute-old member: upvote applies; the same button again toggles it off; each outcome is announced (4.1.7)
+  const target = page.locator('li#C-GW-1-1');
+  await target.locator('summary').first().click();
+  await target.getByRole('button', { name: /Upvote comment/ }).click();
+  await expect(target.getByRole('status')).toContainText('APPLIED');
+  await expect(target.locator('details').first()).toHaveAttribute('open', ''); // no redirect: the panel stays open
+  await target.getByRole('button', { name: /Upvote comment/ }).click();
+  await expect(target.getByRole('status')).toContainText('TOGGLED_OFF');
+  // the member edits their own reply and lands on it, not at the top of the thread
+  await page.getByLabel('New comment').fill('A reply the member will edit.');
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  const mine = page.locator('li.c', { hasText: 'A reply the member will edit.' }).first();
+  await mine.locator('summary').first().click();
+  await mine.getByLabel('Edit your comment').fill('A reply the member edited.');
+  await mine.getByRole('button', { name: 'Save edit' }).click();
+  await expect(page.locator('ol.thread')).toContainText('A reply the member edited.');
+  await expect(page).toHaveURL(/#C-[A-Za-z0-9-]+$/);
+});
+
+test('4.1.6: an upload refusal is visible without opening anything', async ({ page }) => {
+  await signIn(page);
+  await page.goto(`/o/${SLUG}/f/p/P-GW`);
+  // the owner is not P-GW's author: create an own post first through the board form
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await page.getByLabel('Title').fill('Upload refusal check');
+  await page.getByLabel(/^Body/).fill('A post to attach a bad file to.');
+  await page.getByRole('button', { name: 'Post', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Upload refusal check' })).toBeVisible();
+  const post = page.locator('article[aria-label="Post"]');
+  await post.locator('summary').first().click();
+  await post.getByLabel(/Attach an image/).setInputFiles({ name: 'evil.png', mimeType: 'image/png', buffer: Buffer.from('<svg onload=alert(1)></svg>') });
+  await post.getByRole('button', { name: 'Attach' }).click();
+  await expect(page.locator('p[role="alert"]')).toBeVisible(); // not inside a closed <details>
+  await expect(page.locator('p[role="alert"]')).toContainText('INPUT_INVALID');
 });
