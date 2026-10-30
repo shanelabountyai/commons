@@ -96,6 +96,9 @@ describe('users', () => {
     const ban = await tx((t) => actOnUser(t, modCtx('mod'), 'BAN', P.plain!, 'repeat spam', T0 + 202, mod, 24));
     expect(ban).toMatchObject({ from: 'WARNED', to: 'BANNED', until: T0 + 202 + 24 * 3600 });
     await expect(tx((t) => submitPost(t, { orgId, profileId: P.plain!, boardId, publicId: 'M-B1', title: 't', body: 'b', at: T0 + 203 }, limits, mod))).rejects.toMatchObject({ code: 'BANNED_UNTIL' });
+    // 4.1.2: reports go through the door too (D-14 lists them)
+    const anyPost = await db.post.findFirstOrThrow({ where: { orgId, authorId: P.author! }, select: { id: true } });
+    await expect(tx((t) => submitReport(t, { orgId, profileId: P.plain!, node: { kind: 'POST', id: anyPost.id }, reason: 'spam', at: T0 + 203 }, limits, mod))).rejects.toMatchObject({ code: 'BANNED_UNTIL' });
     await expect(tx((t) => actOnUser(t, modCtx('mod'), 'WARN', P.plain!, 'x', T0 + 204, mod))).rejects.toMatchObject({ code: 'TRANSITION_INVALID' });
     await expect(tx((t) => actOnUser(t, modCtx('mod'), 'WARN', P.mod!, 'x', T0 + 205, mod))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
     expect((await tx((t) => actOnUser(t, modCtx('mod'), 'UNBAN', P.plain!, 'served', T0 + 206, mod))).to).toBe('ACTIVE');

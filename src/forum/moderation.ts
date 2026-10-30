@@ -3,6 +3,7 @@
 // truth, the state columns are the cache). Who may moderate: owner, admin, or a Profile with isModerator (D-48).
 // Removal keeps the subtree (D-13) and refuses new replies beneath (D-30); a ban stops new writes (D-14).
 import { canTransition, type LimitRules, type ModerationRules } from '@/rules';
+import { admit } from './actions';
 import { ForumRefused, lockKey, nodeInfo, toDate, type NodeRef, type Tx } from './db';
 import { guardAndRecord } from './limits-store';
 
@@ -44,6 +45,7 @@ export type SubmitReport = { orgId: string; profileId: string; node: NodeRef; re
 /** A user reports a node: the `report` window applies (action door rules), one report per reporter per node, and the
  *  first report opens the case (content state OPEN). Reporting your own content is allowed (it still opens a case). */
 export async function submitReport(tx: Tx, r: SubmitReport, limits: LimitRules, mod: ModerationRules): Promise<{ caseId: string; reportsOnNode: number }> {
+  await admit(tx, r.orgId, r.profileId, r.at); // 4.1.2: a banned member cannot report either (D-14)
   if (!mod.report_reasons.some((x) => x.code === r.reason)) throw new ForumRefused('INPUT_INVALID', `unknown reason ${r.reason}`);
   const info = await nodeInfo(tx, r.node);
   if (!info || info.orgId !== r.orgId) throw new ForumRefused('UNKNOWN_NODE', `${r.node.kind} ${r.node.id}`);
