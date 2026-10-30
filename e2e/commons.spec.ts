@@ -238,3 +238,40 @@ test('4.1.12: a refused comment keeps what was typed (RATE_LIMITED on a young ac
   await expect(page.getByLabel('New comment')).toHaveValue(body);
   await expect(alert).toBeFocused(); // the refusal takes focus so a keyboard or screen-reader user hears it
 });
+
+test('4.1.13: every page has its own title; the thread is usable and axe-clean at 320 px and after an action', async ({ page }) => {
+  await signIn(page);
+  const titles: [string, RegExp][] = [
+    [`/o/${SLUG}/f`, /^Boards/],
+    [`/o/${SLUG}/f/selfhosting`, /^selfhosting/],
+    [`/o/${SLUG}/f/p/P-GW`, /^P-GW title/],
+    [`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, /^Comment by /],
+    [`/o/${SLUG}/f/u/homelabber059`, /^homelabber059/],
+    [`/o/${SLUG}/f/mod`, /^Moderation queue/],
+    [`/o/${SLUG}/f/search?q=P-GW`, /^Search/],
+  ];
+  for (const [path, re] of titles) {
+    await page.goto(path);
+    await expect(page).toHaveTitle(re);
+  }
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true); // no horizontal scroll (1.4.10)
+  await expectAccessible(page, 'thread at 320px', 'P-CHAIN title');
+  await page.getByRole('link', { name: 'Skip to content' }).focus();
+  await expect(page.getByRole('link', { name: 'Skip to content' })).toBeVisible();
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/o/${SLUG}/f/p/P-GW`);
+  const target = page.locator('li#C-GW-1-1');
+  await target.locator('summary').first().click();
+  const up = target.getByRole('button', { name: /Upvote comment/ });
+  const box = (await up.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(24);
+  expect(box.height).toBeGreaterThanOrEqual(24);
+  await up.click();
+  await expect(target.getByRole('status')).toBeVisible();
+  await expectAccessible(page, 'thread after a vote', 'P-GW title');
+  await expect(page.locator('time').first()).toHaveAttribute('datetime', /^\d{4}-/);
+});
