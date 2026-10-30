@@ -7,10 +7,11 @@ import { ActionForm } from '@/core/ui/action-form';
 import { Markdown, Text, when } from '@/components/forum';
 import { canModerate, queue } from '@/forum/moderation';
 import { ensureProfile } from '@/forum/view';
-import { parseModerationRules } from '@/rules';
+import { parseLimitRules, parseModerationRules } from '@/rules';
 import { moderateContent, reviewBrigade, reviewDuplicate } from '../actions';
 
 const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
+const brigadeRule = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8'))).signals.brigade;
 
 /** Task 4.4: open cases with content in context, reporter count and author history; brigade and duplicate signals;
  *  the append-only log. Moderators only ("not yours" ≡ not found for everyone else). */
@@ -44,7 +45,7 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
     <main>
       <h1>Moderation queue</h1>
       <p className="meta">
-        {items.length} open item{items.length === 1 ? '' : 's'}: cases from reports, brigade signals (≥ 5 gated downvotes in 10 min), duplicate signals. Nothing here was acted on automatically.
+        {items.length} open item{items.length === 1 ? '' : 's'}: cases from reports, brigade signals (≥ {brigadeRule.min_voters} gated downvotes in {Math.round(brigadeRule.window_seconds / 60)} min), duplicate signals. Nothing here was acted on automatically.
       </p>
       {items.length === 0 && <p>The queue is empty.</p>}
       {await Promise.all(

@@ -43,6 +43,8 @@ export const LimitRulesSchema = z
     edit_window_seconds: positiveInt,
     max_depth_rendered: positiveInt,
     upload: z.object({ max_bytes: positiveInt, types: z.array(z.string().regex(/^image\//)).nonempty() }).strict(),
+    /** D-31 as data (4.1.3): ≥ min_voters distinct gated downvoters on one node inside window_seconds → one signal. */
+    signals: z.object({ brigade: z.object({ min_voters: positiveInt, window_seconds: positiveInt }).strict() }).strict(),
   })
   .strict();
 export type LimitRules = z.infer<typeof LimitRulesSchema>;
