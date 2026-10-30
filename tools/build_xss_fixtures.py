@@ -24,6 +24,9 @@ LIVE = {
     "style_attr": r"<[a-z][^>]*\sstyle\s*=",
     "other_tag": r"<(?!/?" + ALLOWED + r"[\s>/])[a-z!?]",  # any element outside the allowlist, comments, PIs
     "img": r"<img\b",
+    # D-61 (Phase 4.1): user headings may not enter the page outline (h1–h3 are the page's); links open no new window
+    "outline_heading": r"<h[1-3]\b",
+    "new_window": r"<a\b[^>]*\starget\s*=",
 }
 TEXT_LIVE = {"any_tag": r"<[a-z/!?]"}  # plain-text fields contain no markup whatsoever once encoded
 
@@ -89,6 +92,8 @@ md("X-47", "[mail](mailto:a@example.com)", ['href="mailto:a@example.com"'], "mai
 md("X-48", "[rel](/local/path) and [proto](//evil.example/x)", ["rel", "proto"], "relative and protocol-relative links: text kept; href policy is the renderer's (must not be javascript)")
 md("X-49", "<details open ontoggle=alert(1)><summary>x</summary></details>", ["x"], "details/ontoggle")
 md("X-50", "<marquee onstart=alert(1)>x</marquee>", ["x"], "obsolete tag with handler")
+md("X-51", "# Not the page title\n\n## nor a section\n\n#### fine", ["<h4>Not the page title</h4>", "<h5>nor a section</h5>", "<h6>fine</h6>"], "D-61: user headings demoted three levels, text kept; h1–h3 are the page's")
+md("X-52", "[same tab](https://ok.example)", ['href="https://ok.example"', 'rel="nofollow ugc noopener"', "same tab"], "D-61: no target=_blank; rel policy unchanged")
 
 # --- plain-text fields: title, handle, board title ---
 for i, (field, inp, keep) in enumerate([
