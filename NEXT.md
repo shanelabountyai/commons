@@ -1,10 +1,24 @@
 # NEXT
 
-## ▶ Review gate done; Phase 4.1 planned, NOT started (2026-10-30). Shane reviews `docs/phase-4.1-tasks.md` and PR #3, then says go.
+## ▶ Phase 4.1 DONE; stopped at the gate (2026-10-30). Shane reviews PR #3 and decides whether to merge; then Phase 5 PRDs, one at a time.
 
-**Review session (2026-10-29 late → 2026-10-30, cloud).** Four read-only review agents (UX, accessibility, design, forum/T&S SME) and a PO consolidation over the Phase 4 head; reports verbatim in `docs/reviews/`. Lead verified the three SME defect claims against the code before the PO pass (D-64). Shane decided D-58..D-63 one at a time. PR #1 merged by Shane as `5f0ba21`; branch `phase-4.1` off `main`; PR #3 opened with the plan only.
-- **Next action (needs "go"):** Phase 4.1 — 15 rows in `docs/phase-4.1-tasks.md`, failing test first for each, one concern per commit. Then Phase 5 PRDs (`docs/prd/`, one per task in `docs/phase-5-tasks.md`), reviewed one at a time before any build.
-- **Nothing ran in this session** beyond review and the gate docs; the Phase 4 gate numbers (D-55) stand.
+**Phase 4.1 session (2026-10-30, cloud, Shane's "go").** 15 defect rows from the review gate, each fixed behind a red test, one concern per commit on `phase-4.1` (21 commits incl. the plan). Decisions D-65..D-68.
+- **Gate output:** `npm test` 332/332 (46 files); harness 14/14 with `deleteOwn` and `moderatorFlag`; `xss:check` 61/61 (D-61 cases added, red first); `engine:eval` 0 differences; `fixtures:check` OK (manifest regenerated, 12 expected CSVs byte-identical); `engine:lint` OK with the new single-door rule (proven red on the old edit import); drift clean; tsc clean; eslint 0; full Playwright 18/18 against the production build in 2.6 min, axe 0 light+dark incl. 320 px and after an action; audit 15 advisories, 0 added. Every number with its command: `docs/EVAL.md` §Phase 4.1.
+- **Found while patching:** the two D-61 fixture cases pushed the capstone's thread past 50 top-level comments, so the XSS walk now checks storage and scans every page; the dev server's first compile can outlast a 5 min test (seen once; CI uses the production build).
+- **Sandbox:** everything ran locally; Postgres had to be restarted (`service postgresql start`) after the overnight idle.
+
+| CI run | Head | Result |
+|---|---|---|
+| Phase 4.1 head | (PR #3 checks) | pending at the time of writing; the session updates this row when the run finishes |
+| Phase 4 head | 63dad8a | **success** https://github.com/shanelabountyai/commons/actions/runs/40967135925 (merged as 5f0ba21) |
+
+**Decisions for Shane:** merge PR #3 or not; confirm or reverse D-65..D-68. Then the Phase 5 PRDs (`docs/phase-5-tasks.md`, D-59), presented one at a time before any build.
+
+**Upstream for saas-foundation (new this phase):** D-67 (ActionForm loses typed input and focus on refusal).
+
+---
+
+## Review gate done; Phase 4.1 planned (2026-10-30). (superseded by the block above)
 
 ---
 
