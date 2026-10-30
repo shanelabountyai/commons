@@ -1,6 +1,6 @@
 # Phase 4.1 — defect patch (written 2026-10-30 at the Phase 4 gate; for Shane's review before work starts)
 
-Source: the four reviews and the PO consolidation in `docs/reviews/2026-10-29-*.md`. These are defects against decisions already made or P0 promises, not new scope. **Rule 7 applies to every row: the failing test or fixture is written and committed before the fix.** One concern per commit on `phase-4.1`, PR #2 against `main`, never merged by a session. Exit bar: every test below green locally and in CI; `engine:eval`, `xss:check`, `fixtures:check`, `engine:lint`, drift all OK; D-58+ recorded; `docs/EVAL.md` §4.1 with the numbers.
+Source: the four reviews and the PO consolidation in `docs/reviews/2026-10-29-*.md`. These are defects against decisions already made or P0 promises, not new scope. **Rule 7 applies to every row: the failing test or fixture is written and committed before the fix.** One concern per commit on `phase-4.1`, PR #3 against `main`, never merged by a session. Exit bar: every test below green locally and in CI; `engine:eval`, `xss:check`, `fixtures:check`, `engine:lint`, drift all OK; D-58+ recorded; `docs/EVAL.md` §4.1 with the numbers.
 
 | # | Defect | Violates | Failing test first | Fix | Size |
 |---|---|---|---|---|---|

@@ -1,8 +1,8 @@
 # NEXT
 
-## ▶ Review gate done; Phase 4.1 planned, NOT started (2026-10-30). Shane reviews `docs/phase-4.1-tasks.md` and PR #2, then says go.
+## ▶ Review gate done; Phase 4.1 planned, NOT started (2026-10-30). Shane reviews `docs/phase-4.1-tasks.md` and PR #3, then says go.
 
-**Review session (2026-10-29 late → 2026-10-30, cloud).** Four read-only review agents (UX, accessibility, design, forum/T&S SME) and a PO consolidation over the Phase 4 head; reports verbatim in `docs/reviews/`. Lead verified the three SME defect claims against the code before the PO pass (D-64). Shane decided D-58..D-63 one at a time. PR #1 merged by Shane as `5f0ba21`; branch `phase-4.1` off `main`; PR #2 opened with the plan only.
+**Review session (2026-10-29 late → 2026-10-30, cloud).** Four read-only review agents (UX, accessibility, design, forum/T&S SME) and a PO consolidation over the Phase 4 head; reports verbatim in `docs/reviews/`. Lead verified the three SME defect claims against the code before the PO pass (D-64). Shane decided D-58..D-63 one at a time. PR #1 merged by Shane as `5f0ba21`; branch `phase-4.1` off `main`; PR #3 opened with the plan only.
 - **Next action (needs "go"):** Phase 4.1 — 15 rows in `docs/phase-4.1-tasks.md`, failing test first for each, one concern per commit. Then Phase 5 PRDs (`docs/prd/`, one per task in `docs/phase-5-tasks.md`), reviewed one at a time before any build.
 - **Nothing ran in this session** beyond review and the gate docs; the Phase 4 gate numbers (D-55) stand.
 

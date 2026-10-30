@@ -108,7 +108,7 @@ The PRD leaves several rules open. This file closes them, and **it outranks PRD 
 
 | # | Decision | Why |
 |---|----------|-----|
-| D-58 | **The 14-defect patch is Phase 4.1 on its own branch and PR (#2) after PR #1 merged** as the Phases 1–4 record (merge commit `5f0ba21`). Tasks in `docs/phase-4.1-tasks.md`; each fix is preceded by its failing test (rule 7). | Owner, option (b) of the PO pass |
+| D-58 | **The 14-defect patch is Phase 4.1 on its own branch and PR (#3) after PR #1 merged** as the Phases 1–4 record (merge commit `5f0ba21`). Tasks in `docs/phase-4.1-tasks.md`; each fix is preceded by its failing test (rule 7). | Owner, option (b) of the PO pass |
 | D-59 | **Phase 5 = integrity and moderation:** vote control with state and outcome, ring and aged-brigade signals as data, the ranking measurement study, mod queue triage v2 (`docs/phase-5-tasks.md`). Readability + tokens and upload hardening are Phase 6. | Owner, option (a) |
 | D-60 | **The four review reports and the PO consolidation are committed verbatim** to `docs/reviews/2026-10-29-*.md` with a header (date, SHA, read-only). The SME's gap table extends "the attacks the author thought of" and belongs in the record; `WRITEUP.md` gains those rows when each is fixtured. | Owner, option (a) |
 | D-61 | **D-43 amended:** user-authored headings are demoted three levels (`h1→h4`, `h2→h5`, `h3+→h6`) so a comment cannot enter the page outline (WCAG 1.3.1); `target="_blank"` is dropped from user links (`rel="nofollow ugc noopener"` stays). Implemented as a markdown-it renderer rule, no dependency; two render fixture rows (X-51, X-52) are added by the generator first, under the D-41 precedent — a definition change, not a D-10 edit. | Owner, option (a); task 4.1.15 |
