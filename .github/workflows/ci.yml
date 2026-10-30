@@ -115,7 +115,8 @@ jobs:
           if [ -n "${{ github.event.pull_request.number }}" ]; then
             {
               echo "**Playwright failed** on ${{ github.sha }}. Reporter tail, then each failure context (first 120 lines):"
-              echo; echo '```'; grep -v 'axe \(light\|dark\) 0' playwright.txt | tail -60; echo '```'
+              echo; echo '```'; grep -v 'axe \(light\|dark\) 0' playwright.txt | tail -90; echo '```'
+              echo; echo "Server log lines with errors or upload attempts:"; echo '```'; grep -n 'WebServer\].*\(⨯\|Error\|uploads:\|digest\)' playwright.txt | tail -40; echo '```'
               for f in $(find test-results -name error-context.md | head -5); do
                 echo; echo "<details><summary>$f</summary>"; echo; echo '```'; head -120 "$f"; echo '```'; echo "</details>"
               done

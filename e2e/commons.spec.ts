@@ -225,10 +225,12 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   await page.goto(`/o/${SLUG}/f/p/P-GW`);
   // the owner is not P-GW's author: create an own post first through the board form
   await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await page.waitForLoadState('networkidle'); // a click before hydration posts the form natively to the page (CI runners are slow)
   await page.getByLabel('Title').fill('Upload refusal check');
   await page.getByLabel(/^Body/).fill('A post to attach a bad file to.');
   await page.getByRole('button', { name: 'Post', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Upload refusal check' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
   const post = page.locator('article[aria-label="Post"]');
   await post.locator('summary').first().click();
   await post.getByLabel(/Attach an image/).setInputFiles({ name: 'evil.png', mimeType: 'image/png', buffer: Buffer.from('<svg onload=alert(1)></svg>') });
