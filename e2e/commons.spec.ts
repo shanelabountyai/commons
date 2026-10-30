@@ -92,6 +92,7 @@ test('reply, vote, edit; a young-looking owner cannot downvote yet; refusals car
 });
 
 test('every XSS fixture body posted through the real form renders inert in a real browser', async ({ page }) => {
+  test.setTimeout(900_000); // 52 round trips through a real form; a CI runner is 2–3× slower than the laptop
   await signIn(page);
   await page.goto(`/o/${SLUG}/f/p/P-0001`);
   const bodies = xssCases.filter((c) => c.class === 'markdown' && c.input.length < 5000);
@@ -122,8 +123,8 @@ test('every XSS fixture body posted through the real form renders inert in a rea
     } else {
       await expect(alert).toContainText('INPUT_INVALID');
       refusedIds.push(c.id);
+      await page.goto(`/o/${SLUG}/f/p/P-0001`);
     }
-    await page.goto(`/o/${SLUG}/f/p/P-0001`);
   }
   expect(refusedIds).toEqual(['X-37']); // the NUL-byte body is refused at the door (actions.test.ts); everything else is stored
   expect(accepted).toBe(bodies.length - 1);
