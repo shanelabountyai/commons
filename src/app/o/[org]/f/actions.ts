@@ -12,34 +12,21 @@ import { orgAction, ref } from '@/core/authz/action';
 import type { OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
-import { RateLimited, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
+import { submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { ForumRefused } from '@/forum/db';
-import { actOnContent, actOnThread, actOnUser, NotModerator, reviewSignal, submitReport, TransitionInvalid } from '@/forum/moderation';
+import { refusalText } from '@/forum/refusals';
+import { actOnContent, actOnThread, actOnUser, reviewSignal, submitReport } from '@/forum/moderation';
 import { ensureProfile, nowEpoch } from '@/forum/view';
 import { parseLimitRules, parseModerationRules } from '@/rules';
 
 const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
 const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
 
-/** The door's typed refusals, said plainly. The code stays in the text so a tester can grep for it. */
+/** The door's typed refusals → the form's error text (src/forum/refusals.ts, unit-tested); UNKNOWN_NODE is not found (INV-04). */
 function refused(e: unknown): never {
-  if (e instanceof RateLimited) throw new Refused(`Slow down: too many ${e.action}s. Try again in ${e.retryAfter} s. (RATE_LIMITED)`);
-  if (e instanceof ForumRefused) {
-    if (e.code === 'UNKNOWN_NODE') notFound(); // INV-04: not yours ≡ not found
-    const why: Record<string, string> = {
-      BANNED_UNTIL: 'Your account is banned from posting for now.',
-      NOT_MEMBER: 'You are not a member of this forum.',
-      INPUT_INVALID: 'Check the form: ' + e.message.replace(/^INPUT_INVALID: /, ''),
-      TREE_INVALID: 'That reply target does not belong to this thread.',
-      PARENT_REMOVED: 'You cannot reply under a comment a moderator removed.',
-      THREAD_LOCKED: 'This thread is locked.',
-      NOT_AUTHOR: 'Only the author can edit this.',
-      WRITE_ONCE: e.message,
-    };
-    throw new Refused(`${why[e.code] ?? e.message} (${e.code})`);
-  }
-  if (e instanceof TransitionInvalid) throw new Refused(`That action is not allowed from the current state: ${e.from} → ${e.to}. (TRANSITION_INVALID)`);
-  if (e instanceof NotModerator) throw new Refused('Only moderators can do that. (NOT_MODERATOR)');
+  if (e instanceof ForumRefused && e.code === 'UNKNOWN_NODE') notFound(); // INV-04: not yours ≡ not found
+  const text = refusalText(e);
+  if (text) throw new Refused(text);
   if (e && typeof e === 'object' && (e as { code?: string }).code === 'RATE_LIMITED') throw new Refused(`${(e as Error).message} (RATE_LIMITED)`);
   throw e;
 }
