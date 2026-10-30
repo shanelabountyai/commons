@@ -12,7 +12,7 @@ import { orgAction, ref } from '@/core/authz/action';
 import type { OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
-import { submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
+import { deleteOwn as deleteOwnNode, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { ForumRefused } from '@/forum/db';
 import { refusalText } from '@/forum/refusals';
 import { actOnContent, actOnThread, actOnUser, reviewSignal, submitReport } from '@/forum/moderation';
@@ -115,6 +115,22 @@ export const edit = orgAction(null, nodeSchema.extend({ body: z.string().min(1).
   }
   revalidatePath(`${base(ctx.slug)}/p/${postPublicId}`); // a hash-only redirect would not refetch without this
   redirect(`${base(ctx.slug)}/p/${postPublicId}${anchor}`); // 4.1.7: back to the node, not the top of the thread
+});
+
+/** 4.1.10 (D-13): the author takes their own node down; [deleted] in place, subtree and votes kept. Not a moderation action, not in the mod log; audited like an edit. */
+export const deleteOwn = orgAction(null, nodeSchema, async (ctx, i) => {
+  const me = await ensureProfile(ctx);
+  const { node, postPublicId, anchor } = await resolveNode(ctx.orgId, i);
+  try {
+    await db.$transaction(async (tx) => {
+      await deleteOwnNode(tx, { orgId: ctx.orgId, profileId: me.profileId, node, at: nowEpoch() });
+      await audit(ctx, 'forum.deleted', { targetType: node.kind.toLowerCase(), targetId: node.id }, tx);
+    });
+  } catch (e) {
+    refused(e);
+  }
+  revalidatePath(`${base(ctx.slug)}/p/${postPublicId}`);
+  redirect(`${base(ctx.slug)}/p/${postPublicId}${anchor}`);
 });
 
 export const report = orgAction(null, nodeSchema.extend({ reason: z.string().min(1), detail: z.string().max(2000).default('') }), async (ctx, i) => {

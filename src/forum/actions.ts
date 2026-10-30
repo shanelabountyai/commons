@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import { MAX_BODY_CHARS } from '@/render';
 import type { LimitRules, ModerationRules } from '@/rules';
-import { ForumRefused, toDate, toEpoch, type NodeRef, type Tx } from './db';
+import { ForumRefused, nodeInfo, toDate, toEpoch, type NodeRef, type Tx } from './db';
 import { guardAndRecord } from './limits-store';
 import { editNode, type EditInput } from './edit';
 import { createComment, createPost } from './tree-write';
@@ -105,3 +105,19 @@ export async function submitVote(tx: Tx, s: SubmitVote, rules: LimitRules): Prom
   return castVote(tx, { orgId: s.orgId, voterId: s.profileId, node: s.node, value: s.value, castAt: s.at }, rules);
 }
 
+
+/** 4.1.10 (D-13): the author deletes their own node. Status → deleted; position, children, vote rows and totals stay;
+ * the body is hidden at render, not erased (moderators still see it, P0-6). A member may delete while banned: a ban
+ * stops new writes (D-14), and taking your own words down is not one — membership is still required. A node that is
+ * already deleted or removed is refused by name. */
+export type DeleteOwn = { orgId: string; profileId: string; node: NodeRef; at: number };
+export async function deleteOwn(tx: Tx, d: DeleteOwn): Promise<void> {
+  const p = await tx.profile.findUnique({ where: { id: d.profileId }, select: { orgId: true } });
+  if (!p || p.orgId !== d.orgId) throw new ForumRefused('NOT_MEMBER', `profile ${d.profileId} is not in org ${d.orgId}`);
+  const info = await nodeInfo(tx, d.node);
+  if (!info || info.orgId !== d.orgId) throw new ForumRefused('UNKNOWN_NODE', `${d.node.kind} ${d.node.id}`);
+  if (info.authorId !== d.profileId) throw new ForumRefused('NOT_AUTHOR', `only the author deletes ${d.node.kind} ${d.node.id}`);
+  if (info.status !== 'visible') throw new ForumRefused('INPUT_INVALID', `${d.node.kind} is already ${info.status}`);
+  if (d.node.kind === 'POST') await tx.post.update({ where: { id: d.node.id }, data: { status: 'deleted' } });
+  else await tx.comment.update({ where: { id: d.node.id }, data: { status: 'deleted' } });
+}

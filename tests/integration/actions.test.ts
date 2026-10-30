@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db } from '@/core/db';
-import { RateLimited, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
+import { deleteOwn, RateLimited, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { toDate } from '@/forum/db';
 import { guardAndRecord, sweepLimitHits } from '@/forum/limits-store';
 import { parseLimitRules } from '@/rules';
@@ -78,6 +78,26 @@ describe('the action door', () => {
     const row = await db.post.findUniqueOrThrow({ where: { id: own.id }, select: { body: true, bodyHash: true } });
     expect(row.body).toMatch(/^Edited body/);
     expect(row.bodyHash).not.toBeNull(); // rehashed on edit so the duplicate detector sees edited bodies
+  });
+
+  it('4.1.10: the author deletes their own node — [deleted] in place, subtree, votes and totals kept (D-13); others are NOT_AUTHOR', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-D1', title: 'to delete', body: 'b', at: T0 + 5040 }, rules));
+    const c1 = await tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: post.id, parentId: null, publicId: 'A-D1-C1', body: 'parent comment', at: T0 + 5041 }, rules));
+    await tx((t) => submitComment(t, { orgId, profileId: P.kid!, postId: post.id, parentId: c1.id, publicId: 'A-D1-C2', body: 'child stays', at: T0 + 5042 }, rules));
+    await tx((t) => submitVote(t, { orgId, profileId: P.kid!, node: { kind: 'COMMENT', id: c1.id }, value: 1, at: T0 + 5043 }, rules));
+    await expect(tx((t) => deleteOwn(t, { orgId, profileId: P.kid!, node: { kind: 'COMMENT', id: c1.id }, at: T0 + 5044 }))).rejects.toMatchObject({ code: 'NOT_AUTHOR' });
+    await expect(tx((t) => deleteOwn(t, { orgId, profileId: P.stranger!, node: { kind: 'COMMENT', id: c1.id }, at: T0 + 5044 }))).rejects.toMatchObject({ code: 'NOT_MEMBER' });
+    await tx((t) => deleteOwn(t, { orgId, profileId: P.vet!, node: { kind: 'COMMENT', id: c1.id }, at: T0 + 5045 }));
+    const after = await db.comment.findUniqueOrThrow({ where: { id: c1.id }, include: { children: true } });
+    expect(after.status).toBe('deleted');
+    expect(after.children).toHaveLength(1); // subtree kept
+    expect(await db.vote.count({ where: { nodeKind: 'COMMENT', nodeId: c1.id } })).toBe(2); // author +1 and the kid's vote stay
+    expect((await db.post.findUniqueOrThrow({ where: { id: post.id } })).commentCount).toBe(2); // totals still count it
+    await expect(tx((t) => deleteOwn(t, { orgId, profileId: P.vet!, node: { kind: 'COMMENT', id: c1.id }, at: T0 + 5046 }))).rejects.toMatchObject({ code: 'INPUT_INVALID' }); // already deleted
+    // a reply under a deleted comment is still allowed (D-30 names removed, not deleted)
+    await tx((t) => submitComment(t, { orgId, profileId: P.kid!, postId: post.id, parentId: c1.id, publicId: 'A-D1-C3', body: 'reply under deleted', at: T0 + 5100 }, rules));
+    await tx((t) => deleteOwn(t, { orgId, profileId: P.vet!, node: { kind: 'POST', id: post.id }, at: T0 + 5101 }));
+    expect((await db.post.findUniqueOrThrow({ where: { id: post.id } })).status).toBe('deleted');
   });
 
   it('INPUT_INVALID: empty title, oversize body', async () => {

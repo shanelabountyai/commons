@@ -9,7 +9,7 @@ import { canModerate, editHistoryForThread } from '@/forum/moderation';
 import { ensureProfile, nowEpoch, thread, type ThreadNode } from '@/forum/view';
 import { parseLimitRules, parseModerationRules, parseRankingRules } from '@/rules';
 import type { RenderedRow } from '@/tree';
-import { edit, moderateContent, moderateThread, reply, report, vote } from '../../actions';
+import { deleteOwn, edit, moderateContent, moderateThread, reply, report, vote } from '../../actions';
 
 const ranking = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8')));
 const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
@@ -104,6 +104,13 @@ export default async function Thread({ params, searchParams }: { params: Promise
                   <textarea name="body" defaultValue={n.body} required maxLength={50000} />
                 </label>
                 <button type="submit">Save edit</button>
+              </ActionForm>
+            )}
+            {myCommentIds.has(n.publicId) && (
+              <ActionForm action={bound(deleteOwn)}>
+                <input type="hidden" name="postId" value={post.id} />
+                <input type="hidden" name="commentId" value={n.dbId} />
+                <button type="submit" aria-label={`Delete your comment (it shows as [deleted]; replies stay)`}>Delete</button>
               </ActionForm>
             )}
             {isMod && <ModContent kind="COMMENT" commentId={n.dbId} label={`comment by ${n.author}`} />}
@@ -220,6 +227,12 @@ export default async function Thread({ params, searchParams }: { params: Promise
                 <textarea name="body" defaultValue={post.body} required maxLength={50000} />
               </label>
               <button type="submit">Save edit</button>
+            </ActionForm>
+          )}
+          {post.author.id === me.profileId && post.status === 'visible' && (
+            <ActionForm action={bound(deleteOwn)}>
+              <input type="hidden" name="postId" value={post.id} />
+              <button type="submit" aria-label="Delete your post (the title and body show as [deleted]; comments stay)">Delete post</button>
             </ActionForm>
           )}
           {post.author.id === me.profileId && (
