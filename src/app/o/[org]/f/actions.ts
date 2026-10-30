@@ -15,7 +15,7 @@ import { Refused } from '@/core/errors';
 import { deleteOwn as deleteOwnNode, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { ForumRefused } from '@/forum/db';
 import { refusalText } from '@/forum/refusals';
-import { actOnContent, actOnThread, actOnUser, reviewSignal, submitReport } from '@/forum/moderation';
+import { actOnContent, actOnThread, actOnUser, reviewSignal, setModerator, submitReport } from '@/forum/moderation';
 import { ensureProfile, nowEpoch } from '@/forum/view';
 import { parseLimitRules, parseModerationRules } from '@/rules';
 
@@ -194,6 +194,23 @@ export const moderateUser = orgAction(null, z.object({ handle: z.string().min(1)
     refused(e);
   }
   redirect(i.back || `${base(ctx.slug)}/u/${i.handle}`);
+});
+
+/** 4.1.11 (D-48): owner/admin grant or revoke the moderator flag; logged as GRANT_MOD / REVOKE_MOD. */
+export const moderatorFlag = orgAction(null, z.object({ handle: z.string().min(1), action: z.enum(['GRANT_MOD', 'REVOKE_MOD']), ...modSchema.shape }), async (ctx, i) => {
+  const me = await ensureProfile(ctx);
+  const subject = await db.profile.findUnique({ where: { orgId_handle: { orgId: ctx.orgId, handle: i.handle } }, select: { id: true } });
+  if (!subject) throw new Refused('No such member. (NOT_MEMBER)');
+  try {
+    await db.$transaction(async (tx) => {
+      await setModerator(tx, me, subject.id, i.action === 'GRANT_MOD', i.reason, nowEpoch());
+      await audit(ctx, `forum.mod.${i.action.toLowerCase()}`, { targetType: 'profile', targetId: subject.id, data: { reason: i.reason } }, tx);
+    });
+  } catch (e) {
+    refused(e);
+  }
+  revalidatePath(`${base(ctx.slug)}/u/${i.handle}`);
+  redirect(`${base(ctx.slug)}/u/${i.handle}`);
 });
 
 // Two actions, one per signal table, so each id is a ref('<model>') the invariant harness can scope (FR-08).

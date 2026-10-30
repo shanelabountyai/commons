@@ -8,7 +8,7 @@ import { Text, when } from '@/components/forum';
 import { canModerate } from '@/forum/moderation';
 import { ensureProfile, profilePage } from '@/forum/view';
 import { parseModerationRules } from '@/rules';
-import { moderateUser } from '../../actions';
+import { moderateUser, moderatorFlag } from '../../actions';
 
 const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
 
@@ -72,6 +72,20 @@ export default async function ProfilePage({ params }: { params: Promise<{ org: s
             <button type="submit" name="action" value="WARN">Warn</button> <button type="submit" name="action" value="BAN">Ban</button>{' '}
             <button type="submit" name="action" value="UNBAN">Unban</button>
           </ActionForm>
+          {(me.role === 'owner' || me.role === 'admin') && (
+            <ActionForm action={moderatorFlag.bind(null, ctx.slug)}>
+              <input type="hidden" name="handle" value={v.profile.handle} />
+              <label>
+                Reason <input name="reason" required maxLength={1000} aria-label="Reason for changing the moderator flag" />
+              </label>
+              {v.profile.isModerator ? (
+                <button type="submit" name="action" value="REVOKE_MOD">Revoke moderator</button>
+              ) : (
+                <button type="submit" name="action" value="GRANT_MOD">Make moderator</button>
+              )}{' '}
+              <span className="meta">(owner/admin only; logged, D-48)</span>
+            </ActionForm>
+          )}
           <h3>Moderation log for this member</h3>
           <table>
             <thead>

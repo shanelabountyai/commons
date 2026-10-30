@@ -4,7 +4,7 @@
 // Removal keeps the subtree (D-13) and refuses new replies beneath (D-30); a ban stops new writes (D-14).
 import { canTransition, type LimitRules, type ModerationRules } from '@/rules';
 import { admit } from './actions';
-import { ForumRefused, lockKey, nodeInfo, toDate, type NodeRef, type Tx } from './db';
+import { ForumRefused, lockKey, nodeInfo, toDate, toEpoch, type NodeRef, type Tx } from './db';
 import { guardAndRecord } from './limits-store';
 
 export type ModeratorCtx = { orgId: string; profileId: string; role: 'owner' | 'admin' | 'member' | 'scorekeeper'; isModerator: boolean };
@@ -29,8 +29,21 @@ export class NotModerator extends Error {
   }
 }
 
-function requireMod(m: ModeratorCtx): void {
+/** 4.1.11: a moderator must be one, and must not be banned (D-14 applies to moderators too); checked before anything else. */
+async function requireMod(tx: Tx, m: ModeratorCtx, at: number): Promise<void> {
   if (!canModerate(m)) throw new NotModerator();
+  const p = await tx.profile.findUnique({ where: { id: m.profileId }, select: { orgId: true, bannedUntil: true } });
+  if (!p || p.orgId !== m.orgId) throw new ForumRefused('NOT_MEMBER', `profile ${m.profileId} is not in org ${m.orgId}`);
+  if (p.bannedUntil && toEpoch(p.bannedUntil) > at) throw new ForumRefused('BANNED_UNTIL', String(toEpoch(p.bannedUntil)));
+}
+/** Owner/admin are the template's roles; a flagged moderator is not above another moderator (4.1.11). */
+const isOwnerOrAdmin = (m: ModeratorCtx): boolean => m.role === 'owner' || m.role === 'admin';
+async function subjectIsModerator(tx: Tx, orgId: string, subjectId: string): Promise<boolean> {
+  const s = await tx.profile.findUnique({ where: { id: subjectId }, select: { isModerator: true, userId: true } });
+  if (!s) return false;
+  if (s.isModerator) return true;
+  const mem = await tx.membership.findUnique({ where: { orgId_userId: { orgId, userId: s.userId } }, select: { role: true } });
+  return mem?.role === 'owner' || mem?.role === 'admin';
 }
 function requireReason(reason: string): string {
   const r = reason.trim();
@@ -75,7 +88,7 @@ const CONTENT_TARGET: Record<ContentKind, string> = { REMOVE: 'REMOVED', RESTORE
 
 /** Moves the node's case through content_states and sets the node's visibility to match; one log row. */
 export async function actOnContent(tx: Tx, m: ModeratorCtx, kind: ContentKind, node: NodeRef, reason: string, at: number, mod: ModerationRules): Promise<{ from: string; to: string }> {
-  requireMod(m);
+  await requireMod(tx, m, at);
   const why = requireReason(reason);
   const info = await nodeInfo(tx, node);
   if (!info || info.orgId !== m.orgId) throw new ForumRefused('UNKNOWN_NODE', `${node.kind} ${node.id}`);
@@ -95,7 +108,7 @@ export async function actOnContent(tx: Tx, m: ModeratorCtx, kind: ContentKind, n
 
 /** Lock / unlock a thread (no new replies, D-30's cousin) and pin / unpin a post (P1-1). Logged, not a state machine. */
 export async function actOnThread(tx: Tx, m: ModeratorCtx, kind: 'LOCK' | 'UNLOCK' | 'PIN' | 'UNPIN', postId: string, reason: string, at: number): Promise<void> {
-  requireMod(m);
+  await requireMod(tx, m, at);
   const why = requireReason(reason);
   const p = await tx.post.findUnique({ where: { id: postId }, select: { orgId: true, lockedAt: true, pinnedAt: true } });
   if (!p || p.orgId !== m.orgId) throw new ForumRefused('UNKNOWN_NODE', `POST ${postId}`);
@@ -110,11 +123,12 @@ export async function actOnThread(tx: Tx, m: ModeratorCtx, kind: 'LOCK' | 'UNLOC
 
 /** WARN, BAN (hours from rules.ban_durations_hours; 0 = permanent → until null, modState BANNED, bannedUntil far future), UNBAN. */
 export async function actOnUser(tx: Tx, m: ModeratorCtx, kind: 'WARN' | 'BAN' | 'UNBAN', subjectId: string, reason: string, at: number, mod: ModerationRules, hours?: number): Promise<{ from: string; to: string; until: number | null }> {
-  requireMod(m);
+  await requireMod(tx, m, at);
   const why = requireReason(reason);
   const s = await tx.profile.findUnique({ where: { id: subjectId }, select: { orgId: true, modState: true } });
   if (!s || s.orgId !== m.orgId) throw new ForumRefused('NOT_MEMBER', `profile ${subjectId}`);
   if (subjectId === m.profileId) throw new ForumRefused('INPUT_INVALID', 'moderators do not act on themselves');
+  if (!isOwnerOrAdmin(m) && (await subjectIsModerator(tx, m.orgId, subjectId))) throw new ForumRefused('INPUT_INVALID', 'only an owner or admin acts on a moderator');
   const to = kind === 'WARN' ? 'WARNED' : kind === 'BAN' ? 'BANNED' : 'ACTIVE';
   if (!canTransition(mod.user_states, s.modState, to)) throw new TransitionInvalid('user', s.modState, to);
   let until: number | null = null;
@@ -129,7 +143,7 @@ export async function actOnUser(tx: Tx, m: ModeratorCtx, kind: 'WARN' | 'BAN' | 
 
 /** Mark a brigade or duplicate signal reviewed (it leaves the queue); logged. */
 export async function reviewSignal(tx: Tx, m: ModeratorCtx, signal: { kind: 'BRIGADE' | 'DUPLICATE'; id: string }, reason: string, at: number): Promise<void> {
-  requireMod(m);
+  await requireMod(tx, m, at);
   const why = requireReason(reason);
   const row = signal.kind === 'BRIGADE' ? await tx.brigadeSignal.findUnique({ where: { id: signal.id } }) : await tx.duplicateSignal.findUnique({ where: { id: signal.id } });
   if (!row || row.orgId !== m.orgId) throw new ForumRefused('UNKNOWN_NODE', `${signal.kind} signal ${signal.id}`);
@@ -196,4 +210,16 @@ export async function editHistoryForThread(tx: Tx, orgId: string, postId: string
     by.get(k)!.push({ previousBody: r.previousBody, editedAt: r.editedAt, withinWindow: r.withinWindow, editor: r.editor.handle });
   }
   return by;
+}
+
+/** 4.1.11 (D-48): the moderator flag is set only by an owner or admin, and every change is a logged action (GRANT_MOD / REVOKE_MOD). */
+export async function setModerator(tx: Tx, m: ModeratorCtx, subjectId: string, grant: boolean, reason: string, at: number): Promise<void> {
+  await requireMod(tx, m, at);
+  if (!isOwnerOrAdmin(m)) throw new NotModerator();
+  const why = requireReason(reason);
+  const s = await tx.profile.findUnique({ where: { id: subjectId }, select: { orgId: true, isModerator: true } });
+  if (!s || s.orgId !== m.orgId) throw new ForumRefused('NOT_MEMBER', `profile ${subjectId}`);
+  if (s.isModerator === grant) throw new ForumRefused('INPUT_INVALID', `already ${grant ? 'a moderator' : 'a member'}`);
+  await tx.profile.update({ where: { id: subjectId }, data: { isModerator: grant } });
+  await tx.moderationAction.create({ data: { orgId: m.orgId, actorId: m.profileId, kind: grant ? 'GRANT_MOD' : 'REVOKE_MOD', subjectId, fromState: grant ? 'MEMBER' : 'MODERATOR', toState: grant ? 'MODERATOR' : 'MEMBER', reason: why, createdAt: toDate(at) } });
 }

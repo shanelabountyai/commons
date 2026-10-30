@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db } from '@/core/db';
 import { submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { toDate } from '@/forum/db';
-import { actOnContent, actOnThread, actOnUser, authorHistory, editHistoryFor, queue, reviewSignal, submitReport, type ModeratorCtx } from '@/forum/moderation';
+import { actOnContent, actOnThread, actOnUser, authorHistory, editHistoryFor, queue, reviewSignal, setModerator, submitReport, type ModeratorCtx } from '@/forum/moderation';
 import { canTransition, parseLimitRules, parseModerationRules } from '@/rules';
 import { makeOrg } from '../helpers/org';
 
@@ -149,5 +149,30 @@ describe('context for moderators (4.1.8, 4.1.9)', () => {
       ['first body', true],
     ]);
     expect(await editHistoryFor(db, '00000000-0000-4000-8000-000000000000', { kind: 'POST', id: post.id })).toEqual([]); // scoped by org (INV-03)
+  });
+});
+
+describe('who moderates the moderators (4.1.11, D-48, D-14)', () => {
+  it('a banned moderator cannot act; a moderator cannot act on a moderator; an owner can; grants and revokes are logged', async () => {
+    const owner = await profile('owner1', T0 - 400 * DAY);
+    await db.membership.updateMany({ where: { orgId, user: { email: { startsWith: 'owner1-' } } }, data: { role: 'owner' } });
+    const ownerCtx: ModeratorCtx = { orgId, profileId: owner, role: 'owner', isModerator: false };
+    const mod2 = await profile('mod2', T0 - 400 * DAY);
+    // only an owner/admin grants; the grant is a logged action with both states
+    await expect(tx((t) => setModerator(t, modCtx('mod'), mod2, true, 'helpful', T0 + 800))).rejects.toMatchObject({ code: 'NOT_MODERATOR' });
+    await tx((t) => setModerator(t, ownerCtx, mod2, true, 'helpful in #help', T0 + 801));
+    expect((await db.profile.findUniqueOrThrow({ where: { id: mod2 } })).isModerator).toBe(true);
+    expect(await db.moderationAction.findFirst({ where: { subjectId: mod2, kind: 'GRANT_MOD' } })).toMatchObject({ fromState: 'MEMBER', toState: 'MODERATOR' });
+    // a moderator may not warn or ban another moderator; the owner may
+    await expect(tx((t) => actOnUser(t, modCtx('mod'), 'WARN', mod2, 'x', T0 + 802, mod))).rejects.toMatchObject({ code: 'INPUT_INVALID' });
+    expect((await tx((t) => actOnUser(t, ownerCtx, 'WARN', mod2, 'tone', T0 + 803, mod))).to).toBe('WARNED');
+    // a banned moderator is refused BANNED_UNTIL before anything else
+    const ban = await tx((t) => actOnUser(t, ownerCtx, 'BAN', mod2, 'repeat', T0 + 804, mod, 24));
+    const mod2Ctx: ModeratorCtx = { orgId, profileId: mod2, role: 'member', isModerator: true };
+    const post = await db.post.findFirstOrThrow({ where: { orgId, authorId: P.author! } });
+    await expect(tx((t) => actOnContent(t, mod2Ctx, 'REMOVE', { kind: 'POST', id: post.id }, 'x', T0 + 805, mod))).rejects.toMatchObject({ code: 'BANNED_UNTIL', message: `BANNED_UNTIL: ${ban.until}` });
+    await tx((t) => setModerator(t, ownerCtx, mod2, false, 'banned', T0 + 806));
+    expect(await db.moderationAction.findFirst({ where: { subjectId: mod2, kind: 'REVOKE_MOD' } })).toMatchObject({ fromState: 'MODERATOR', toState: 'MEMBER' });
+    await expect(tx((t) => setModerator(t, ownerCtx, mod2, false, 'twice', T0 + 807))).rejects.toMatchObject({ code: 'INPUT_INVALID' }); // already a member
   });
 });
