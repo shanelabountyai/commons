@@ -45,3 +45,20 @@ export function ownerFor(slug: string) {
     },
   };
 }
+
+/** A plain member of org `slug` (no TOTP: members are not required to enrol), created by `setup`; used for the non-moderator view. */
+export function memberFor(slug: string, handle = 'member') {
+  const email = `${handle}-${slug}@example.test`;
+  return {
+    email,
+    async setup(db: pg.Pool, orgId: string) {
+      const { rows: [u] } = await db.query(`INSERT INTO "User" (id, email, "updatedAt") VALUES (gen_random_uuid(), $1, now()) RETURNING id`, [email]);
+      await db.query(`INSERT INTO "Membership" ("orgId", "userId", role, "updatedAt") VALUES ($1, $2, 'member', now())`, [orgId, u.id]);
+      return u.id as string;
+    },
+    async signIn(db: pg.Pool, page: Page) {
+      await signInByLink(db, page, email);
+      await expect(page).not.toHaveURL(/\/login/);
+    },
+  };
+}

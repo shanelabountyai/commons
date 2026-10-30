@@ -13,6 +13,16 @@ describe('rules loader (task 1.4)', () => {
     const l = parseLimitRules(limits());
     expect(l.windows).toHaveLength(4);
     expect(windowFor(l, 'comment')).toMatchObject({ per_seconds: 60, max: 6, young_max: 2 });
+    expect(l.signals.brigade).toEqual({ min_voters: 5, window_seconds: 600 }); // 4.1.3: D-31's constants are data
+  });
+
+  it('4.1.3: refuses a brigade signal rule with zero voters or an unknown key', () => {
+    const bad = JSON.parse(JSON.stringify(limits())) as { signals: { brigade: Record<string, unknown> } };
+    bad.signals.brigade.min_voters = 0;
+    expect(() => parseLimitRules(bad)).toThrow(/signals\.brigade\.min_voters/);
+    const extra = JSON.parse(JSON.stringify(limits())) as { signals: { brigade: Record<string, unknown> } };
+    extra.signals.brigade.auto_remove = true;
+    expect(() => parseLimitRules(extra)).toThrow(/signals\.brigade/);
   });
   it('refuses a negative gravity by name', () => {
     const r = ranking();

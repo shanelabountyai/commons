@@ -10,7 +10,7 @@ export const toDate = (epochSeconds: number): Date => new Date(epochSeconds * 10
 
 export class ForumRefused extends Error {
   constructor(
-    readonly code: 'TREE_INVALID' | 'PARENT_REMOVED' | 'NOT_AUTHOR' | 'UNKNOWN_NODE' | 'NOT_MEMBER' | 'BANNED_UNTIL' | 'WRITE_ONCE' | 'INPUT_INVALID' | 'THREAD_LOCKED',
+    readonly code: 'TREE_INVALID' | 'PARENT_REMOVED' | 'NOT_AUTHOR' | 'UNKNOWN_NODE' | 'NOT_MEMBER' | 'BANNED_UNTIL' | 'WRITE_ONCE' | 'INPUT_INVALID' | 'THREAD_LOCKED' | 'ALREADY_REPORTED',
     detail: string,
   ) {
     super(`${code}: ${detail}`);

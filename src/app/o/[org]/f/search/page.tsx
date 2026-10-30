@@ -3,7 +3,7 @@ import { requireOrg } from '@/core/authz/guards';
 import { Text } from '@/components/forum';
 import { ensureProfile, search } from '@/forum/view';
 
-export const metadata = { title: 'Search' };
+export const metadata = { title: 'Search · Commons' };
 
 /** P1-4: plain full-text (Postgres `simple`); the semantic, cited version is Footnote's lesson, not this one. */
 export default async function Search({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<{ q?: string }> }) {
@@ -12,11 +12,11 @@ export default async function Search({ params, searchParams }: { params: Promise
   const q = (await searchParams).q ?? '';
   const r = await search(ctx.orgId, q);
   return (
-    <main>
+    <main id="main" tabIndex={-1}>
       <h1>Search</h1>
       <form method="get" role="search">
         <label>
-          Words <input name="q" defaultValue={q} maxLength={200} size={40} />
+          Words <input name="q" defaultValue={q} maxLength={200} />
         </label>
         <button type="submit">Search</button>
       </form>

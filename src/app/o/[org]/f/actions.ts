@@ -12,35 +12,21 @@ import { orgAction, ref } from '@/core/authz/action';
 import type { OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
-import { RateLimited, submitComment, submitPost, submitVote } from '@/forum/actions';
+import { deleteOwn as deleteOwnNode, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { ForumRefused } from '@/forum/db';
-import { editNode } from '@/forum/edit';
-import { actOnContent, actOnThread, actOnUser, NotModerator, reviewSignal, submitReport, TransitionInvalid } from '@/forum/moderation';
+import { refusalText } from '@/forum/refusals';
+import { actOnContent, actOnThread, actOnUser, reviewSignal, setModerator, submitReport } from '@/forum/moderation';
 import { ensureProfile, nowEpoch } from '@/forum/view';
 import { parseLimitRules, parseModerationRules } from '@/rules';
 
 const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
 const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
 
-/** The door's typed refusals, said plainly. The code stays in the text so a tester can grep for it. */
+/** The door's typed refusals → the form's error text (src/forum/refusals.ts, unit-tested); UNKNOWN_NODE is not found (INV-04). */
 function refused(e: unknown): never {
-  if (e instanceof RateLimited) throw new Refused(`Slow down: too many ${e.action}s. Try again in ${e.retryAfter} s. (RATE_LIMITED)`);
-  if (e instanceof ForumRefused) {
-    if (e.code === 'UNKNOWN_NODE') notFound(); // INV-04: not yours ≡ not found
-    const why: Record<string, string> = {
-      BANNED_UNTIL: 'Your account is banned from posting for now.',
-      NOT_MEMBER: 'You are not a member of this forum.',
-      INPUT_INVALID: 'Check the form: ' + e.message.replace(/^INPUT_INVALID: /, ''),
-      TREE_INVALID: 'That reply target does not belong to this thread.',
-      PARENT_REMOVED: 'You cannot reply under a comment a moderator removed.',
-      THREAD_LOCKED: 'This thread is locked.',
-      NOT_AUTHOR: 'Only the author can edit this.',
-      WRITE_ONCE: e.message,
-    };
-    throw new Refused(`${why[e.code] ?? e.message} (${e.code})`);
-  }
-  if (e instanceof TransitionInvalid) throw new Refused(`That action is not allowed from the current state: ${e.from} → ${e.to}. (TRANSITION_INVALID)`);
-  if (e instanceof NotModerator) throw new Refused('Only moderators can do that. (NOT_MODERATOR)');
+  if (e instanceof ForumRefused && e.code === 'UNKNOWN_NODE') notFound(); // INV-04: not yours ≡ not found
+  const text = refusalText(e);
+  if (text) throw new Refused(text);
   if (e && typeof e === 'object' && (e as { code?: string }).code === 'RATE_LIMITED') throw new Refused(`${(e as Error).message} (RATE_LIMITED)`);
   throw e;
 }
@@ -84,14 +70,23 @@ export const reply = orgAction(null, z.object({ postId: ref('post'), parentId: r
  *  harness can scope them; the post's publicId is read back for the redirect. */
 const nodeSchema = z.object({ postId: ref('post'), commentId: ref('comment').optional() });
 type NodeInput = z.infer<typeof nodeSchema>;
-async function resolveNode(orgId: string, i: NodeInput): Promise<{ node: { kind: 'POST' | 'COMMENT'; id: string }; postPublicId: string }> {
+async function resolveNode(orgId: string, i: NodeInput): Promise<{ node: { kind: 'POST' | 'COMMENT'; id: string }; postPublicId: string; anchor: string }> {
   const post = await db.post.findFirst({ where: { id: i.postId, orgId }, select: { id: true, publicId: true } });
   if (!post) notFound(); // INV-04: not yours ≡ not found
-  if (!i.commentId) return { node: { kind: 'POST', id: post.id }, postPublicId: post.publicId };
-  const c = await db.comment.findFirst({ where: { id: i.commentId, orgId, postId: post.id }, select: { id: true } });
+  if (!i.commentId) return { node: { kind: 'POST', id: post.id }, postPublicId: post.publicId, anchor: '' };
+  const c = await db.comment.findFirst({ where: { id: i.commentId, orgId, postId: post.id }, select: { id: true, publicId: true } });
   if (!c) notFound();
-  return { node: { kind: 'COMMENT', id: c.id }, postPublicId: post.publicId };
+  return { node: { kind: 'COMMENT', id: c.id }, postPublicId: post.publicId, anchor: `#${c.publicId}` };
 }
+
+/** 4.1.7 / 4.1.14: every vote outcome is said back, effect first, code kept (V-1..V-5). */
+const VOTE_NOTICE: Record<string, string> = {
+  APPLIED: 'Vote counted. (APPLIED)',
+  SWITCHED: 'Vote switched. (SWITCHED)',
+  TOGGLED_OFF: 'Vote removed — press again to vote the same way. (TOGGLED_OFF)',
+  GATED_DOWNVOTE: `Your downvote was recorded but not counted: accounts need ${limits.downvote_gate.min_age_hours} h and ${limits.downvote_gate.min_contributions} contributions to downvote. (GATED_DOWNVOTE)`,
+  SELF_VOTE: 'Your own +1 on your own content is fixed and cannot change. (SELF_VOTE)',
+};
 
 export const vote = orgAction(null, nodeSchema.extend({ value: z.enum(['1', '-1']) }), async (ctx, i) => {
   const me = await ensureProfile(ctx);
@@ -103,23 +98,39 @@ export const vote = orgAction(null, nodeSchema.extend({ value: z.enum(['1', '-1'
     refused(e);
   }
   revalidatePath(`${base(ctx.slug)}/p/${postPublicId}`);
-  if (outcome === 'GATED_DOWNVOTE') return { notice: 'Recorded, not counted: new accounts cannot downvote yet (24 h and 3 contributions). (GATED_DOWNVOTE)' };
-  if (outcome === 'SELF_VOTE') return { notice: 'Your own vote on your own post is fixed. (SELF_VOTE)' };
-  redirect(`${base(ctx.slug)}/p/${postPublicId}`);
+  // no redirect (4.1.7): the counts refresh in the same response, the <details> panel stays open, the outcome is announced
+  return { notice: VOTE_NOTICE[outcome] ?? `${outcome}. (${outcome})` };
 });
 
 export const edit = orgAction(null, nodeSchema.extend({ body: z.string().min(1).max(50_000) }), async (ctx, i) => {
   const me = await ensureProfile(ctx);
-  const { node, postPublicId } = await resolveNode(ctx.orgId, i);
+  const { node, postPublicId, anchor } = await resolveNode(ctx.orgId, i);
   try {
     await db.$transaction(async (tx) => {
-      const r = await editNode(tx, { orgId: ctx.orgId, editorId: me.profileId, node, body: i.body, at: nowEpoch() }, limits);
+      const r = await submitEdit(tx, { orgId: ctx.orgId, editorId: me.profileId, node, body: i.body, at: nowEpoch() }, limits);
       await audit(ctx, 'forum.edited', { targetType: node.kind.toLowerCase(), targetId: node.id, data: { withinWindow: r.withinWindow } }, tx);
     });
   } catch (e) {
     refused(e);
   }
-  redirect(`${base(ctx.slug)}/p/${postPublicId}`);
+  revalidatePath(`${base(ctx.slug)}/p/${postPublicId}`); // a hash-only redirect would not refetch without this
+  redirect(`${base(ctx.slug)}/p/${postPublicId}${anchor}`); // 4.1.7: back to the node, not the top of the thread
+});
+
+/** 4.1.10 (D-13): the author takes their own node down; [deleted] in place, subtree and votes kept. Not a moderation action, not in the mod log; audited like an edit. */
+export const deleteOwn = orgAction(null, nodeSchema, async (ctx, i) => {
+  const me = await ensureProfile(ctx);
+  const { node, postPublicId, anchor } = await resolveNode(ctx.orgId, i);
+  try {
+    await db.$transaction(async (tx) => {
+      await deleteOwnNode(tx, { orgId: ctx.orgId, profileId: me.profileId, node, at: nowEpoch() });
+      await audit(ctx, 'forum.deleted', { targetType: node.kind.toLowerCase(), targetId: node.id }, tx);
+    });
+  } catch (e) {
+    refused(e);
+  }
+  revalidatePath(`${base(ctx.slug)}/p/${postPublicId}`);
+  redirect(`${base(ctx.slug)}/p/${postPublicId}${anchor}`);
 });
 
 export const report = orgAction(null, nodeSchema.extend({ reason: z.string().min(1), detail: z.string().max(2000).default('') }), async (ctx, i) => {
@@ -143,7 +154,7 @@ const modSchema = z.object({ reason: z.string().min(1).max(1000), back: z.string
 
 export const moderateContent = orgAction(null, nodeSchema.extend({ ...modSchema.shape, action: z.enum(['REMOVE', 'RESTORE', 'CLEAR', 'REOPEN']) }), async (ctx, i) => {
   const me = await ensureProfile(ctx);
-  const { node } = await resolveNode(ctx.orgId, i);
+  const { node, anchor } = await resolveNode(ctx.orgId, i);
   try {
     await db.$transaction(async (tx) => {
       const r = await actOnContent(tx, me, i.action, node, i.reason, nowEpoch(), mod);
@@ -153,7 +164,7 @@ export const moderateContent = orgAction(null, nodeSchema.extend({ ...modSchema.
     refused(e);
   }
   revalidatePath(`${base(ctx.slug)}/mod`);
-  redirect(i.back || `${base(ctx.slug)}/mod`);
+  redirect(i.back ? `${i.back}${anchor}` : `${base(ctx.slug)}/mod`);
 });
 
 export const moderateThread = orgAction(null, z.object({ postId: ref('post'), action: z.enum(['LOCK', 'UNLOCK', 'PIN', 'UNPIN']), ...modSchema.shape }), async (ctx, i) => {
@@ -183,6 +194,23 @@ export const moderateUser = orgAction(null, z.object({ handle: z.string().min(1)
     refused(e);
   }
   redirect(i.back || `${base(ctx.slug)}/u/${i.handle}`);
+});
+
+/** 4.1.11 (D-48): owner/admin grant or revoke the moderator flag; logged as GRANT_MOD / REVOKE_MOD. */
+export const moderatorFlag = orgAction(null, z.object({ handle: z.string().min(1), action: z.enum(['GRANT_MOD', 'REVOKE_MOD']), ...modSchema.shape }), async (ctx, i) => {
+  const me = await ensureProfile(ctx);
+  const subject = await db.profile.findUnique({ where: { orgId_handle: { orgId: ctx.orgId, handle: i.handle } }, select: { id: true } });
+  if (!subject) throw new Refused('No such member. (NOT_MEMBER)');
+  try {
+    await db.$transaction(async (tx) => {
+      await setModerator(tx, me, subject.id, i.action === 'GRANT_MOD', i.reason, nowEpoch());
+      await audit(ctx, `forum.mod.${i.action.toLowerCase()}`, { targetType: 'profile', targetId: subject.id, data: { reason: i.reason } }, tx);
+    });
+  } catch (e) {
+    refused(e);
+  }
+  revalidatePath(`${base(ctx.slug)}/u/${i.handle}`);
+  redirect(`${base(ctx.slug)}/u/${i.handle}`);
 });
 
 // Two actions, one per signal table, so each id is a ref('<model>') the invariant harness can scope (FR-08).

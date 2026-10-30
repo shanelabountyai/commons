@@ -26,3 +26,19 @@ table { border-collapse: collapse; margin: 0.5rem 0 1rem; }
 th, td { border: 1px solid CanvasText; padding: 0.25rem 0.5rem; text-align: left; vertical-align: top; }
 .pin::before { content: '📌 '; }
 .lock::before { content: '🔒 '; }
+
+/* 4.1.13 — targets, reflow, focus, motion (reviews: a11y S6/S7, design #8) */
+body { line-height: 1.5; }
+.skip { position: absolute; left: -999px; top: 0.5rem; padding: 0.25rem 0.5rem; background: Canvas; border: 2px solid CanvasText; }
+.skip:focus { left: 0.5rem; z-index: 1; }
+main:focus { outline: none; }
+.votes button { min-width: 24px; min-height: 24px; margin-right: 4px; }
+input[type='text'], input:not([type]), input[type='search'], select { max-width: 100%; box-sizing: border-box; }
+table { display: block; max-width: 100%; overflow-x: auto; }
+@media (max-width: 40rem) {
+  ol.thread ol { margin-left: 0.5rem; padding-left: 0.5rem; }
+  nav { overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}

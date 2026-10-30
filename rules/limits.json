@@ -10,5 +10,8 @@
   ],
   "edit_window_seconds": 900,
   "max_depth_rendered": 6,
-  "upload": { "max_bytes": 2000000, "types": ["image/png", "image/jpeg", "image/webp"] }
+  "upload": { "max_bytes": 2000000, "types": ["image/png", "image/jpeg", "image/webp"] },
+  "signals": {
+    "brigade": { "min_voters": 5, "window_seconds": 600 }
+  }
 }
