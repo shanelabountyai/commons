@@ -233,8 +233,15 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   await page.waitForLoadState('networkidle');
   const post = page.locator('article[aria-label="Post"]');
   await post.locator('summary').first().click();
+  // diagnostics for the runner: the form must be its own element with the uploads action, and the POST must go there
+  const uploadForm = post.locator('form[enctype="multipart/form-data"]');
+  await expect(uploadForm).toHaveAttribute('action', /\/f\/uploads\?post=/);
+  expect(await page.evaluate(() => document.querySelectorAll('form form').length), 'no nested forms').toBe(0);
   await post.getByLabel(/Attach an image/).setInputFiles({ name: 'evil.png', mimeType: 'image/png', buffer: Buffer.from('<svg onload=alert(1)></svg>') });
+  const posted = page.waitForRequest((r) => r.method() === 'POST', { timeout: 15_000 });
   await post.getByRole('button', { name: 'Attach', exact: true }).click();
+  const req = await posted;
+  expect(req.url(), `POST went to ${req.url()} (headers: ${JSON.stringify(req.headers())})`).toMatch(/\/f\/uploads\?post=/);
   await expect(page.locator('p[role="alert"]')).toBeVisible(); // not inside a closed <details>
   await expect(page.locator('p[role="alert"]')).toContainText('INPUT_INVALID');
 });
