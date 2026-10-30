@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
-import { ActionForm } from '@/core/ui/action-form';
+import { ForumForm as ActionForm } from '@/components/forum-form';
 import { ago, ScopeNote, Text } from '@/components/forum';
 import { boardPosts, ensureProfile, nowEpoch, POST_SORTS, SORT_LABEL } from '@/forum/view';
 import type { PostSort } from '@/ranking';

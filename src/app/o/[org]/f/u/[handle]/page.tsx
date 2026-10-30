@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
-import { ActionForm } from '@/core/ui/action-form';
+import { ForumForm as ActionForm } from '@/components/forum-form';
 import { Text, when } from '@/components/forum';
 import { canModerate } from '@/forum/moderation';
 import { ensureProfile, profilePage } from '@/forum/view';
