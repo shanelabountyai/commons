@@ -5,7 +5,7 @@ import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
 import { ago, Markdown, ScopeNote, Text, when } from '@/components/forum';
-import { canModerate } from '@/forum/moderation';
+import { canModerate, editHistoryForThread } from '@/forum/moderation';
 import { ensureProfile, nowEpoch, thread, type ThreadNode } from '@/forum/view';
 import { parseLimitRules, parseModerationRules, parseRankingRules } from '@/rules';
 import type { RenderedRow } from '@/tree';
@@ -30,6 +30,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
   if (!t) notFound();
   const { post } = t;
   const isMod = canModerate(me);
+  const edits: Awaited<ReturnType<typeof editHistoryForThread>> = isMod ? await editHistoryForThread(db, ctx.orgId, post.id, t.nodes.map((n) => n.dbId)) : new Map();
   const here = `/o/${ctx.slug}/f/p/${publicId}`;
   const bound = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const myCommentIds = new Set((await db.comment.findMany({ where: { postId: post.id, authorId: me.profileId }, select: { publicId: true } })).map((c) => c.publicId));
@@ -106,6 +107,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
               </ActionForm>
             )}
             {isMod && <ModContent kind="COMMENT" commentId={n.dbId} label={`comment by ${n.author}`} />}
+            {isMod && <EditHistory kind="COMMENT" id={n.dbId} />}
           </details>
         )}
         {removed && isMod && (
@@ -135,6 +137,27 @@ export default async function Thread({ params, searchParams }: { params: Promise
         </label>
         <button type="submit">Report</button>
       </ActionForm>
+    );
+  }
+
+  /** 4.1.9 (P0-6): previous bodies, moderators only; rendered through the same sanitizer as live bodies. */
+  function EditHistory({ kind, id }: { kind: 'POST' | 'COMMENT'; id: string }) {
+    const h = edits.get(`${kind}:${id}`) ?? [];
+    if (h.length === 0) return null;
+    return (
+      <details className="edits">
+        <summary>Edit history ({h.length}, moderators only)</summary>
+        <ol>
+          {h.map((e, i) => (
+            <li key={i}>
+              <p className="meta">
+                before the edit by <Text value={e.editor} /> at {when(e.editedAt)} · {e.withinWindow ? 'inside the window, unmarked' : 'outside the window, marked'}
+              </p>
+              <Markdown body={e.previousBody} />
+            </li>
+          ))}
+        </ol>
+      </details>
     );
   }
 
@@ -211,6 +234,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
           {isMod && (
             <>
               <ModContent kind="POST" label="this post" />
+              <EditHistory kind="POST" id={post.id} />
               <ActionForm action={bound(moderateThread)}>
                 <input type="hidden" name="postId" value={post.id} />
                 <label>
