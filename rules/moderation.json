@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "report_reasons": [
+    { "code": "spam", "label": "Spam or affiliate link" },
+    { "code": "malware", "label": "Malware, phishing or a fake support number" },
+    { "code": "harassment", "label": "Harassment or abuse" },
+    { "code": "doxxing", "label": "Personal information" },
+    { "code": "off_topic", "label": "Off topic for this board" },
+    { "code": "duplicate", "label": "Duplicate post" },
+    { "code": "other", "label": "Something else (say what)" }
+  ],
+  "content_states": {
+    "OPEN": ["REMOVED", "CLEARED"],
+    "REMOVED": ["RESTORED"],
+    "CLEARED": ["OPEN"],
+    "RESTORED": ["OPEN"]
+  },
+  "user_states": {
+    "ACTIVE": ["WARNED", "BANNED"],
+    "WARNED": ["BANNED", "ACTIVE"],
+    "BANNED": ["ACTIVE"]
+  },
+  "ban_durations_hours": [24, 168, 720, 0],
+  "duplicate": { "window_seconds": 86400, "min_chars": 40 },
+  "queue": { "page_size": 50 }
+}

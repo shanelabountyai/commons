@@ -4,7 +4,19 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # Docs-only pushes cost Actions minutes and test nothing (quorum ci.yml, itself Gavel's, task 1.3).
+    paths-ignore: ['docs/**', '**.md']
   pull_request:
+    paths-ignore: ['docs/**', '**.md']
+
+# A newer push supersedes a running one; no point finishing the old run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write # the migrate-diff and ADR steps comment on the PR (the only channel the cloud session can read)
 
 jobs:
   ci:
@@ -14,10 +26,10 @@ jobs:
       PGHOST: localhost
       PGUSER: postgres
       PGPASSWORD: postgres
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/saas_foundation_test?connection_limit=10&pool_timeout=20
-      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/saas_foundation_test?connection_limit=10&pool_timeout=20
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/commons_test?connection_limit=10&pool_timeout=20
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/commons_test?connection_limit=10&pool_timeout=20
       AUTH_SECRET: ci-only-secret-not-for-real-use-0123456789abc
-      APP_URL: http://localhost:4100
+      APP_URL: http://localhost:7500
     services:
       postgres:
         image: postgres:17
@@ -33,6 +45,9 @@ jobs:
           --health-retries=5
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # foundation:drift diffs against the v1.4.0 template commit, which a shallow checkout does not have
+          fetch-tags: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -40,8 +55,55 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: createdb saas_foundation_test
+      # origin carries no tags (the cloud session's push of v1.4.0 was refused, D-20); until Shane pushes the tag from
+      # the Mac, name the template release commit by its SHA (shared history, so it is in the checkout).
+      - run: git rev-parse -q --verify refs/tags/v1.4.0 >/dev/null || git tag v1.4.0 e0053a16603a6758d747730f873b95665406ba24
+      - run: npm run foundation:drift
+      # Phase 1 gate (docs/phase-1-tasks.md 1.11): purity lint, the Python oracle, the engines against the frozen
+      # fixtures. fixtures:check runs AFTER engine:eval so a product-code write into fixtures/ fails the run.
+      - run: python3 --version
+      - run: npm run engine:lint
+      - run: npm run ranking:golden
+      - run: npm run engine:eval
+      # Phase 3 (task 3.3): the XSS fixture set through the real renderer, before any database step.
+      - run: npm run xss:check
+      - run: npm run fixtures:check
+      - run: createdb commons_test
       - run: npx prisma migrate deploy
+      # Phase 2 (task 2.1): the Commons migration is hand-written (the sandbox cannot run `migrate dev`), so prove the
+      # migration history and prisma/schema agree. A non-empty diff is posted on the PR and the step fails.
+      # Ported from quorum ci.yml.
+      - run: |
+          createdb commons_shadow
+          set +e
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema --exit-code --script > migrate-diff.txt 2>&1
+          rc=$?
+          cat migrate-diff.txt
+          if [ "$rc" -ne 0 ] && [ -n "${{ github.event.pull_request.number }}" ]; then
+            { echo "**migrations vs schema differ** (\`prisma migrate diff\` exit $rc on ${{ github.sha }}):"; echo; echo '```sql'; cat migrate-diff.txt; echo '```'; } > comment.md
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md || true
+          fi
+          exit $rc
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/commons_shadow
+      # Phase 2 gate (tasks 2.9, 2.8): the fixture through the real writers, stored rows against the 12 expected files;
+      # then ADR-001 re-measured on this runner's Postgres 17 and posted on the PR (exit 2 = the task's stop).
+      - run: npm run engine:eval:db
+      - run: |
+          set +e
+          npm run adr:measure:db --silent > adr-measure.md 2>&1
+          rc=$?
+          cat adr-measure.md
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file adr-measure.md || true
+          fi
+          exit $rc
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # Phase 3 (task 3.7): the limit scripts through the live LimitHit store.
+      - run: npm run abuse:spam
+      - run: npm run abuse:normal
       - run: npx vitest run
       # Production build, served — the way it ships. login.spec.ts drives a real page.
       - run: npx playwright install --with-deps chromium

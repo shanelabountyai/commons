@@ -1,0 +1,28 @@
+/* Commons' one stylesheet (ported from Quorum's: system colours only, so both colour schemes are contrast-safe and
+   axe measures what the browser renders). */
+:root { color-scheme: light dark; }
+body { font-family: system-ui, sans-serif; line-height: 1.45; margin: 0 auto; max-width: 64rem; padding: 0 1rem 3rem; background: Canvas; color: CanvasText; }
+nav { padding: 0.75rem 0; border-bottom: 1px solid CanvasText; margin-bottom: 1rem; }
+nav.tabs { border: 0; margin: 0 0 0.5rem; padding: 0; }
+nav.tabs a[aria-current='page'] { font-weight: bold; text-decoration: none; border-bottom: 2px solid CanvasText; }
+.scope { border: 1px solid CanvasText; padding: 0.25rem 0.75rem; margin: 0.5rem 0 1rem; font-size: 0.95em; }
+.meta { font-size: 0.9em; opacity: 0.85; }
+.post { margin: 0.75rem 0; padding: 0.5rem 0; border-bottom: 1px solid color-mix(in srgb, CanvasText 25%, transparent); }
+.body { max-width: 48rem; }
+.body pre { overflow-x: auto; padding: 0.5rem; border: 1px solid CanvasText; }
+.body blockquote { border-left: 3px solid CanvasText; margin: 0.5rem 0; padding-left: 0.75rem; }
+ol.thread, ol.thread ol { list-style: none; padding-left: 0; }
+ol.thread ol { margin-left: 1.25rem; border-left: 1px solid color-mix(in srgb, CanvasText 30%, transparent); padding-left: 0.75rem; }
+li.c { margin: 0.5rem 0; }
+.removed { font-style: italic; opacity: 0.8; }
+.votes form { display: inline; }
+.votes button { padding: 0 0.4rem; }
+details > summary { cursor: pointer; }
+fieldset { margin: 0.5rem 0; }
+label { display: inline-block; margin: 0.25rem 0.5rem 0.25rem 0; }
+textarea { width: 100%; max-width: 48rem; min-height: 6rem; font-family: ui-monospace, monospace; }
+[role='alert'] { border: 2px solid CanvasText; padding: 0.25rem 0.5rem; }
+table { border-collapse: collapse; margin: 0.5rem 0 1rem; }
+th, td { border: 1px solid CanvasText; padding: 0.25rem 0.5rem; text-align: left; vertical-align: top; }
+.pin::before { content: '📌 '; }
+.lock::before { content: '🔒 '; }

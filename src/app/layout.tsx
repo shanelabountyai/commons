@@ -1,5 +1,7 @@
 // public: the root shell; renders no data
-export const metadata = { title: 'SaaS Foundation' };
+import './commons.css';
+
+export const metadata = { title: 'Commons' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

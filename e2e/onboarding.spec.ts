@@ -34,6 +34,8 @@ test('new email → org created → lands in /o/[slug]', async ({ page }) => {
   await page.getByRole('link', { name: 'Done' }).click();
 
   await page.getByRole('link', { name: /^Acme / }).click();
-  await expect(page).toHaveURL(/\/o\/acme-\d+$/);
-  await expect(page.getByRole('heading', { name: 'Nothing here yet' })).toBeVisible();
+  // Commons: the org home redirects to the forum (D-52); a new org has boards to make, not projects
+  await expect(page).toHaveURL(/\/o\/acme-\d+\/f$/);
+  await expect(page.getByRole('heading', { name: 'Boards' })).toBeVisible();
+  await expect(page.getByText('No boards yet.')).toBeVisible();
 });
