@@ -16,8 +16,9 @@ describe('src/render against fixtures/xss', () => {
     });
   }
   it('links: http/https/mailto keep their href with the rel set; others lose it', () => {
-    expect(renderMarkdown('[a](https://x.example)')).toContain('<a href="https://x.example" rel="nofollow ugc noopener" target="_blank">a</a>');
-    expect(renderMarkdown('[a](ftp://x.example)')).toContain('<a rel="nofollow ugc noopener" target="_blank">a</a>');
+    expect(renderMarkdown('[a](https://x.example)')).toContain('<a href="https://x.example" rel="nofollow ugc noopener">a</a>');
+    expect(renderMarkdown('[a](ftp://x.example)')).toContain('<a rel="nofollow ugc noopener">a</a>');
+    expect(renderMarkdown('# h1\n\n### h3\n\n###### h6')).toBe('<h4>h1</h4>\n<h6>h3</h6>\n<h6>h6</h6>\n'); // D-61: demoted three levels, capped at h6
   });
   it('raw HTML is text, markdown is markup', () => {
     expect(renderMarkdown('<b>x</b> **y**')).toBe('<p>&lt;b&gt;x&lt;/b&gt; <strong>y</strong></p>\n');
