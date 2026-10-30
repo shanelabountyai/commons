@@ -163,3 +163,37 @@ export async function queue(tx: Tx, orgId: string, limit: number): Promise<Queue
   const when = (i: QueueItem) => (i.kind === 'CASE' ? i.openedAt : i.createdAt).getTime();
   return items.sort((a, b) => when(a) - when(b)).slice(0, limit);
 }
+
+/** 4.1.8 (P0-5): the author's history beside a queue item — reports on any of their nodes, posts and comments, and prior actions against them. */
+export async function authorHistory(tx: Tx, profileId: string): Promise<{ reports: number; actions: number }> {
+  const [posts, comments] = await Promise.all([
+    tx.post.findMany({ where: { authorId: profileId }, select: { id: true } }),
+    tx.comment.findMany({ where: { authorId: profileId }, select: { id: true } }),
+  ]);
+  const reports = await tx.report.count({
+    where: { OR: [{ nodeKind: 'POST', nodeId: { in: posts.map((p) => p.id) } }, { nodeKind: 'COMMENT', nodeId: { in: comments.map((c) => c.id) } }] },
+  });
+  return { reports, actions: await tx.moderationAction.count({ where: { subjectId: profileId } }) };
+}
+
+/** 4.1.9 (P0-6, D-32): a node's previous bodies for moderators, newest first; scoped by org. The page shows this only to moderators. */
+export async function editHistoryFor(tx: Tx, orgId: string, node: NodeRef): Promise<{ previousBody: string; editedAt: Date; withinWindow: boolean; editor: string }[]> {
+  const rows = await tx.editHistory.findMany({ where: { orgId, nodeKind: node.kind, nodeId: node.id }, orderBy: { editedAt: 'desc' }, include: { editor: { select: { handle: true } } } });
+  return rows.map((r) => ({ previousBody: r.previousBody, editedAt: r.editedAt, withinWindow: r.withinWindow, editor: r.editor.handle }));
+}
+
+/** The whole thread's edit history in one read, keyed `${kind}:${id}`, for the thread page's moderator view (4.1.9). */
+export async function editHistoryForThread(tx: Tx, orgId: string, postId: string, commentIds: string[]): Promise<Map<string, Awaited<ReturnType<typeof editHistoryFor>>>> {
+  const rows = await tx.editHistory.findMany({
+    where: { orgId, OR: [{ nodeKind: 'POST', nodeId: postId }, { nodeKind: 'COMMENT', nodeId: { in: commentIds } }] },
+    orderBy: { editedAt: 'desc' },
+    include: { editor: { select: { handle: true } } },
+  });
+  const by = new Map<string, Awaited<ReturnType<typeof editHistoryFor>>>();
+  for (const r of rows) {
+    const k = `${r.nodeKind}:${r.nodeId}`;
+    if (!by.has(k)) by.set(k, []);
+    by.get(k)!.push({ previousBody: r.previousBody, editedAt: r.editedAt, withinWindow: r.withinWindow, editor: r.editor.handle });
+  }
+  return by;
+}

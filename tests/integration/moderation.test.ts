@@ -3,9 +3,9 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db } from '@/core/db';
-import { submitComment, submitPost, submitVote } from '@/forum/actions';
+import { submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { toDate } from '@/forum/db';
-import { actOnContent, actOnThread, actOnUser, queue, reviewSignal, submitReport, type ModeratorCtx } from '@/forum/moderation';
+import { actOnContent, actOnThread, actOnUser, authorHistory, editHistoryFor, queue, reviewSignal, submitReport, type ModeratorCtx } from '@/forum/moderation';
 import { canTransition, parseLimitRules, parseModerationRules } from '@/rules';
 import { makeOrg } from '../helpers/org';
 
@@ -126,5 +126,28 @@ describe('signals in the queue (4.5, D-31)', () => {
     await tx((t) => reviewSignal(t, modCtx('mod'), { kind: 'DUPLICATE', id: d.id }, 'repost, left up', T0 + 501));
     expect((await queue(db, orgId, 50)).filter((i) => i.kind !== 'CASE')).toHaveLength(0);
     await expect(tx((t) => reviewSignal(t, modCtx('mod'), { kind: 'BRIGADE', id: b.id }, 'again', T0 + 502))).rejects.toMatchObject({ code: 'TRANSITION_INVALID' });
+  });
+});
+
+describe('context for moderators (4.1.8, 4.1.9)', () => {
+  it('author history counts reports on comments as well as posts (P0-5)', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.reporter!, boardId, publicId: 'M-P5', title: 't', body: 'host post for a reported comment', at: T0 + 600 }, limits, mod));
+    const c = await tx((t) => submitComment(t, { orgId, profileId: P.author!, postId: post.id, parentId: null, publicId: 'M-C5', body: 'spammy comment', at: T0 + 601 }, limits, mod));
+    const before = await authorHistory(db, P.author!);
+    await tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'COMMENT', id: c.id }, reason: 'spam', at: T0 + 602 }, limits, mod));
+    const after = await authorHistory(db, P.author!);
+    expect(after.reports).toBe(before.reports + 1);
+  });
+
+  it('edit history is readable for moderators: previous bodies, newest first, with the window flag (P0-6)', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.author!, boardId, publicId: 'M-P6', title: 't', body: 'first body', at: T0 + 700 }, limits, mod));
+    await tx((t) => submitEdit(t, { orgId, editorId: P.author!, node: { kind: 'POST', id: post.id }, body: 'second body', at: T0 + 701 }, limits));
+    await tx((t) => submitEdit(t, { orgId, editorId: P.author!, node: { kind: 'POST', id: post.id }, body: 'third body', at: T0 + 700 + limits.edit_window_seconds + 1 }, limits));
+    const h = await editHistoryFor(db, orgId, { kind: 'POST', id: post.id });
+    expect(h.map((e) => [e.previousBody, e.withinWindow])).toEqual([
+      ['second body', false],
+      ['first body', true],
+    ]);
+    expect(await editHistoryFor(db, '00000000-0000-4000-8000-000000000000', { kind: 'POST', id: post.id })).toEqual([]); // scoped by org (INV-03)
   });
 });

@@ -5,7 +5,7 @@ import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
 import { Markdown, Text, when } from '@/components/forum';
-import { canModerate, queue } from '@/forum/moderation';
+import { authorHistory, canModerate, queue } from '@/forum/moderation';
 import { ensureProfile } from '@/forum/view';
 import { parseLimitRules, parseModerationRules } from '@/rules';
 import { moderateContent, reviewBrigade, reviewDuplicate } from '../actions';
@@ -35,10 +35,6 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
     const c = comments.find((x) => x.id === node.id);
     return c ? { title: `comment on ${c.post.title}`, body: c.body, author: c.author, status: c.status, postPublicId: c.post.publicId, postId: c.postId, commentId: c.id, link: `/o/${ctx.slug}/f/p/${c.post.publicId}/c/${c.publicId}` } : null;
   };
-  const authorHistory = async (profileId: string) => ({
-    reports: await db.report.count({ where: { nodeKind: 'POST', nodeId: { in: (await db.post.findMany({ where: { authorId: profileId }, select: { id: true } })).map((p) => p.id) } } }),
-    actions: await db.moderationAction.count({ where: { subjectId: profileId } }),
-  });
   const log = await db.moderationAction.findMany({ where: { orgId: ctx.orgId }, orderBy: { seq: 'desc' }, take: 50, include: { actor: { select: { handle: true } }, subject: { select: { handle: true } } } });
 
   return (
@@ -52,7 +48,7 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
         items.map(async (item) => {
           const c = ctxOf(item.node);
           if (!c) return null;
-          const hist = await authorHistory(c.author.id);
+          const hist = await authorHistory(db, c.author.id);
           return (
             <section key={`${item.kind}-${item.id}`} aria-label={`${item.kind} on ${c.title}`} className="post">
               <h2>
