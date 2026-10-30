@@ -220,3 +220,21 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   await expect(page.locator('p[role="alert"]')).toBeVisible(); // not inside a closed <details>
   await expect(page.locator('p[role="alert"]')).toContainText('INPUT_INVALID');
 });
+
+test('4.1.12: a refused comment keeps what was typed (RATE_LIMITED on a young account)', async ({ page }) => {
+  await member.signIn(db, page);
+  await page.goto(`/o/${SLUG}/f/p/P-0001`);
+  await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]);
+  for (const n of [1, 2]) {
+    await page.getByLabel('New comment').fill(`Quick comment ${n}`);
+    await page.getByRole('button', { name: 'Comment', exact: true }).click();
+    await expect(page.locator('ol.thread')).toContainText(`Quick comment ${n}`);
+  }
+  const body = 'A long third comment the young account typed and must not lose when the window refuses it.';
+  await page.getByLabel('New comment').fill(body);
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  const alert = page.locator('p[role="alert"]');
+  await expect(alert).toContainText('RATE_LIMITED');
+  await expect(page.getByLabel('New comment')).toHaveValue(body);
+  await expect(alert).toBeFocused(); // the refusal takes focus so a keyboard or screen-reader user hears it
+});
