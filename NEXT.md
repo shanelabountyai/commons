@@ -1,6 +1,8 @@
 # NEXT
 
-## ▶ Phase 4.1 MERGED (`091435f`, 2026-11-01, D-70). Branch `phase-5` open; next: Phase 5 PRDs in `docs/prd/`, one at a time, Shane decides which first.
+## ▶ Phase 5 in progress on `phase-5` (2026-11-01). PRD 5.3 approved and built: `tools/rank_study.py`, numbers in `docs/EVAL.md` §Phase 5. Waiting on Shane's three post-study decisions (GH-08 gravity, GW-09 Best/author +1, limits), then PRD 5.2.
+
+- **5.3 result:** Hot ≈ New on every board at gravity 45k/90k/150k (ρ ≥ 0.981, 0 hot-only top-5 posts); Best is pure tiebreak in 120/878 sibling groups; dropping the author's +1 from Best changes 45/878 top comments; the fixture cannot calibrate the age gate, aged-brigade signal or comment window (no aged sockpuppets; generator comment timestamps). Phase 4.1 merged as `091435f` (D-70).
 
 **Phase 4.1 session (2026-10-30, cloud, Shane's "go").** 15 defect rows from the review gate, each fixed behind a red test, one concern per commit on `phase-4.1` (21 commits incl. the plan). Decisions D-65..D-68.
 - **Gate output:** `npm test` 332/332 (46 files); harness 14/14 with `deleteOwn` and `moderatorFlag`; `xss:check` 61/61 (D-61 cases added, red first); `engine:eval` 0 differences; `fixtures:check` OK (manifest regenerated, 12 expected CSVs byte-identical); `engine:lint` OK with the new single-door rule (proven red on the old edit import); drift clean; tsc clean; eslint 0; full Playwright 18/18 against the production build in 2.6 min, axe 0 light+dark incl. 320 px and after an action; audit 15 advisories, 0 added. Every number with its command: `docs/EVAL.md` §Phase 4.1.
