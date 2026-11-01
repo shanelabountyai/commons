@@ -8,6 +8,7 @@ import { hot, net, orderPosts, orderSiblings, wilsonLower, type Counts, type Pos
 import type { LimitRules, RankingRules } from '@/rules';
 import { assignPaths, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
 import { reduceVotes, type Outcome } from '@/votes';
+import { detectSignals, type Signal, type SignalScenario } from '@/votes/signals';
 
 export type Diff = { file: string; row: number; field: string; expected: string; actual: string };
 export type FileResult = { file: string; rows: number; matched: number; firstDiff?: Diff };
@@ -19,6 +20,8 @@ export type EvalReport = {
   files: FileResult[];
   limits: { script: string; attempts: number; allowed: number; refused: number; firstRetryAfter: number | null }[];
   threads: { post_id: string; comments_total: number; top_level_shown: number; pages: number }[];
+  /** 5.2: every signal the whole community's votes raise (the false-positive check; the oracle finds only P-BRIGADE's). */
+  communitySignals: Signal[];
 };
 
 const POST_SORTS: PostSort[] = ['hot', 'top_day', 'top_week', 'top_all', 'new'];
@@ -26,7 +29,7 @@ const NAMED_THREADS = ['P-THICK', 'P-CHAIN', 'P-GW'];
 const HOT_TOLERANCE = 1e-7;
 const WILSON_TOLERANCE = 5e-5;
 
-export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules, expected: (name: string) => CsvRow[], now = NOW): EvalReport {
+export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules, expected: (name: string) => CsvRow[], now = NOW, signalScenarios: readonly SignalScenario[] = []): EvalReport {
   const accounts = new Map(fx.users.map((u) => [u.id, u.created_at]));
   const nodes = new Map<string, string>();
   for (const p of fx.posts) nodes.set(p.id, p.author);
@@ -165,6 +168,20 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
   });
   compare('expected_limits.csv', limitRows);
 
+  // 5.2 (D-75): the additive scenario set, and the community's own votes through the same detector
+  if (signalScenarios.length > 0) {
+    const sigRows = signalScenarios.flatMap((sc) => detectSignals(sc, limits).map((s) => ({ scenario: sc.id, kind: s.kind, node: s.node, voters: s.voters, window_start: s.window_start })));
+    compare('signals/expected_signals.csv', sigRows);
+  }
+  const community: SignalScenario = {
+    id: 'community',
+    note: 'the frozen community fixture',
+    accounts: fx.users.map((u) => ({ id: u.id, created_at: u.created_at, contributions: authored.get(u.id) ?? [] })),
+    nodes: [...nodes].map(([id, author]) => ({ id, author })),
+    events: fx.votes.map((v) => ({ row: v.row, voter: v.voter, node_id: v.node_id, value: v.value, cast_at: v.cast_at })),
+  };
+  const communitySignals = detectSignals(community, limits);
+
   const tally: Record<Outcome, number> = { APPLIED: 0, TOGGLED_OFF: 0, SWITCHED: 0, SELF_VOTE: 0, GATED_DOWNVOTE: 0, UNKNOWN_NODE: 0 };
   for (const o of outcomes.values()) tally[o]++;
   void isYoung;
@@ -176,5 +193,6 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
     files,
     limits: limitRows.map((r) => ({ script: r.script, attempts: r.attempts, allowed: r.allowed, refused: r.refused, firstRetryAfter: r.first_retry_after === '' ? null : Number(r.first_retry_after) })),
     threads,
+    communitySignals,
   };
 }

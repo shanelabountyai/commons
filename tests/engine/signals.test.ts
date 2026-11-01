@@ -27,3 +27,13 @@ describe('vote signals (5.2) against fixtures/signals', () => {
     expect(expected).toHaveLength(6);
   });
 });
+
+describe('false positives on the community (5.2 acceptance)', () => {
+  it('10,607 ordinary votes raise only the planted BRIGADE on P-BRIGADE (7) — no RING, no AGED_BRIGADE', async () => {
+    const { evaluate } = await import('@/eval');
+    const { loadFixtures } = await import('@/fixtures/load');
+    const { parseRankingRules } = await import('@/rules');
+    const report = evaluate(loadFixtures(), parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8'))), rules, (n) => expectedRows(n));
+    expect(report.communitySignals.map((s) => [s.kind, s.node, s.voters])).toEqual([['BRIGADE', 'P-BRIGADE', 7]]);
+  });
+});
