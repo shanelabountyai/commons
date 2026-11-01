@@ -44,7 +44,15 @@ export const LimitRulesSchema = z
     max_depth_rendered: positiveInt,
     upload: z.object({ max_bytes: positiveInt, types: z.array(z.string().regex(/^image\//)).nonempty() }).strict(),
     /** D-31 as data (4.1.3): ≥ min_voters distinct gated downvoters on one node inside window_seconds → one signal. */
-    signals: z.object({ brigade: z.object({ min_voters: positiveInt, window_seconds: positiveInt }).strict() }).strict(),
+    signals: z
+      .object({
+        brigade: z.object({ min_voters: positiveInt, window_seconds: positiveInt }).strict(),
+        /** 5.2 (D-75): ≥ min_voters young (L-1) accounts' applied upvotes on one node inside the window → RING. */
+        ring: z.object({ min_voters: positiveInt, window_seconds: positiveInt }).strict(),
+        /** 5.2 (D-75): ≥ min_voters applied downvotes from gate-passing accounts younger than max_account_age_days → AGED_BRIGADE. */
+        aged_brigade: z.object({ min_voters: positiveInt, window_seconds: positiveInt, max_account_age_days: positiveInt }).strict(),
+      })
+      .strict(),
   })
   .strict();
 export type LimitRules = z.infer<typeof LimitRulesSchema>;
