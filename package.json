@@ -30,6 +30,7 @@
     "foundation:drift": "tsx scripts/foundation-drift.ts",
     "ranking:golden": "python3 -I tools/golden_answers.py",
     "fixtures:check": "python3 -I tools/verify_fixtures.py && python3 -I tools/golden_answers.py && git diff --exit-code fixtures/ && test -z \"$(git status --porcelain fixtures/)\"",
+    "repo:ignored": "test -z \"$(git ls-files --others --ignored --exclude-standard src e2e tests prisma rules tools | grep -v '^src/generated/\\|__pycache__/')\" || (echo 'repo:ignored: source files hidden by .gitignore:'; git ls-files --others --ignored --exclude-standard src e2e tests prisma rules tools | grep -v '^src/generated/\\|__pycache__/'; exit 1)",
     "engine:lint": "tsx scripts/engine-lint.ts",
     "engine:eval": "tsx scripts/engine-eval.ts",
     "xss:check": "tsx scripts/xss-check.ts",

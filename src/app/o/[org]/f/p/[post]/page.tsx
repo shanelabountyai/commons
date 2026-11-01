@@ -3,13 +3,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
-import { ActionForm } from '@/core/ui/action-form';
+import { ForumForm as ActionForm } from '@/components/forum-form';
 import { ago, Markdown, ScopeNote, Text, when } from '@/components/forum';
-import { canModerate } from '@/forum/moderation';
+import { canModerate, editHistoryForThread } from '@/forum/moderation';
 import { ensureProfile, nowEpoch, thread, type ThreadNode } from '@/forum/view';
 import { parseLimitRules, parseModerationRules, parseRankingRules } from '@/rules';
 import type { RenderedRow } from '@/tree';
-import { edit, moderateContent, moderateThread, reply, report, vote } from '../../actions';
+import { deleteOwn, edit, moderateContent, moderateThread, reply, report, vote } from '../../actions';
 
 const ranking = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8')));
 const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
@@ -18,6 +18,13 @@ const COMMENT_SORTS = ['best', 'top', 'new'] as const;
 type CommentSort = (typeof COMMENT_SORTS)[number];
 
 type Row = RenderedRow & { node: ThreadNode; path: string };
+
+/** 4.1.13 (WCAG 2.4.2): titled after the post; guard first, scoped lookup (FR-06, INV-03). Removed posts keep a neutral title. */
+export async function generateMetadata({ params }: { params: Promise<{ org: string; post: string }> }) {
+  const ctx = await requireOrg((await params).org);
+  const p = await db.post.findUnique({ where: { orgId_publicId: { orgId: ctx.orgId, publicId: (await params).post } }, select: { title: true, status: true } });
+  return { title: p ? `${p.status === 'visible' ? p.title : `[${p.status}]`} · Commons` : 'Commons' };
+}
 
 export default async function Thread({ params, searchParams }: { params: Promise<{ org: string; post: string }>; searchParams: Promise<{ sort?: string; page?: string; upload?: string }> }) {
   const ctx = await requireOrg((await params).org);
@@ -30,6 +37,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
   if (!t) notFound();
   const { post } = t;
   const isMod = canModerate(me);
+  const edits: Awaited<ReturnType<typeof editHistoryForThread>> = isMod ? await editHistoryForThread(db, ctx.orgId, post.id, t.nodes.map((n) => n.dbId)) : new Map();
   const here = `/o/${ctx.slug}/f/p/${publicId}`;
   const bound = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const myCommentIds = new Set((await db.comment.findMany({ where: { postId: post.id, authorId: me.profileId }, select: { publicId: true } })).map((c) => c.publicId));
@@ -44,7 +52,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
         const r = rows[i]!;
         const [kids, next] = render(i + 1, depth + 1);
         items.push(
-          <li key={r.id} id={r.id} className="c">
+          <li key={r.id} id={r.id} className="c" tabIndex={-1}>
             <CommentView r={r} />
             {kids.length > 0 && <ol>{kids}</ol>}
           </li>,
@@ -105,7 +113,15 @@ export default async function Thread({ params, searchParams }: { params: Promise
                 <button type="submit">Save edit</button>
               </ActionForm>
             )}
+            {myCommentIds.has(n.publicId) && (
+              <ActionForm action={bound(deleteOwn)}>
+                <input type="hidden" name="postId" value={post.id} />
+                <input type="hidden" name="commentId" value={n.dbId} />
+                <button type="submit" aria-label={`Delete your comment (it shows as [deleted]; replies stay)`}>Delete</button>
+              </ActionForm>
+            )}
             {isMod && <ModContent kind="COMMENT" commentId={n.dbId} label={`comment by ${n.author}`} />}
+            {isMod && <EditHistory kind="COMMENT" id={n.dbId} />}
           </details>
         )}
         {removed && isMod && (
@@ -133,8 +149,33 @@ export default async function Thread({ params, searchParams }: { params: Promise
             ))}
           </select>
         </label>
+        <label>
+          Say what (optional, for &ldquo;Something else&rdquo; especially)
+          <textarea name="detail" maxLength={2000} rows={2} aria-label={`Detail for reporting ${label}`} />
+        </label>
         <button type="submit">Report</button>
       </ActionForm>
+    );
+  }
+
+  /** 4.1.9 (P0-6): previous bodies, moderators only; rendered through the same sanitizer as live bodies. */
+  function EditHistory({ kind, id }: { kind: 'POST' | 'COMMENT'; id: string }) {
+    const h = edits.get(`${kind}:${id}`) ?? [];
+    if (h.length === 0) return null;
+    return (
+      <details className="edits">
+        <summary>Edit history ({h.length}, moderators only)</summary>
+        <ol>
+          {h.map((e, i) => (
+            <li key={i}>
+              <p className="meta">
+                before the edit by <Text value={e.editor} /> at {when(e.editedAt)} · {e.withinWindow ? 'inside the window, unmarked' : 'outside the window, marked'}
+              </p>
+              <Markdown body={e.previousBody} />
+            </li>
+          ))}
+        </ol>
+      </details>
     );
   }
 
@@ -154,7 +195,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
   }
 
   return (
-    <main>
+    <main id="main" tabIndex={-1}>
       <p className="meta">
         <Link href={`/o/${ctx.slug}/f`}>Boards</Link> › <Link href={`/o/${ctx.slug}/f/${post.board.slug}`}><Text value={post.board.title} /></Link> ›
       </p>
@@ -164,7 +205,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
         </h1>
         <div className="meta">
           {post.ups - post.downs} points · by <Link href={`/o/${ctx.slug}/f/u/${post.author.handle}`}><Text value={post.author.handle} /></Link> · {when(post.createdAt)}
-          {post.editedAt && ' · edited'} · {post.commentCount} comments · hot {t.postScore.hot.toFixed(2)} (ranked {ago(t.rankedAt)})
+          {post.editedAt && ' · edited'} · {post.commentCount} comments · ranked {ago(t.rankedAt)}{isMod && <> · hot {t.postScore.hot.toFixed(2)} (moderators only, D-9)</>}
         </div>
         {post.status === 'visible' ? <Markdown body={post.body} /> : <p className="removed">This post was {post.status}{isMod ? '; the body is below for moderators.' : '.'}</p>}
         {post.status !== 'visible' && isMod && <Markdown body={post.body} />}
@@ -178,7 +219,8 @@ export default async function Thread({ params, searchParams }: { params: Promise
             ))}
           </ul>
         )}
-        <details>
+        {sp.upload && <p role="alert">{sp.upload}</p>}
+        <details open={sp.upload ? true : undefined}>
           <summary>Vote, report{post.author.id === me.profileId ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
           <span className="votes">
             <ActionForm action={bound(vote)}>
@@ -198,6 +240,12 @@ export default async function Thread({ params, searchParams }: { params: Promise
               <button type="submit">Save edit</button>
             </ActionForm>
           )}
+          {post.author.id === me.profileId && post.status === 'visible' && (
+            <ActionForm action={bound(deleteOwn)}>
+              <input type="hidden" name="postId" value={post.id} />
+              <button type="submit" aria-label="Delete your post (the title and body show as [deleted]; comments stay)">Delete post</button>
+            </ActionForm>
+          )}
           {post.author.id === me.profileId && (
             <form method="post" encType="multipart/form-data" action={`/o/${ctx.slug}/f/uploads?post=${post.id}`}>
               <label>
@@ -205,12 +253,12 @@ export default async function Thread({ params, searchParams }: { params: Promise
                 <input type="file" name="file" accept={limits.upload.types.join(',')} required />
               </label>
               <button type="submit">Attach</button>
-              {sp.upload && <p role="alert">{sp.upload}</p>}
             </form>
           )}
           {isMod && (
             <>
               <ModContent kind="POST" label="this post" />
+              <EditHistory kind="POST" id={post.id} />
               <ActionForm action={bound(moderateThread)}>
                 <input type="hidden" name="postId" value={post.id} />
                 <label>

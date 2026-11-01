@@ -7,8 +7,9 @@
 import { createHash } from 'node:crypto';
 import { MAX_BODY_CHARS } from '@/render';
 import type { LimitRules, ModerationRules } from '@/rules';
-import { ForumRefused, toDate, toEpoch, type NodeRef, type Tx } from './db';
+import { ForumRefused, nodeInfo, toDate, toEpoch, type NodeRef, type Tx } from './db';
 import { guardAndRecord } from './limits-store';
+import { editNode, type EditInput } from './edit';
 import { createComment, createPost } from './tree-write';
 import { castVote, type CastResult } from './votes';
 
@@ -25,7 +26,8 @@ export class RateLimited extends Error {
 
 export const MAX_TITLE_CHARS = 300;
 
-async function admit(tx: Tx, orgId: string, profileId: string, at: number): Promise<void> {
+/** Step 1 of the door, shared with reports (4.1.2) and moderation checks (4.1.11). */
+export async function admit(tx: Tx, orgId: string, profileId: string, at: number): Promise<void> {
   const p = await tx.profile.findUnique({ where: { id: profileId }, select: { orgId: true, bannedUntil: true } });
   if (!p || p.orgId !== orgId) throw new ForumRefused('NOT_MEMBER', `profile ${profileId} is not in org ${orgId}`);
   if (p.bannedUntil && toEpoch(p.bannedUntil) > at) throw new ForumRefused('BANNED_UNTIL', String(toEpoch(p.bannedUntil)));
@@ -82,6 +84,19 @@ export async function submitComment(tx: Tx, s: SubmitComment, rules: LimitRules,
   return { ...row, duplicate: await duplicateSignal(tx, s.orgId, { kind: 'COMMENT', id: row.id }, s.body, s.at, mod) };
 }
 
+/** 4.1.1 (D-64): edits come through the same door as creates — membership and ban, then text checks, then the
+ * writer; the body is rehashed so the duplicate detector sees edited bodies. Edits have no sliding window (D-32
+ * governs the mark, not a rate). */
+export async function submitEdit(tx: Tx, s: EditInput, rules: LimitRules): Promise<{ withinWindow: boolean }> {
+  await admit(tx, s.orgId, s.editorId, s.at);
+  checkText('body', s.body, MAX_BODY_CHARS);
+  const r = await editNode(tx, s, rules);
+  const h = bodyHash(s.body);
+  if (s.node.kind === 'POST') await tx.post.update({ where: { id: s.node.id }, data: { bodyHash: h } });
+  else await tx.comment.update({ where: { id: s.node.id }, data: { bodyHash: h } });
+  return r;
+}
+
 export type SubmitVote = { orgId: string; profileId: string; node: { kind: 'POST' | 'COMMENT'; id: string }; value: 1 | -1; at: number };
 export async function submitVote(tx: Tx, s: SubmitVote, rules: LimitRules): Promise<CastResult> {
   await admit(tx, s.orgId, s.profileId, s.at);
@@ -90,3 +105,19 @@ export async function submitVote(tx: Tx, s: SubmitVote, rules: LimitRules): Prom
   return castVote(tx, { orgId: s.orgId, voterId: s.profileId, node: s.node, value: s.value, castAt: s.at }, rules);
 }
 
+
+/** 4.1.10 (D-13): the author deletes their own node. Status → deleted; position, children, vote rows and totals stay;
+ * the body is hidden at render, not erased (moderators still see it, P0-6). A member may delete while banned: a ban
+ * stops new writes (D-14), and taking your own words down is not one — membership is still required. A node that is
+ * already deleted or removed is refused by name. */
+export type DeleteOwn = { orgId: string; profileId: string; node: NodeRef; at: number };
+export async function deleteOwn(tx: Tx, d: DeleteOwn): Promise<void> {
+  const p = await tx.profile.findUnique({ where: { id: d.profileId }, select: { orgId: true } });
+  if (!p || p.orgId !== d.orgId) throw new ForumRefused('NOT_MEMBER', `profile ${d.profileId} is not in org ${d.orgId}`);
+  const info = await nodeInfo(tx, d.node);
+  if (!info || info.orgId !== d.orgId) throw new ForumRefused('UNKNOWN_NODE', `${d.node.kind} ${d.node.id}`);
+  if (info.authorId !== d.profileId) throw new ForumRefused('NOT_AUTHOR', `only the author deletes ${d.node.kind} ${d.node.id}`);
+  if (info.status !== 'visible') throw new ForumRefused('INPUT_INVALID', `${d.node.kind} is already ${info.status}`);
+  if (d.node.kind === 'POST') await tx.post.update({ where: { id: d.node.id }, data: { status: 'deleted' } });
+  else await tx.comment.update({ where: { id: d.node.id }, data: { status: 'deleted' } });
+}

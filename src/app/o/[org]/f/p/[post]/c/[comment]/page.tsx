@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
+import { db } from '@/core/db';
 import { Markdown, Text, when } from '@/components/forum';
 import { ensureProfile, nowEpoch, permalinkView } from '@/forum/view';
 import { parseLimitRules, parseRankingRules } from '@/rules';
@@ -10,6 +11,15 @@ const ranking = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 
 const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
 
 /** T-5: ancestors collapsed to one line each, then the subtree with the node at depth 0. */
+/** 4.1.13 (WCAG 2.4.2): guard first, scoped lookup (FR-06, INV-03). */
+export async function generateMetadata({ params }: { params: Promise<{ org: string; post: string; comment: string }> }) {
+  const ctx = await requireOrg((await params).org);
+  const { post, comment } = await params;
+  const c = await db.comment.findUnique({ where: { orgId_publicId: { orgId: ctx.orgId, publicId: comment } }, select: { status: true, author: { select: { handle: true } }, post: { select: { publicId: true, title: true } } } });
+  if (!c || c.post.publicId !== post) return { title: 'Commons' };
+  return { title: `Comment by ${c.status === 'visible' ? c.author.handle : `[${c.status}]`} on ${c.post.title} · Commons` };
+}
+
 export default async function Permalink({ params }: { params: Promise<{ org: string; post: string; comment: string }> }) {
   const ctx = await requireOrg((await params).org);
   await ensureProfile(ctx);
@@ -18,7 +28,7 @@ export default async function Permalink({ params }: { params: Promise<{ org: str
   if (!v) notFound();
   const here = `/o/${ctx.slug}/f/p/${post}`;
   return (
-    <main>
+    <main id="main" tabIndex={-1}>
       <p className="meta">
         <Link href={`/o/${ctx.slug}/f`}>Boards</Link> › <Link href={here}><Text value={v.post.title} /></Link> › comment
       </p>

@@ -12,13 +12,16 @@ export default async function OrgLayout({ children, params }: { children: React.
   const base = `/o/${ctx.slug}`;
   return (
     <>
+      <a href="#main" className="skip">
+        Skip to content
+      </a>
       <nav aria-label="Forum">
         <strong>{org.name}</strong> · <Link href={`${base}/f`}>Boards</Link> · <Link href={`${base}/f/search`}>Search</Link>
         {me && <> · <Link href={`${base}/f/u/${me.handle}`}>You ({me.handle})</Link></>}
         {mod && <> · <Link href={`${base}/f/mod`}>Mod queue</Link></>}
         {' · '}<Link href={`${base}/settings/members`}>Members</Link>
-        {can(ctx.role, 'org.delete') && <> · <Link href={`${base}/settings/danger`}>Delete org</Link></>}
         {' · '}<Link href="/onboarding">Your orgs</Link> · <Link href="/account/security">Account</Link>
+        {can(ctx.role, 'org.delete') && <> · <Link href={`${base}/settings/danger`} className="meta">Settings: delete org</Link></>}
       </nav>
       {children}
     </>

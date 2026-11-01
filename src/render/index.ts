@@ -8,16 +8,29 @@
 //
 // Allowed subset (3.2): p, br, strong, em, b, i, code, pre, a, ul, ol, li, blockquote, h1–h6, hr, del, s. No images
 // (D-40), no raw HTML, no tables yet. Links: http, https, mailto only; everything else loses its href. Every anchor
-// gets rel="nofollow ugc noopener" and target="_blank".
+// gets rel="nofollow ugc noopener"; no target (D-61). User headings render as h4–h6 (D-61).
 import DOMPurify from 'isomorphic-dompurify';
 import MarkdownIt from 'markdown-it';
 
 export const ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'b', 'i', 'code', 'pre', 'a', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'del', 's'] as const;
-export const ALLOWED_ATTR = ['href', 'rel', 'target'] as const;
+export const ALLOWED_ATTR = ['href', 'rel'] as const;
 export const LINK_REL = 'nofollow ugc noopener';
 export const MAX_BODY_CHARS = 50_000; // longer bodies are cut before parsing (X-41); the writer refuses them earlier
 
 const md = new MarkdownIt('commonmark', { html: false, linkify: false, typographer: false, breaks: false });
+
+/** D-61 (4.1.15): user headings are demoted three levels (h1→h4 … h4+→h6) so a body cannot enter the page outline
+ *  (WCAG 1.3.1); the text is kept. h1–h3 stay in ALLOWED_TAGS only so the sanitizer's allowlist is the policy of
+ *  record for raw-HTML paths, which markdown-it never emits with html:false. */
+const HEADING_DEMOTE = 3;
+for (const rule of ['heading_open', 'heading_close'] as const) {
+  md.renderer.rules[rule] = (tokens, idx, options, _env, self) => {
+    const t = tokens[idx]!;
+    const level = Math.min(6, Number(t.tag.slice(1)) + HEADING_DEMOTE);
+    t.tag = `h${level}`;
+    return self.renderToken(tokens, idx, options);
+  };
+}
 // markdown-it's own URL check already drops javascript:/vbscript:/data: on links; keep it and add ours below.
 
 const SAFE_HREF = /^(https?:\/\/|mailto:)/i;
@@ -44,8 +57,7 @@ function linkPolicy(root: ParentNode): void {
   for (const a of Array.from(root.querySelectorAll('a'))) {
     const href = (a.getAttribute('href') ?? '').trim();
     if (!SAFE_HREF.test(href)) a.removeAttribute('href');
-    a.setAttribute('rel', LINK_REL);
-    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', LINK_REL); // D-61: no target=_blank (3.2.5); the rel policy is unchanged
   }
 }
 

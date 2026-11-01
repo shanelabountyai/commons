@@ -2,7 +2,7 @@
 
 Learning project: a synthetic homelab community forum. Boards, posts, and comments nested arbitrarily deep; Hot/Top/New/Best ranking; one account, one vote; rate limits and young-account gates as data; reports, a mod queue and an append-only mod log. It's the first project in the portfolio designed against hostile users. **Synthetic data only. No scraped content, no real users. Passing the abuse fixtures shows the defenses stop the attacks the author thought of, nothing more.** Keep the scope-honesty banner from `prd-commons.md` verbatim in README.md.
 
-Read first: `prd-commons.md` (what), `docs/decisions.md` (authoritative; outranks the PRD), `docs/domain-brief.md` (vocabulary, tree rules T-, ranking formulas R-, golden-case index), `docs/adr-001-tree-storage.md`, `docs/portfolio-overlap.md` (what to port). Current work: `docs/phase-1-tasks.md`. Session state: `NEXT.md`.
+Read first: `prd-commons.md` (what), `docs/decisions.md` (authoritative; outranks the PRD), `docs/domain-brief.md` (vocabulary, tree rules T-, ranking formulas R-, golden-case index), `docs/adr-001-tree-storage.md`, `docs/portfolio-overlap.md` (what to port). Current work: `docs/phase-4.1-tasks.md` (then `docs/phase-5-tasks.md`). Session state: `NEXT.md`.
 
 ## Non-negotiables
 1. **All user content is untrusted at every render.** Output-encode everywhere; markdown through an allowlisted subset only; links `rel="nofollow ugc noopener"`; no `dangerouslySetInnerHTML` outside the one sanitizer module. The XSS fixture set is written **before** the renderer (Phase 3).

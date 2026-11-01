@@ -77,9 +77,26 @@ export function lintSingleRenderer(root = 'src'): string[] {
   return out;
 }
 
+/** D-44 / D-64 (4.1.1): pages, routes and scripts reach the writers only through the door. Anything under src/app
+ * may import @/forum/actions and @/forum/moderation (and read-side modules), never edit, tree-write, votes or
+ * guardAndRecord directly — the edit action did, and a banned member could edit. */
+export function lintSingleDoor(root = 'src/app'): string[] {
+  const out: string[] = [];
+  if (!existsSync(root)) return out;
+  const files = readdirSync(root, { recursive: true, withFileTypes: true }).filter((d) => d.isFile() && /\.tsx?$/.test(d.name));
+  for (const d of files) {
+    const p = `${d.parentPath}/${d.name}`;
+    const code = stripComments(readFileSync(p, 'utf8'));
+    const m = code.match(/from ['"]@\/forum\/(edit|tree-write|votes)['"]/);
+    if (m) out.push(`${p}: imports @/forum/${m[1]} directly; go through @/forum/actions (the door, D-44)`);
+    if (/\bguardAndRecord\b/.test(code)) out.push(`${p}: calls guardAndRecord directly; the door records limits (D-44)`); // the cron sweep may import limits-store
+  }
+  return out;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const lint = lintEngineDirs();
-  const problems = [...lint.problems, ...lintSingleWriter(), ...lintSingleRenderer()];
+  const problems = [...lint.problems, ...lintSingleWriter(), ...lintSingleRenderer(), ...lintSingleDoor()];
   const files = lint.files;
   for (const p of problems) console.error(`engine:lint: ${p}`);
   if (problems.length) process.exit(1);

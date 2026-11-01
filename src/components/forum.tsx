@@ -1,6 +1,7 @@
 // Shared server components for the forum pages. All user text reaches the DOM through src/render (non-negotiable 1);
 // the Markdown and Text wrappers live there. The scope note is one sentence in one place.
 export { Markdown, Text } from '@/render/components';
+import { ago as agoText, when as whenText } from '@/forum/time';
 
 export function ScopeNote() {
   return (
@@ -12,5 +13,7 @@ export function ScopeNote() {
   );
 }
 
-export const when = (d: Date) => d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-export const ago = (d: Date | null) => (d ? `${Math.max(0, Math.round((Date.now() - d.getTime()) / 60_000))} min ago` : 'not yet');
+/** Absolute time, UTC to the minute, machine-readable (4.1.13). */
+export const when = (d: Date) => <time dateTime={d.toISOString()}>{whenText(d)}</time>;
+/** Relative time with a scaled unit; the absolute value sits in the title and dateTime. */
+export const ago = (d: Date | null) => (d ? <time dateTime={d.toISOString()} title={whenText(d)}>{agoText(d, new Date())}</time> : <>not yet</>);

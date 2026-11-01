@@ -10,8 +10,6 @@ import { contributionsAt, ForumRefused, lockKey, nodeInfo, toDate, toEpoch, type
 export type CastInput = { orgId: string; voterId: string; node: NodeRef; value: 1 | -1; castAt: number; note?: string };
 export type CastResult = { outcome: Exclude<Outcome, 'UNKNOWN_NODE'>; signal: boolean };
 
-const BRIGADE_MIN = 5;
-const BRIGADE_WINDOW_S = 600;
 
 export async function castVote(tx: Tx, input: CastInput, rules: LimitRules): Promise<CastResult> {
   const info = await nodeInfo(tx, input.node);
@@ -30,7 +28,7 @@ export async function castVote(tx: Tx, input: CastInput, rules: LimitRules): Pro
     const account = { created_at: toEpoch(voter.joinedAt), contributions: await contributionsAt(tx, input.voterId, at) };
     if (!downvoteAllowed(account, input.castAt, rules)) {
       await record('GATED_DOWNVOTE'); // V-2
-      return { outcome: 'GATED_DOWNVOTE', signal: await brigadeCheck(tx, input, at) };
+      return { outcome: 'GATED_DOWNVOTE', signal: await brigadeCheck(tx, input, at, rules) };
     }
   }
   await lockKey(tx, `vote:${input.node.kind}:${input.node.id}`); // counts and the current row move together
@@ -62,16 +60,16 @@ export async function castVote(tx: Tx, input: CastInput, rules: LimitRules): Pro
   return { outcome, signal: false };
 }
 
-/** D-31: on a gated downvote, ≥ BRIGADE_MIN gated downvotes on this node inside the window → one signal per window. */
-async function brigadeCheck(tx: Tx, input: CastInput, at: Date): Promise<boolean> {
-  const since = toDate(input.castAt - BRIGADE_WINDOW_S);
+/** D-31: on a gated downvote, ≥ rules.signals.brigade.min_voters gated downvoters on this node inside the window → one signal per window (constants in rules/limits.json, 4.1.3). */
+async function brigadeCheck(tx: Tx, input: CastInput, at: Date, rules: LimitRules): Promise<boolean> {
+  const since = toDate(input.castAt - rules.signals.brigade.window_seconds);
   const gated = await tx.voteEvent.findMany({
     where: { nodeKind: input.node.kind, nodeId: input.node.id, outcome: 'GATED_DOWNVOTE', castAt: { gt: since, lte: at } },
     select: { voterId: true, castAt: true },
     orderBy: { castAt: 'asc' },
   });
   const voters = new Set(gated.map((g) => g.voterId));
-  if (voters.size < BRIGADE_MIN) return false;
+  if (voters.size < rules.signals.brigade.min_voters) return false;
   const windowStart = gated[0]!.castAt;
   const existing = await tx.brigadeSignal.findFirst({ where: { nodeKind: input.node.kind, nodeId: input.node.id, windowStart: { gt: since } } });
   if (existing) {

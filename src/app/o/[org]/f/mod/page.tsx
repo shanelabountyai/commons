@@ -3,17 +3,20 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
-import { ActionForm } from '@/core/ui/action-form';
+import { ForumForm as ActionForm } from '@/components/forum-form';
 import { Markdown, Text, when } from '@/components/forum';
-import { canModerate, queue } from '@/forum/moderation';
+import { authorHistory, canModerate, queue } from '@/forum/moderation';
 import { ensureProfile } from '@/forum/view';
-import { parseModerationRules } from '@/rules';
+import { parseLimitRules, parseModerationRules } from '@/rules';
 import { moderateContent, reviewBrigade, reviewDuplicate } from '../actions';
 
 const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
+const brigadeRule = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8'))).signals.brigade;
 
 /** Task 4.4: open cases with content in context, reporter count and author history; brigade and duplicate signals;
  *  the append-only log. Moderators only ("not yours" ≡ not found for everyone else). */
+export const metadata = { title: 'Moderation queue · Commons' };
+
 export default async function ModQueue({ params }: { params: Promise<{ org: string }> }) {
   const ctx = await requireOrg((await params).org);
   const me = await ensureProfile(ctx);
@@ -34,24 +37,20 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
     const c = comments.find((x) => x.id === node.id);
     return c ? { title: `comment on ${c.post.title}`, body: c.body, author: c.author, status: c.status, postPublicId: c.post.publicId, postId: c.postId, commentId: c.id, link: `/o/${ctx.slug}/f/p/${c.post.publicId}/c/${c.publicId}` } : null;
   };
-  const authorHistory = async (profileId: string) => ({
-    reports: await db.report.count({ where: { nodeKind: 'POST', nodeId: { in: (await db.post.findMany({ where: { authorId: profileId }, select: { id: true } })).map((p) => p.id) } } }),
-    actions: await db.moderationAction.count({ where: { subjectId: profileId } }),
-  });
   const log = await db.moderationAction.findMany({ where: { orgId: ctx.orgId }, orderBy: { seq: 'desc' }, take: 50, include: { actor: { select: { handle: true } }, subject: { select: { handle: true } } } });
 
   return (
-    <main>
+    <main id="main" tabIndex={-1}>
       <h1>Moderation queue</h1>
       <p className="meta">
-        {items.length} open item{items.length === 1 ? '' : 's'}: cases from reports, brigade signals (≥ 5 gated downvotes in 10 min), duplicate signals. Nothing here was acted on automatically.
+        {items.length} open item{items.length === 1 ? '' : 's'}: cases from reports, brigade signals (≥ {brigadeRule.min_voters} gated downvotes in {Math.round(brigadeRule.window_seconds / 60)} min), duplicate signals. Nothing here was acted on automatically.
       </p>
       {items.length === 0 && <p>The queue is empty.</p>}
       {await Promise.all(
         items.map(async (item) => {
           const c = ctxOf(item.node);
           if (!c) return null;
-          const hist = await authorHistory(c.author.id);
+          const hist = await authorHistory(db, c.author.id);
           return (
             <section key={`${item.kind}-${item.id}`} aria-label={`${item.kind} on ${c.title}`} className="post">
               <h2>
@@ -60,6 +59,15 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
               <p className="meta">
                 by <Link href={`/o/${ctx.slug}/f/u/${c.author.handle}`}><Text value={c.author.handle} /></Link> ({c.author.modState}; {hist.reports} reports on their posts, {hist.actions} prior actions) · status {c.status} · opened {when(item.kind === 'CASE' ? item.openedAt : item.createdAt)}
               </p>
+              {item.kind === 'CASE' && item.details.length > 0 && (
+                <ul aria-label="What reporters said">
+                  {item.details.map((d, i) => (
+                    <li key={i} className="meta">
+                      <Text value={d} />
+                    </li>
+                  ))}
+                </ul>
+              )}
               <Markdown body={c.body} />
               {item.kind === 'CASE' && (
                 <ActionForm action={moderateContent.bind(null, ctx.slug)}>

@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import pg from 'pg';
 import { expectAccessible } from './axe';
-import { ownerFor } from './commons-helpers';
+import { memberFor, ownerFor } from './commons-helpers';
 
 test.use({ bypassCSP: true }); // axe is injected; the app's CSP (INV-15) rightly refuses that
 test.describe.configure({ mode: 'serial', timeout: 300_000 });
@@ -14,12 +14,14 @@ test.describe.configure({ mode: 'serial', timeout: 300_000 });
 const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
 const SLUG = `homelab-e2e-${Date.now()}`;
 const owner = ownerFor(SLUG);
+const member = memberFor(SLUG);
 let orgId = '';
 const xssCases = (JSON.parse(readFileSync('fixtures/xss/cases.json', 'utf8')) as { cases: { id: string; class: string; input: string }[] }).cases;
 
 test.beforeAll(async () => {
   test.setTimeout(900_000); // the fixture load through the writers is ~1k posts and ~10k comments; hooks default to 30 s
   orgId = await owner.setup(db);
+  await member.setup(db, orgId);
   // the fixture community through the real writers (same path as engine:eval:db), in one transaction
   const { loadFixtures } = await import('../src/fixtures/load');
   const { loadForum } = await import('../src/forum/load');
@@ -42,7 +44,7 @@ test('boards and a board under Hot, Top and New, ranked by the job', async ({ pa
   await expect(page.getByRole('link', { name: 'networking' })).toBeVisible();
   await page.getByRole('link', { name: 'selfhosting' }).click();
   await expectAccessible(page, 'board hot', 'Hot');
-  await expect(page.getByText(/ranked \d+ min ago/)).toBeVisible();
+  await expect(page.getByText(/ranked (just now|\d+ (min|h|d) ago)/)).toBeVisible(); // 4.1.13: scaled units
   const hotFirst = await page.locator('ol li.post a').first().textContent();
   await page.getByRole('link', { name: 'Top all time' }).click();
   await expect(page.getByRole('link', { name: 'Top all time' })).toHaveAttribute('aria-current', 'page');
@@ -90,6 +92,7 @@ test('reply, vote, edit; a young-looking owner cannot downvote yet; refusals car
 });
 
 test('every XSS fixture body posted through the real form renders inert in a real browser', async ({ page }) => {
+  test.setTimeout(900_000); // 52 round trips through a real form; a CI runner is 2–3× slower than the laptop
   await signIn(page);
   await page.goto(`/o/${SLUG}/f/p/P-0001`);
   const bodies = xssCases.filter((c) => c.class === 'markdown' && c.input.length < 5000);
@@ -105,16 +108,19 @@ test('every XSS fixture body posted through the real form renders inert in a rea
     FROM "Profile" p, "Board" b, generate_series(1, 6) g WHERE p."orgId" = $1 AND p."handle" LIKE 'owner%' AND b."orgId" = $1 AND b.slug = 'help'`, [orgId]);
   let accepted = 0;
   const refusedIds: string[] = [];
+  const stored = async () => Number((await db.query(`SELECT count(*) AS n FROM "Comment" c JOIN "Post" p ON p.id = c."postId" WHERE p."orgId" = $1 AND p."publicId" = 'P-0001'`, [orgId])).rows[0].n);
+  const alert = page.locator('p[role="alert"]'); // the form's own; Next's route announcer is also role=alert
   for (const c of bodies) {
     await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]); // one case per attempt; the limit itself is proven by abuse:spam
-    const before = await page.locator('ol.thread li.c').count();
+    const before = await stored();
     await page.getByLabel('New comment').fill(c.input);
     await page.getByRole('button', { name: 'Comment', exact: true }).click();
-    // either the comment is stored and rendered inert, or the door refuses it with a code — never a 500
-    const alert = page.locator('p[role="alert"]'); // the form's own; Next's route announcer is also role=alert
-    await expect(page.locator('ol.thread li.c').nth(before).or(alert)).toBeVisible();
-    if ((await page.locator('ol.thread li.c').count()) > before) accepted += 1;
-    else {
+    // either the comment is stored (it may land on page 2 once the thread passes 50 top-level comments) or the door refuses it with a code — never a 500
+    await expect.poll(async () => (await stored()) > before || (await alert.count()) > 0, { message: `case ${c.id}` }).toBe(true);
+    if ((await stored()) > before) {
+      accepted += 1;
+      await expect(page).toHaveURL(/\/f\/p\/P-0001/);
+    } else {
       await expect(alert).toContainText('INPUT_INVALID');
       refusedIds.push(c.id);
       await page.goto(`/o/${SLUG}/f/p/P-0001`);
@@ -122,20 +128,32 @@ test('every XSS fixture body posted through the real form renders inert in a rea
   }
   expect(refusedIds).toEqual(['X-37']); // the NUL-byte body is refused at the door (actions.test.ts); everything else is stored
   expect(accepted).toBe(bodies.length - 1);
-  const live = await page.evaluate(() => {
-    const bad: string[] = [];
-    // the rendered bodies only (div.body is the one sanitizer output); the thread's own forms sit beside them
-    for (const el of Array.from(document.querySelectorAll('ol.thread div.body *'))) {
-      const tag = el.tagName.toLowerCase();
-      if (['script', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'style', 'math'].includes(tag)) bad.push(tag);
-      for (const a of Array.from(el.attributes)) {
-        if (/^on/i.test(a.name)) bad.push(`${tag}@${a.name}`);
-        if ((a.name === 'href' || a.name === 'src') && /^\s*(javascript|data|vbscript):/i.test(a.value)) bad.push(`${tag}@${a.name}=${a.value.slice(0, 20)}`);
-      }
-    }
-    return bad;
-  });
-  expect(await page.locator('ol.thread div.body').count()).toBeGreaterThanOrEqual(accepted);
+  // every page of the thread: no live markup survives inside any rendered body
+  const live: string[] = [];
+  let rendered = 0;
+  for (let pg = 1; pg <= 3; pg += 1) {
+    await page.goto(`/o/${SLUG}/f/p/P-0001?page=${pg}`);
+    const n = await page.locator('ol.thread div.body').count();
+    if (n === 0) break;
+    rendered += n;
+    live.push(
+      ...(await page.evaluate(() => {
+        const bad: string[] = [];
+        // the rendered bodies only (div.body is the one sanitizer output); the thread's own forms sit beside them
+        for (const el of Array.from(document.querySelectorAll('ol.thread div.body *'))) {
+          const tag = el.tagName.toLowerCase();
+          if (['script', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'style', 'math', 'h1', 'h2', 'h3'].includes(tag)) bad.push(tag);
+          for (const a of Array.from(el.attributes)) {
+            if (/^on/i.test(a.name)) bad.push(`${tag}@${a.name}`);
+            if (a.name === 'target') bad.push(`${tag}@target`); // D-61
+            if ((a.name === 'href' || a.name === 'src') && /^\s*(javascript|data|vbscript):/i.test(a.value)) bad.push(`${tag}@${a.name}=${a.value.slice(0, 20)}`);
+          }
+        }
+        return bad;
+      })),
+    );
+  }
+  expect(rendered).toBeGreaterThanOrEqual(accepted);
   expect(live).toEqual([]);
   expect(fired).toBe(false);
   await expectAccessible(page, 'thread with hostile bodies', 'P-0001 title');
@@ -174,4 +192,113 @@ test('report → queue (with the fixture brigade) → remove → restore → app
   await page.goto(`/o/${SLUG}/f/search?q=P-BRIGADE`);
   await expectAccessible(page, 'search', 'Search');
   await expect(page.getByRole('link', { name: 'P-BRIGADE title' })).toBeVisible();
+});
+
+// ---- Phase 4.1 defect patch: each assertion below was red before its fix (docs/phase-4.1-tasks.md) ----
+
+test('4.1.5–4.1.7: a member sees no hot score; a vote answers with its outcome and keeps the panel open; edit returns to the node', async ({ page }) => {
+  await member.signIn(db, page);
+  await page.goto(`/o/${SLUG}/f/p/P-GW`);
+  await expect(page.locator('article[aria-label="Post"] .meta')).not.toContainText(/\bhot \d/); // D-9: the score is for the eval and moderators
+  await expect(page.locator('article[aria-label="Post"] .meta')).toContainText(/ranked/);
+  // a 0-minute-old member: upvote applies; the same button again toggles it off; each outcome is announced (4.1.7)
+  const target = page.locator('li#C-GW-1-1');
+  await target.locator('summary').first().click();
+  await target.getByRole('button', { name: /Upvote comment/ }).click();
+  await expect(target.getByRole('status')).toContainText('APPLIED');
+  await expect(target.locator('details').first()).toHaveAttribute('open', ''); // no redirect: the panel stays open
+  await target.getByRole('button', { name: /Upvote comment/ }).click();
+  await expect(target.getByRole('status')).toContainText('TOGGLED_OFF');
+  // the member edits their own reply and lands on it, not at the top of the thread
+  await page.getByLabel('New comment').fill('A reply the member will edit.');
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  const mine = page.locator('li.c', { hasText: 'A reply the member will edit.' }).first();
+  await mine.locator('summary').first().click();
+  await mine.getByLabel('Edit your comment').fill('A reply the member edited.');
+  await mine.getByRole('button', { name: 'Save edit' }).click();
+  await expect(page.locator('ol.thread')).toContainText('A reply the member edited.');
+  await expect(page).toHaveURL(/#C-[A-Za-z0-9-]+$/);
+});
+
+test('4.1.6: an upload refusal is visible without opening anything', async ({ page }) => {
+  await signIn(page);
+  await page.goto(`/o/${SLUG}/f/p/P-GW`);
+  // the owner is not P-GW's author: create an own post first through the board form
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await page.waitForLoadState('networkidle'); // a click before hydration posts the form natively to the page (CI runners are slow)
+  await page.getByLabel('Title').fill('Upload refusal check');
+  await page.getByLabel(/^Body/).fill('A post to attach a bad file to.');
+  await page.getByRole('button', { name: 'Post', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Upload refusal check' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const post = page.locator('article[aria-label="Post"]');
+  await post.locator('summary').first().click();
+  // diagnostics for the runner: the form must be its own element with the uploads action, and the POST must go there
+  const uploadForm = post.locator('form[enctype="multipart/form-data"]');
+  await expect(uploadForm).toHaveAttribute('action', /\/f\/uploads\?post=/);
+  expect(await page.evaluate(() => document.querySelectorAll('form form').length), 'no nested forms').toBe(0);
+  await post.getByLabel(/Attach an image/).setInputFiles({ name: 'evil.png', mimeType: 'image/png', buffer: Buffer.from('<svg onload=alert(1)></svg>') });
+  const posted = page.waitForRequest((r) => r.method() === 'POST', { timeout: 15_000 });
+  await post.getByRole('button', { name: 'Attach', exact: true }).click();
+  const req = await posted;
+  expect(req.url(), `POST went to ${req.url()} (headers: ${JSON.stringify(req.headers())})`).toMatch(/\/f\/uploads\?post=/);
+  const res = await req.response();
+  const detail = `POST ${req.url()} → ${res?.status()} ${JSON.stringify(res?.headers() ?? {})}; page now ${page.url()}; body: ${(await page.textContent('body'))?.slice(0, 300)}`;
+  await expect(page.locator('p[role="alert"]'), detail).toBeVisible(); // not inside a closed <details>
+  await expect(page.locator('p[role="alert"]')).toContainText('INPUT_INVALID');
+});
+
+test('4.1.12: a refused comment keeps what was typed (RATE_LIMITED on a young account)', async ({ page }) => {
+  await member.signIn(db, page);
+  await page.goto(`/o/${SLUG}/f/p/P-0002`);
+  await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]);
+  for (const n of [1, 2]) {
+    await page.getByLabel('New comment').fill(`Quick comment ${n}`);
+    await page.getByRole('button', { name: 'Comment', exact: true }).click();
+    await expect(page.locator('ol.thread')).toContainText(`Quick comment ${n}`);
+  }
+  const body = 'A long third comment the young account typed and must not lose when the window refuses it.';
+  await page.getByLabel('New comment').fill(body);
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  const alert = page.locator('p[role="alert"]');
+  await expect(alert).toContainText('RATE_LIMITED');
+  await expect(page.getByLabel('New comment')).toHaveValue(body);
+  await expect(alert).toBeFocused(); // the refusal takes focus so a keyboard or screen-reader user hears it
+});
+
+test('4.1.13: every page has its own title; the thread is usable and axe-clean at 320 px and after an action', async ({ page }) => {
+  await signIn(page);
+  const titles: [string, RegExp][] = [
+    [`/o/${SLUG}/f`, /^Boards/],
+    [`/o/${SLUG}/f/selfhosting`, /^selfhosting/],
+    [`/o/${SLUG}/f/p/P-GW`, /^P-GW title/],
+    [`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, /^Comment by /],
+    [`/o/${SLUG}/f/u/homelabber059`, /^homelabber059/],
+    [`/o/${SLUG}/f/mod`, /^Moderation queue/],
+    [`/o/${SLUG}/f/search?q=P-GW`, /^Search/],
+  ];
+  for (const [path, re] of titles) {
+    await page.goto(path);
+    await expect(page).toHaveTitle(re);
+  }
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true); // no horizontal scroll (1.4.10)
+  await expectAccessible(page, 'thread at 320px', 'P-CHAIN title');
+  await page.getByRole('link', { name: 'Skip to content' }).focus();
+  await expect(page.getByRole('link', { name: 'Skip to content' })).toBeVisible();
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/o/${SLUG}/f/p/P-GW`);
+  const target = page.locator('li#C-GW-1-1');
+  await target.locator('summary').first().click();
+  const up = target.getByRole('button', { name: /Upvote comment/ });
+  const box = (await up.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(24);
+  expect(box.height).toBeGreaterThanOrEqual(24);
+  await up.click();
+  await expect(target.getByRole('status')).toBeVisible();
+  await expectAccessible(page, 'thread after a vote', 'P-GW title');
+  await expect(page.locator('time').first()).toHaveAttribute('datetime', /^\d{4}-/);
 });
