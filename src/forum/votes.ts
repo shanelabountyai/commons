@@ -71,6 +71,10 @@ async function signalCheck(tx: Tx, kind: SignalKind, input: CastInput, at: Date,
   const accountAt = async (voterId: string, joinedAt: Date, castAt: Date) => ({ created_at: toEpoch(joinedAt), contributions: await contributionsAt(tx, voterId, castAt) });
   const me = await tx.profile.findUniqueOrThrow({ where: { id: input.voterId }, select: { joinedAt: true } });
   const outcome = kind === 'BRIGADE' ? 'GATED_DOWNVOTE' : 'APPLIED';
+  // cheap exits before any count query (most votes are from old accounts): AGED needs age < max days; RING with age ≥ the
+  // young window still needs the contribution count
+  const age = input.castAt - toEpoch(me.joinedAt);
+  if (kind === 'AGED_BRIGADE' && age >= rules.signals.aged_brigade.max_account_age_days * 86_400) return false;
   if (!qualifies(kind, outcome, input.value, await accountAt(input.voterId, me.joinedAt, at), input.castAt, rules)) return false;
   const window = kind === 'BRIGADE' ? rules.signals.brigade : kind === 'RING' ? rules.signals.ring : rules.signals.aged_brigade;
   const since = toDate(input.castAt - window.window_seconds);

@@ -195,6 +195,7 @@ const scenarios = (JSON.parse(readFileSync('fixtures/signals/scenarios.json', 'u
 const SIG_SLUG = 'signals-eval';
 await db.org.deleteMany({ where: { slug: SIG_SLUG } });
 const sigOrg = await db.org.create({ data: { slug: SIG_SLUG, name: SIG_SLUG } });
+const runTag = sigOrg.id.slice(0, 8); // users outlive a deleted org; emails are unique per run
 const sigBoard = await db.board.create({ data: { orgId: sigOrg.id, slug: 'signals', title: 'Signals' } });
 const nodeOf = new Map<string, { scenario: string; id: string }>();
 for (const sc of scenarios) {
@@ -202,7 +203,7 @@ for (const sc of scenarios) {
     async (tx) => {
       const prof = new Map<string, string>();
       for (const a of sc.accounts) {
-        const user = await tx.user.create({ data: { email: `${sc.id}-${a.id}@signals.example.test` } });
+        const user = await tx.user.create({ data: { email: `${sc.id}-${a.id}-${runTag}@signals.example.test` } });
         await tx.membership.create({ data: { orgId: sigOrg.id, userId: user.id, role: 'member' } });
         const p = await tx.profile.create({ data: { orgId: sigOrg.id, userId: user.id, handle: `${sc.id}-${a.id}`.toLowerCase(), joinedAt: toDate(a.created_at) } });
         prof.set(a.id, p.id);
