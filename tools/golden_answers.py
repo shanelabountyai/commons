@@ -3,7 +3,7 @@
 Expected values were derived from the closed-form formulas in docs/domain-brief.md §3 and are
 frozen here. Never edit an expected value to make a test pass (D-10).
 """
-import os, sys
+import math, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # -I drops the script dir
 from rankinglib import hot, wilson_lower, top_window_includes
 from treelib import seg, assign_paths, depth, ancestors, render
@@ -96,10 +96,20 @@ check("GL-12", "retryAfter floor is 1 s", limit_check([T0 - 59, T0 - 59], "comme
 check("GL-13", "regular comment limit is 6: 5 hits allow", limit_check([T0 + i for i in range(5)], "comment", False, T0 + 5)[0], "allow")
 check("GL-14", "regular comment limit is 6: 6 hits refuse", limit_check([T0 + i for i in range(6)], "comment", False, T0 + 6)[0], "refuse")
 
+# Pending (PRD 5.3, D-63): proposed, computed and printed, NOT asserted or counted until a D- entry adopts them.
+pending = [
+    ("GH-08", "at gravity 90000 the 50-vote vs 5-vote crossover is log10(50/5) x 90000 = 90000 s",
+     round(math.log10(50 / 5) * 90_000, 7), 90_000.0),
+    ("GW-09", "Best without the author's +1: 1/1 -> wilson(0,0)=0; 2/2 -> wilson(1,1); 1/2 -> wilson(0,1)",
+     (wilson_lower(0, 0), round(wilson_lower(1, 1), 4), round(wilson_lower(0, 1), 4)), (0.0, 0.2065, 0.0)),
+]
+
 failed = [c for c in cases if not c[4]]
 for cid, desc, got, want, ok in cases:
     print(f"{'ok  ' if ok else 'FAIL'} {cid} {desc}: got {got!r} want {want!r}")
 if failed:
     print(f"FAILED {failed[0][0]}")
     sys.exit(1)
+for cid, desc, got, want in pending:
+    print(f"pend {cid} {desc}: got {got!r} (proposed {want!r}; not asserted)")
 print(f"{len(cases)} cases OK")
