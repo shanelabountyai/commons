@@ -183,6 +183,48 @@ New since Phase 4: a plain member's thread view shows no hot score; an upvote an
 
 CI green at `df78efb` (https://github.com/shanelabountyai/commons/actions/runs/41139192206) after four runs red on 4.1.6 alone — the upload route handlers had never been committed (D-69); `npm run repo:ignored` now guards it. `engine:lint` OK (with the door rule); `ranking:golden` 44 OK; `engine:eval` 12 files / 19,568 rows / 0 differences; `fixtures:check` OK (18 files, 12 reproduce); `foundation:drift` clean; `tsc` clean; `eslint` 0; invariant harness 14/14 with two new actions (`deleteOwn`, `moderatorFlag`); `npm audit` 15 advisories, 0 added (lockfile unchanged).
 
+## Phase 5 — ranking measured (PRD 5.3, 2026-11-01)
+
+Command for every number below: `python3 -I tools/rank_study.py` (6.8 s; `--json` for the raw report). Frozen fixture: 500 posts, 5,000 comments, 10,607 vote events, six boards; votes reduced by the same oracle as the expected files, at 147 steps of 6 h ending at the fixture instant (2026-11-05T00:00Z). Nothing under `fixtures/` changed; `ranking:golden` 44 OK with GH-08 and GW-09 printed as pending.
+
+### Claim 1 — "Hot may be ordering ≈ New": the fixture supports it
+
+| Gravity | Spearman ρ, median per board (6 boards) | Kendall τ, median | Posts reaching Hot's top 5 that never reached New's |
+|---|---|---|---|
+| 45,000 s (current) | 0.994 – 0.999 | 0.948 – 0.983 | **0 on every board** |
+| 90,000 s | 0.992 – 0.996 | 0.932 – 0.957 | 0 on every board |
+| 150,000 s | 0.981 – 0.991 | 0.897 – 0.934 | 0 on every board |
+
+Median hours in the top 5 are the same under Hot and New on 4 of 6 boards and within 3 h on the other two. The low minima (help ρ −0.5 at 45,000 s) are the first steps, when a board has 3–4 posts. **What it means:** on this fixture Hot surfaces nothing New does not, and tripling gravity does not change that — the cause is vote volume (median post net 4), not the constant. **What it cannot say:** how a real homelab board's votes are distributed in time; the fixture's vote timing is generated.
+
+### Claim 2 — "Best on small n is mostly the tiebreak": partly
+
+| Measure | Value |
+|---|---|
+| Comments whose only vote is the author's fixed +1 | 1,945 of 5,000 (38.9 %); 1,892 of the visible ones |
+| Sibling groups (≥ 2 children of one parent) | 878 |
+| … every member with n ≤ 2 | 263 (30.0 %) |
+| … every member with n ≤ 3 | 442 (50.3 %) |
+| … every member's Wilson score equal — Best is purely D-9's `(created desc, id asc)` | 120 (13.7 %) |
+
+(The PO pass quoted 1,941; the SME's 1,945 matches this definition, which counts every comment.) **What it means:** Best decides by tiebreak alone in about one group in seven, and works on two votes or fewer in three in ten.
+
+### M4 — Best without the author's +1 (proposed GW-09)
+
+The first comment changes in **45 of 878** sibling groups (5.1 %); median Kendall τ between the current and the alternative order is **1.000** over the 365 groups of three or more. **What it means:** excluding the author's +1 from Best would change little on this fixture.
+
+### M6 — the downvote gate against first downvotes
+
+195 users ever downvote; 185 first downvotes pass the gate and 10 are gated (7 of them the planted brigade). Account age at first downvote: p10 846 h, p50 5,032 h; **none** is within 1 h of the 24 h threshold. Contributions at first downvote: p10 3, p50 5; **77** are within 1 of the 3-contribution threshold. **What it means:** on this fixture the age half of the gate never binds outside the planted young accounts; the contribution half sits where real-looking behaviour is. **What it cannot say:** anything about aged sockpuppets — the fixture has none besides the planted ones, so it cannot calibrate 5.2's `aged_brigade` thresholds; 5.2 needs its own fixture.
+
+### M7 — pacing (non-flagged users)
+
+Vote gaps: p1 129 s, no gap under 2 s, at most 2 votes by one user in any 60 s (the regular limit is 30). Comment gaps: 223 of 4,815 are **0 s** across 109 users, and the busiest user posts 6 comments in 60 s — exactly the regular limit. **What it means:** the generator places some comments at identical seconds, so the fixture's comment pacing is an artifact, not human pace; it cannot calibrate the comment window. Vote pacing is far below every vote limit.
+
+### Net
+
+The fixture supports claim 1, partly supports claim 2, and on its own evidence would change little if either proposed case were adopted (gravity does not separate Hot from New; GW-09 moves 5 % of top comments). It cannot calibrate the age gate, the aged-brigade signal or the comment window. Decisions are the owner's (D-63).
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
