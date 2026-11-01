@@ -1,0 +1,1520 @@
+{
+ "version": 1,
+ "seed": 20261101,
+ "instant": 1793836800,
+ "scenarios": [
+  {
+   "id": "S-RING",
+   "note": "8 accounts 2 h old upvote one post within 300 s",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800,
+     "contributions": [
+      1767916800,
+      1767916801,
+      1767916802,
+      1767916803,
+      1767916804,
+      1767916805,
+      1767916806,
+      1767916807,
+      1767916808,
+      1767916809,
+      1767916810,
+      1767916811,
+      1767916812,
+      1767916813,
+      1767916814,
+      1767916815,
+      1767916816,
+      1767916817,
+      1767916818,
+      1767916819
+     ]
+    },
+    {
+     "id": "r0",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r1",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r2",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r3",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r4",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r5",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r6",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r7",
+     "created_at": 1793829600,
+     "contributions": []
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N-RING",
+     "author": "author"
+    }
+   ],
+   "events": [
+    {
+     "row": 0,
+     "voter": "r0",
+     "node_id": "N-RING",
+     "value": 1,
+     "cast_at": 1793836805
+    },
+    {
+     "row": 1,
+     "voter": "r1",
+     "node_id": "N-RING",
+     "value": 1,
+     "cast_at": 1793836840
+    },
+    {
+     "row": 2,
+     "voter": "r2",
+     "node_id": "N-RING",
+     "value": 1,
+     "cast_at": 1793836880
+    },
+    {
+     "row": 3,
+     "voter": "r3",
+     "node_id": "N-RING",
+     "value": 1,
+     "cast_at": 1793836923
+    },
+    {
+     "row": 4,
+     "voter": "r4",
+     "node_id": "N-RING",
+     "value": 1,
+     "cast_at": 1793836960
+    },
+    {
+     "row": 5,
+     "voter": "r5",
+     "node_id": "N-RING",
+     "value": 1,
+     "cast_at": 1793837005
+    },
+    {
+     "row": 6,
+     "voter": "r6",
+     "node_id": "N-RING",
+     "value": 1,
+     "cast_at": 1793837040
+    },
+    {
+     "row": 7,
+     "voter": "r7",
+     "node_id": "N-RING",
+     "value": 1,
+     "cast_at": 1793837080
+    }
+   ]
+  },
+  {
+   "id": "S-RING-SLOW",
+   "note": "the same 8 young upvotes spread over 3 h",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800,
+     "contributions": [
+      1767916800,
+      1767916801,
+      1767916802,
+      1767916803,
+      1767916804,
+      1767916805,
+      1767916806,
+      1767916807,
+      1767916808,
+      1767916809,
+      1767916810,
+      1767916811,
+      1767916812,
+      1767916813,
+      1767916814,
+      1767916815,
+      1767916816,
+      1767916817,
+      1767916818,
+      1767916819
+     ]
+    },
+    {
+     "id": "r0",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r1",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r2",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r3",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r4",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r5",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r6",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r7",
+     "created_at": 1793829600,
+     "contributions": []
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N-RING-SLOW",
+     "author": "author"
+    }
+   ],
+   "events": [
+    {
+     "row": 0,
+     "voter": "r0",
+     "node_id": "N-RING-SLOW",
+     "value": 1,
+     "cast_at": 1793836800
+    },
+    {
+     "row": 1,
+     "voter": "r1",
+     "node_id": "N-RING-SLOW",
+     "value": 1,
+     "cast_at": 1793838300
+    },
+    {
+     "row": 2,
+     "voter": "r2",
+     "node_id": "N-RING-SLOW",
+     "value": 1,
+     "cast_at": 1793839800
+    },
+    {
+     "row": 3,
+     "voter": "r3",
+     "node_id": "N-RING-SLOW",
+     "value": 1,
+     "cast_at": 1793841300
+    },
+    {
+     "row": 4,
+     "voter": "r4",
+     "node_id": "N-RING-SLOW",
+     "value": 1,
+     "cast_at": 1793842800
+    },
+    {
+     "row": 5,
+     "voter": "r5",
+     "node_id": "N-RING-SLOW",
+     "value": 1,
+     "cast_at": 1793844300
+    },
+    {
+     "row": 6,
+     "voter": "r6",
+     "node_id": "N-RING-SLOW",
+     "value": 1,
+     "cast_at": 1793845800
+    },
+    {
+     "row": 7,
+     "voter": "r7",
+     "node_id": "N-RING-SLOW",
+     "value": 1,
+     "cast_at": 1793847300
+    }
+   ]
+  },
+  {
+   "id": "S-RING-MIXED",
+   "note": "4 young + 10 mature accounts upvote within 300 s",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800,
+     "contributions": [
+      1767916800,
+      1767916801,
+      1767916802,
+      1767916803,
+      1767916804,
+      1767916805,
+      1767916806,
+      1767916807,
+      1767916808,
+      1767916809,
+      1767916810,
+      1767916811,
+      1767916812,
+      1767916813,
+      1767916814,
+      1767916815,
+      1767916816,
+      1767916817,
+      1767916818,
+      1767916819
+     ]
+    },
+    {
+     "id": "y0",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "y1",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "y2",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "y3",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "m0",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    },
+    {
+     "id": "m1",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    },
+    {
+     "id": "m2",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    },
+    {
+     "id": "m3",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    },
+    {
+     "id": "m4",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    },
+    {
+     "id": "m5",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    },
+    {
+     "id": "m6",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    },
+    {
+     "id": "m7",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    },
+    {
+     "id": "m8",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    },
+    {
+     "id": "m9",
+     "created_at": 1786060800,
+     "contributions": [
+      1786060830,
+      1786708825,
+      1787356820,
+      1788004815,
+      1788652810,
+      1789300805,
+      1789948800,
+      1790596795,
+      1791244790,
+      1791892785,
+      1792540780,
+      1793188775
+     ]
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N-RING-MIXED",
+     "author": "author"
+    }
+   ],
+   "events": [
+    {
+     "row": 0,
+     "voter": "y0",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836800
+    },
+    {
+     "row": 1,
+     "voter": "y1",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836820
+    },
+    {
+     "row": 2,
+     "voter": "y2",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836840
+    },
+    {
+     "row": 3,
+     "voter": "y3",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836860
+    },
+    {
+     "row": 4,
+     "voter": "m0",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836900
+    },
+    {
+     "row": 5,
+     "voter": "m1",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836915
+    },
+    {
+     "row": 6,
+     "voter": "m2",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836930
+    },
+    {
+     "row": 7,
+     "voter": "m3",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836945
+    },
+    {
+     "row": 8,
+     "voter": "m4",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836960
+    },
+    {
+     "row": 9,
+     "voter": "m5",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836975
+    },
+    {
+     "row": 10,
+     "voter": "m6",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793836990
+    },
+    {
+     "row": 11,
+     "voter": "m7",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793837005
+    },
+    {
+     "row": 12,
+     "voter": "m8",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793837020
+    },
+    {
+     "row": 13,
+     "voter": "m9",
+     "node_id": "N-RING-MIXED",
+     "value": 1,
+     "cast_at": 1793837035
+    }
+   ]
+  },
+  {
+   "id": "S-RING-EDGE-IN",
+   "note": "exactly 6 young upvotes, the last 599 s after the first",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800,
+     "contributions": [
+      1767916800,
+      1767916801,
+      1767916802,
+      1767916803,
+      1767916804,
+      1767916805,
+      1767916806,
+      1767916807,
+      1767916808,
+      1767916809,
+      1767916810,
+      1767916811,
+      1767916812,
+      1767916813,
+      1767916814,
+      1767916815,
+      1767916816,
+      1767916817,
+      1767916818,
+      1767916819
+     ]
+    },
+    {
+     "id": "r0",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r1",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r2",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r3",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r4",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r5",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N-RING-EDGE-IN",
+     "author": "author"
+    }
+   ],
+   "events": [
+    {
+     "row": 0,
+     "voter": "r0",
+     "node_id": "N-RING-EDGE-IN",
+     "value": 1,
+     "cast_at": 1793836800
+    },
+    {
+     "row": 1,
+     "voter": "r1",
+     "node_id": "N-RING-EDGE-IN",
+     "value": 1,
+     "cast_at": 1793836900
+    },
+    {
+     "row": 2,
+     "voter": "r2",
+     "node_id": "N-RING-EDGE-IN",
+     "value": 1,
+     "cast_at": 1793837000
+    },
+    {
+     "row": 3,
+     "voter": "r3",
+     "node_id": "N-RING-EDGE-IN",
+     "value": 1,
+     "cast_at": 1793837100
+    },
+    {
+     "row": 4,
+     "voter": "r4",
+     "node_id": "N-RING-EDGE-IN",
+     "value": 1,
+     "cast_at": 1793837200
+    },
+    {
+     "row": 5,
+     "voter": "r5",
+     "node_id": "N-RING-EDGE-IN",
+     "value": 1,
+     "cast_at": 1793837399
+    }
+   ]
+  },
+  {
+   "id": "S-RING-EDGE-OUT",
+   "note": "exactly 6 young upvotes, the last 600 s after the first (the first has left the window)",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800,
+     "contributions": [
+      1767916800,
+      1767916801,
+      1767916802,
+      1767916803,
+      1767916804,
+      1767916805,
+      1767916806,
+      1767916807,
+      1767916808,
+      1767916809,
+      1767916810,
+      1767916811,
+      1767916812,
+      1767916813,
+      1767916814,
+      1767916815,
+      1767916816,
+      1767916817,
+      1767916818,
+      1767916819
+     ]
+    },
+    {
+     "id": "r0",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r1",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r2",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r3",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r4",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    },
+    {
+     "id": "r5",
+     "created_at": 1793826000,
+     "contributions": [
+      1793826030
+     ]
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N-RING-EDGE-OUT",
+     "author": "author"
+    }
+   ],
+   "events": [
+    {
+     "row": 0,
+     "voter": "r0",
+     "node_id": "N-RING-EDGE-OUT",
+     "value": 1,
+     "cast_at": 1793836800
+    },
+    {
+     "row": 1,
+     "voter": "r1",
+     "node_id": "N-RING-EDGE-OUT",
+     "value": 1,
+     "cast_at": 1793836900
+    },
+    {
+     "row": 2,
+     "voter": "r2",
+     "node_id": "N-RING-EDGE-OUT",
+     "value": 1,
+     "cast_at": 1793837000
+    },
+    {
+     "row": 3,
+     "voter": "r3",
+     "node_id": "N-RING-EDGE-OUT",
+     "value": 1,
+     "cast_at": 1793837100
+    },
+    {
+     "row": 4,
+     "voter": "r4",
+     "node_id": "N-RING-EDGE-OUT",
+     "value": 1,
+     "cast_at": 1793837200
+    },
+    {
+     "row": 5,
+     "voter": "r5",
+     "node_id": "N-RING-EDGE-OUT",
+     "value": 1,
+     "cast_at": 1793837400
+    }
+   ]
+  },
+  {
+   "id": "S-AGED",
+   "note": "7 accounts 3-6 days old with 3 short replies each downvote one post within 600 s",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800,
+     "contributions": [
+      1767916800,
+      1767916801,
+      1767916802,
+      1767916803,
+      1767916804,
+      1767916805,
+      1767916806,
+      1767916807,
+      1767916808,
+      1767916809,
+      1767916810,
+      1767916811,
+      1767916812,
+      1767916813,
+      1767916814,
+      1767916815,
+      1767916816,
+      1767916817,
+      1767916818,
+      1767916819
+     ]
+    },
+    {
+     "id": "a0",
+     "created_at": 1793577600,
+     "contributions": [
+      1793577630,
+      1793664010,
+      1793750390
+     ]
+    },
+    {
+     "id": "a1",
+     "created_at": 1793491200,
+     "contributions": [
+      1793491230,
+      1793606410,
+      1793721590
+     ]
+    },
+    {
+     "id": "a2",
+     "created_at": 1793404800,
+     "contributions": [
+      1793404830,
+      1793548810,
+      1793692790
+     ]
+    },
+    {
+     "id": "a3",
+     "created_at": 1793318400,
+     "contributions": [
+      1793318430,
+      1793491210,
+      1793663990
+     ]
+    },
+    {
+     "id": "a4",
+     "created_at": 1793577600,
+     "contributions": [
+      1793577630,
+      1793664010,
+      1793750390
+     ]
+    },
+    {
+     "id": "a5",
+     "created_at": 1793491200,
+     "contributions": [
+      1793491230,
+      1793606410,
+      1793721590
+     ]
+    },
+    {
+     "id": "a6",
+     "created_at": 1793404800,
+     "contributions": [
+      1793404830,
+      1793548810,
+      1793692790
+     ]
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N-AGED",
+     "author": "author"
+    }
+   ],
+   "events": [
+    {
+     "row": 0,
+     "voter": "a0",
+     "node_id": "N-AGED",
+     "value": -1,
+     "cast_at": 1793836803
+    },
+    {
+     "row": 1,
+     "voter": "a1",
+     "node_id": "N-AGED",
+     "value": -1,
+     "cast_at": 1793836874
+    },
+    {
+     "row": 2,
+     "voter": "a2",
+     "node_id": "N-AGED",
+     "value": -1,
+     "cast_at": 1793836945
+    },
+    {
+     "row": 3,
+     "voter": "a3",
+     "node_id": "N-AGED",
+     "value": -1,
+     "cast_at": 1793837012
+    },
+    {
+     "row": 4,
+     "voter": "a4",
+     "node_id": "N-AGED",
+     "value": -1,
+     "cast_at": 1793837082
+    },
+    {
+     "row": 5,
+     "voter": "a5",
+     "node_id": "N-AGED",
+     "value": -1,
+     "cast_at": 1793837157
+    },
+    {
+     "row": 6,
+     "voter": "a6",
+     "node_id": "N-AGED",
+     "value": -1,
+     "cast_at": 1793837228
+    }
+   ]
+  },
+  {
+   "id": "S-AGED-ORGANIC",
+   "note": "7 accounts 30+ days old downvote one post within 600 s",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800,
+     "contributions": [
+      1767916800,
+      1767916801,
+      1767916802,
+      1767916803,
+      1767916804,
+      1767916805,
+      1767916806,
+      1767916807,
+      1767916808,
+      1767916809,
+      1767916810,
+      1767916811,
+      1767916812,
+      1767916813,
+      1767916814,
+      1767916815,
+      1767916816,
+      1767916817,
+      1767916818,
+      1767916819
+     ]
+    },
+    {
+     "id": "o0",
+     "created_at": 1791244800,
+     "contributions": [
+      1791244830,
+      1791568822,
+      1791892814,
+      1792216806,
+      1792540798,
+      1792864790,
+      1793188782,
+      1793512774
+     ]
+    },
+    {
+     "id": "o1",
+     "created_at": 1790467200,
+     "contributions": [
+      1790467230,
+      1790888422,
+      1791309614,
+      1791730806,
+      1792151998,
+      1792573190,
+      1792994382,
+      1793415574
+     ]
+    },
+    {
+     "id": "o2",
+     "created_at": 1789689600,
+     "contributions": [
+      1789689630,
+      1790208022,
+      1790726414,
+      1791244806,
+      1791763198,
+      1792281590,
+      1792799982,
+      1793318374
+     ]
+    },
+    {
+     "id": "o3",
+     "created_at": 1788912000,
+     "contributions": [
+      1788912030,
+      1789527622,
+      1790143214,
+      1790758806,
+      1791374398,
+      1791989990,
+      1792605582,
+      1793221174
+     ]
+    },
+    {
+     "id": "o4",
+     "created_at": 1788134400,
+     "contributions": [
+      1788134430,
+      1788847222,
+      1789560014,
+      1790272806,
+      1790985598,
+      1791698390,
+      1792411182,
+      1793123974
+     ]
+    },
+    {
+     "id": "o5",
+     "created_at": 1787356800,
+     "contributions": [
+      1787356830,
+      1788166822,
+      1788976814,
+      1789786806,
+      1790596798,
+      1791406790,
+      1792216782,
+      1793026774
+     ]
+    },
+    {
+     "id": "o6",
+     "created_at": 1786579200,
+     "contributions": [
+      1786579230,
+      1787486422,
+      1788393614,
+      1789300806,
+      1790207998,
+      1791115190,
+      1792022382,
+      1792929574
+     ]
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N-AGED-ORGANIC",
+     "author": "author"
+    }
+   ],
+   "events": [
+    {
+     "row": 0,
+     "voter": "o0",
+     "node_id": "N-AGED-ORGANIC",
+     "value": -1,
+     "cast_at": 1793836800
+    },
+    {
+     "row": 1,
+     "voter": "o1",
+     "node_id": "N-AGED-ORGANIC",
+     "value": -1,
+     "cast_at": 1793836870
+    },
+    {
+     "row": 2,
+     "voter": "o2",
+     "node_id": "N-AGED-ORGANIC",
+     "value": -1,
+     "cast_at": 1793836940
+    },
+    {
+     "row": 3,
+     "voter": "o3",
+     "node_id": "N-AGED-ORGANIC",
+     "value": -1,
+     "cast_at": 1793837010
+    },
+    {
+     "row": 4,
+     "voter": "o4",
+     "node_id": "N-AGED-ORGANIC",
+     "value": -1,
+     "cast_at": 1793837080
+    },
+    {
+     "row": 5,
+     "voter": "o5",
+     "node_id": "N-AGED-ORGANIC",
+     "value": -1,
+     "cast_at": 1793837150
+    },
+    {
+     "row": 6,
+     "voter": "o6",
+     "node_id": "N-AGED-ORGANIC",
+     "value": -1,
+     "cast_at": 1793837220
+    }
+   ]
+  },
+  {
+   "id": "S-GATED",
+   "note": "7 accounts 1 h old downvote one post within 600 s (D-31, unchanged)",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800,
+     "contributions": [
+      1767916800,
+      1767916801,
+      1767916802,
+      1767916803,
+      1767916804,
+      1767916805,
+      1767916806,
+      1767916807,
+      1767916808,
+      1767916809,
+      1767916810,
+      1767916811,
+      1767916812,
+      1767916813,
+      1767916814,
+      1767916815,
+      1767916816,
+      1767916817,
+      1767916818,
+      1767916819
+     ]
+    },
+    {
+     "id": "g0",
+     "created_at": 1793833200,
+     "contributions": []
+    },
+    {
+     "id": "g1",
+     "created_at": 1793833200,
+     "contributions": []
+    },
+    {
+     "id": "g2",
+     "created_at": 1793833200,
+     "contributions": []
+    },
+    {
+     "id": "g3",
+     "created_at": 1793833200,
+     "contributions": []
+    },
+    {
+     "id": "g4",
+     "created_at": 1793833200,
+     "contributions": []
+    },
+    {
+     "id": "g5",
+     "created_at": 1793833200,
+     "contributions": []
+    },
+    {
+     "id": "g6",
+     "created_at": 1793833200,
+     "contributions": []
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N-GATED",
+     "author": "author"
+    }
+   ],
+   "events": [
+    {
+     "row": 0,
+     "voter": "g0",
+     "node_id": "N-GATED",
+     "value": -1,
+     "cast_at": 1793836800
+    },
+    {
+     "row": 1,
+     "voter": "g1",
+     "node_id": "N-GATED",
+     "value": -1,
+     "cast_at": 1793836880
+    },
+    {
+     "row": 2,
+     "voter": "g2",
+     "node_id": "N-GATED",
+     "value": -1,
+     "cast_at": 1793836960
+    },
+    {
+     "row": 3,
+     "voter": "g3",
+     "node_id": "N-GATED",
+     "value": -1,
+     "cast_at": 1793837040
+    },
+    {
+     "row": 4,
+     "voter": "g4",
+     "node_id": "N-GATED",
+     "value": -1,
+     "cast_at": 1793837120
+    },
+    {
+     "row": 5,
+     "voter": "g5",
+     "node_id": "N-GATED",
+     "value": -1,
+     "cast_at": 1793837200
+    },
+    {
+     "row": 6,
+     "voter": "g6",
+     "node_id": "N-GATED",
+     "value": -1,
+     "cast_at": 1793837280
+    }
+   ]
+  },
+  {
+   "id": "S-BOTH",
+   "note": "a ring and an aged brigade on the same post: one signal of each, not merged",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800,
+     "contributions": [
+      1767916800,
+      1767916801,
+      1767916802,
+      1767916803,
+      1767916804,
+      1767916805,
+      1767916806,
+      1767916807,
+      1767916808,
+      1767916809,
+      1767916810,
+      1767916811,
+      1767916812,
+      1767916813,
+      1767916814,
+      1767916815,
+      1767916816,
+      1767916817,
+      1767916818,
+      1767916819
+     ]
+    },
+    {
+     "id": "r0",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r1",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r2",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r3",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r4",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "r5",
+     "created_at": 1793829600,
+     "contributions": []
+    },
+    {
+     "id": "a0",
+     "created_at": 1793491200,
+     "contributions": [
+      1793491230,
+      1793606410,
+      1793721590
+     ]
+    },
+    {
+     "id": "a1",
+     "created_at": 1793491200,
+     "contributions": [
+      1793491230,
+      1793606410,
+      1793721590
+     ]
+    },
+    {
+     "id": "a2",
+     "created_at": 1793491200,
+     "contributions": [
+      1793491230,
+      1793606410,
+      1793721590
+     ]
+    },
+    {
+     "id": "a3",
+     "created_at": 1793491200,
+     "contributions": [
+      1793491230,
+      1793606410,
+      1793721590
+     ]
+    },
+    {
+     "id": "a4",
+     "created_at": 1793491200,
+     "contributions": [
+      1793491230,
+      1793606410,
+      1793721590
+     ]
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N-BOTH",
+     "author": "author"
+    }
+   ],
+   "events": [
+    {
+     "row": 0,
+     "voter": "r0",
+     "node_id": "N-BOTH",
+     "value": 1,
+     "cast_at": 1793836800
+    },
+    {
+     "row": 1,
+     "voter": "r1",
+     "node_id": "N-BOTH",
+     "value": 1,
+     "cast_at": 1793836830
+    },
+    {
+     "row": 2,
+     "voter": "r2",
+     "node_id": "N-BOTH",
+     "value": 1,
+     "cast_at": 1793836860
+    },
+    {
+     "row": 3,
+     "voter": "r3",
+     "node_id": "N-BOTH",
+     "value": 1,
+     "cast_at": 1793836890
+    },
+    {
+     "row": 4,
+     "voter": "r4",
+     "node_id": "N-BOTH",
+     "value": 1,
+     "cast_at": 1793836920
+    },
+    {
+     "row": 5,
+     "voter": "r5",
+     "node_id": "N-BOTH",
+     "value": 1,
+     "cast_at": 1793836950
+    },
+    {
+     "row": 6,
+     "voter": "a0",
+     "node_id": "N-BOTH",
+     "value": -1,
+     "cast_at": 1793837000
+    },
+    {
+     "row": 7,
+     "voter": "a1",
+     "node_id": "N-BOTH",
+     "value": -1,
+     "cast_at": 1793837040
+    },
+    {
+     "row": 8,
+     "voter": "a2",
+     "node_id": "N-BOTH",
+     "value": -1,
+     "cast_at": 1793837080
+    },
+    {
+     "row": 9,
+     "voter": "a3",
+     "node_id": "N-BOTH",
+     "value": -1,
+     "cast_at": 1793837120
+    },
+    {
+     "row": 10,
+     "voter": "a4",
+     "node_id": "N-BOTH",
+     "value": -1,
+     "cast_at": 1793837160
+    }
+   ]
+  }
+ ]
+}
