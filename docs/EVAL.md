@@ -225,6 +225,16 @@ Vote gaps: p1 129 s, no gap under 2 s, at most 2 votes by one user in any 60 s (
 
 The fixture supports claim 1, partly supports claim 2, and on its own evidence would change little if either proposed case were adopted (gravity does not separate Hot from New; GW-09 moves 5 % of top comments). It cannot calibrate the age gate, the aged-brigade signal or the comment window. Decisions are the owner's (D-63).
 
+## Phase 5 — vote signals as data (PRD 5.2, 2026-11-01)
+
+Commands: `npm run engine:eval`, `npm run engine:eval:db`, `npm test`, `python3 -I tools/golden_answers.py`.
+
+- **Fixture first:** `fixtures/signals/scenarios.json` — 9 scenarios, 74 vote events (seed 20261101) — and `expected_signals.csv` (6 rows) from the stdlib oracle `tools/signallib.py`, hashed into the manifest; the 12 community expected files are byte-identical. Golden GS-01..GS-08: 52 cases OK.
+- **Pure detector** (`src/votes/signals.ts`): `engine:eval` 13 files / 19,574 rows / 0 differences; engine tests 120/120.
+- **Through the database:** the 9 scenarios replayed through `castVote` reproduce all 6 expected rows; the community's 10,607 votes raise exactly one signal, the planted `BRIGADE` on P-BRIGADE (7), and **no** `RING` or `AGED_BRIGADE` — the false-positive check. Moderation tests: a 6-account ring opens one `RING` item with the post's ups at 7 (author + 6, unchanged by the signal) and a logged review naming RING; 5 accounts four days old downvoting open one `AGED_BRIGADE` with downs at 5, while 5 accounts 90 days old raise nothing.
+- **Cost, measured:** the bulk load of the community through the writers took 71 s before 5.2 and 132–138 s after (two runs), because each applied upvote now counts the voter's contributions for the young check. The page path pays one or two extra indexed count queries per vote.
+- **What it is not:** thresholds were set by scenarios the author wrote; a ring of accounts older than 24 h with 5 contributions, or a brigade spread over 11 minutes, raises nothing. Every vote still counts — a signal asks a human to look.
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
