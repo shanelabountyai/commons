@@ -24,7 +24,7 @@ Read first: `prd-commons.md` (what), `docs/decisions.md` (authoritative; outrank
 - Small commits, one concern each, naming specific files (never `git add -A`). Branch + PR; **never merge.** Note seams for non-goals but don't build them.
 - **Ask before adding dependencies.** Ask-before-add list: any markdown parser or sanitizer (Phase 3 will need one; propose it with the reason), any CSV parser, any rate-limit library, any date library, any tree/graph library, any charting library.
 - **Cloud session:** the sandbox may not download Prisma engines or Playwright browsers. Try Quorum's workarounds first (D-16). Record what couldn't run in NEXT.md; **CI decides.**
-- **Model is pinned to Claude Fable 5.1 (`claude-fable-5-1`)** in `.claude/settings.json` (D-17).
+- **Model is pinned to Claude Opus 5.5 (`claude-opus-5-5`)** in `.claude/settings.json` (D-74; was Fable 5.1 under D-17 through PRD 5.3).
 - End each session by updating NEXT.md: what was built, decided, left open, and the gate output.
 
 ## Session 0 — reuse check
