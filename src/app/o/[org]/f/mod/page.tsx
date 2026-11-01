@@ -11,7 +11,16 @@ import { parseLimitRules, parseModerationRules } from '@/rules';
 import { moderateContent, reviewBrigade, reviewDuplicate } from '../actions';
 
 const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
-const brigadeRule = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8'))).signals.brigade;
+const signalRules = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8'))).signals;
+const brigadeRule = signalRules.brigade;
+const mins = (s: number) => Math.round(s / 60);
+/** 5.2: one heading per signal kind; the numbers come from rules/limits.json. */
+const signalHeading = (kind: 'BRIGADE' | 'RING' | 'AGED_BRIGADE', n: number) =>
+  kind === 'RING'
+    ? `Suspected upvote ring: ${n} new accounts upvoted within ${mins(signalRules.ring.window_seconds)} min`
+    : kind === 'AGED_BRIGADE'
+      ? `Suspected brigade from accounts under ${signalRules.aged_brigade.max_account_age_days} days: ${n} downvotes within ${mins(signalRules.aged_brigade.window_seconds)} min`
+      : `Suspected brigade: ${n} gated downvotes`;
 
 /** Task 4.4: open cases with content in context, reporter count and author history; brigade and duplicate signals;
  *  the append-only log. Moderators only ("not yours" ≡ not found for everyone else). */
@@ -43,7 +52,7 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
     <main id="main" tabIndex={-1}>
       <h1>Moderation queue</h1>
       <p className="meta">
-        {items.length} open item{items.length === 1 ? '' : 's'}: cases from reports, brigade signals (≥ {brigadeRule.min_voters} gated downvotes in {Math.round(brigadeRule.window_seconds / 60)} min), duplicate signals. Nothing here was acted on automatically.
+        {items.length} open item{items.length === 1 ? '' : 's'}: cases from reports, vote signals (brigade: ≥ {brigadeRule.min_voters} gated downvotes in {mins(brigadeRule.window_seconds)} min; ring: ≥ {signalRules.ring.min_voters} upvotes from new accounts in {mins(signalRules.ring.window_seconds)} min; aged brigade: ≥ {signalRules.aged_brigade.min_voters} downvotes from accounts under {signalRules.aged_brigade.max_account_age_days} days in {mins(signalRules.aged_brigade.window_seconds)} min), duplicate signals. Nothing here was acted on automatically.
       </p>
       {items.length === 0 && <p>The queue is empty.</p>}
       {await Promise.all(
@@ -54,7 +63,7 @@ export default async function ModQueue({ params }: { params: Promise<{ org: stri
           return (
             <section key={`${item.kind}-${item.id}`} aria-label={`${item.kind} on ${c.title}`} className="post">
               <h2>
-                {item.kind === 'CASE' ? `Reported (${item.reports}): ${item.reasons.join(', ')}` : item.kind === 'BRIGADE' ? `Suspected brigade: ${item.voterCount} gated downvotes` : 'Suspected duplicate'} · <Link href={c.link}><Text value={c.title} /></Link>
+                {item.kind === 'CASE' ? `Reported (${item.reports}): ${item.reasons.join(', ')}` : item.kind === 'BRIGADE' ? signalHeading(item.signal, item.voterCount) : 'Suspected duplicate'} · <Link href={c.link}><Text value={c.title} /></Link>
               </h2>
               <p className="meta">
                 by <Link href={`/o/${ctx.slug}/f/u/${c.author.handle}`}><Text value={c.author.handle} /></Link> ({c.author.modState}; {hist.reports} reports on their posts, {hist.actions} prior actions) · status {c.status} · opened {when(item.kind === 'CASE' ? item.openedAt : item.createdAt)}

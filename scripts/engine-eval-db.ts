@@ -10,7 +10,10 @@ import { expectedRows, loadFixtures, NOW } from '@/fixtures/load';
 import { toEpoch } from '@/forum/db';
 import { loadForum } from '@/forum/load';
 import { recomputeRanks } from '@/forum/rank';
-import { votesVerify } from '@/forum/votes';
+import { castVote, votesVerify } from '@/forum/votes';
+import { createPost } from '@/forum/tree-write';
+import type { SignalScenario } from '@/votes/signals';
+import { toDate } from '@/forum/db';
 import { replay } from '@/limits';
 import { parseLimitRules, parseRankingRules } from '@/rules';
 import { assignPaths, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
@@ -184,6 +187,49 @@ console.log(`${verify.mismatches.length === 0 ? 'ok  ' : 'DIFF'} votes:verify ${
 console.log(`${signals.length === 1 && signals[0]!.nodeId === brigadePost.id && signals[0]!.voterCount === 7 ? 'ok  ' : 'DIFF'} BrigadeSignal rows: ${signals.length} (${signals.map((s) => `${s.nodeKind} ${s.nodeId === brigadePost.id ? 'P-BRIGADE' : s.nodeId} voters ${s.voterCount}`).join('; ')})`);
 console.log(`${countMismatch === 0 ? 'ok  ' : 'DIFF'} commentCount = comments per post (${countMismatch} mismatches)`);
 failed ||= pathMismatch > 0 || verify.mismatches.length > 0 || signals.length !== 1 || countMismatch > 0;
+console.log(`${signals.every((x) => x.kind === 'BRIGADE') ? 'ok  ' : 'DIFF'} no RING or AGED_BRIGADE over the community's ${fx.votes.length} votes (5.2 false-positive check)`);
+failed ||= !signals.every((x) => x.kind === 'BRIGADE');
+
+// 5.2 (D-75): every signal scenario through the real vote path, one org, rows diffed against expected_signals.csv
+const scenarios = (JSON.parse(readFileSync('fixtures/signals/scenarios.json', 'utf8')) as { scenarios: SignalScenario[] }).scenarios;
+const SIG_SLUG = 'signals-eval';
+await db.org.deleteMany({ where: { slug: SIG_SLUG } });
+const sigOrg = await db.org.create({ data: { slug: SIG_SLUG, name: SIG_SLUG } });
+const sigBoard = await db.board.create({ data: { orgId: sigOrg.id, slug: 'signals', title: 'Signals' } });
+const nodeOf = new Map<string, { scenario: string; id: string }>();
+for (const sc of scenarios) {
+  await db.$transaction(
+    async (tx) => {
+      const prof = new Map<string, string>();
+      for (const a of sc.accounts) {
+        const user = await tx.user.create({ data: { email: `${sc.id}-${a.id}@signals.example.test` } });
+        await tx.membership.create({ data: { orgId: sigOrg.id, userId: user.id, role: 'member' } });
+        const p = await tx.profile.create({ data: { orgId: sigOrg.id, userId: user.id, handle: `${sc.id}-${a.id}`.toLowerCase(), joinedAt: toDate(a.created_at) } });
+        prof.set(a.id, p.id);
+        for (const [i, t] of (a.contributions ?? []).entries()) await createPost(tx, { orgId: sigOrg.id, boardId: sigBoard.id, authorId: p.id, publicId: `${sc.id}-${a.id}-c${i}`, title: 'c', body: 'c', createdAt: t });
+      }
+      for (const n of sc.nodes) {
+        const row = await createPost(tx, { orgId: sigOrg.id, boardId: sigBoard.id, authorId: prof.get(n.author)!, publicId: `${sc.id}-${n.id}`, title: n.id, body: n.id, createdAt: Math.min(...sc.events.map((e) => e.cast_at)) - 3600 });
+        nodeOf.set(row.id, { scenario: sc.id, id: n.id });
+      }
+      const byNode = new Map([...nodeOf].filter(([, v]) => v.scenario === sc.id).map(([dbId, v]) => [v.id, dbId]));
+      for (const e of [...sc.events].sort((a, b) => a.cast_at - b.cast_at || a.row - b.row)) {
+        await castVote(tx, { orgId: sigOrg.id, voterId: prof.get(e.voter)!, node: { kind: 'POST', id: byNode.get(e.node_id)! }, value: e.value, castAt: e.cast_at }, limits);
+      }
+    },
+    { timeout: 120_000 },
+  );
+}
+const stored = (await db.brigadeSignal.findMany({ where: { orgId: sigOrg.id } }))
+  .map((r) => ({ scenario: nodeOf.get(r.nodeId)!.scenario, kind: r.kind, node: nodeOf.get(r.nodeId)!.id, voters: String(r.voterCount), window_start: String(toEpoch(r.windowStart)) }))
+  .sort((a, b) => (a.scenario + a.node + a.kind < b.scenario + b.node + b.kind ? -1 : 1));
+const want = expectedRows('signals/expected_signals.csv')
+  .map((r) => ({ scenario: r.scenario!, kind: r.kind!, node: r.node!, voters: r.voters!, window_start: r.window_start! }))
+  .sort((a, b) => (a.scenario + a.node + a.kind < b.scenario + b.node + b.kind ? -1 : 1));
+const sigOk = JSON.stringify(stored) === JSON.stringify(want);
+console.log(`${sigOk ? 'ok  ' : 'DIFF'} signals/expected_signals.csv through the vote path: ${stored.length}/${want.length} rows over ${scenarios.length} scenarios`);
+if (!sigOk) console.log({ stored, want });
+failed ||= !sigOk;
 await db.$disconnect();
 if (failed) {
   console.error('engine:eval:db: FAIL');

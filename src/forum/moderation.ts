@@ -150,14 +150,14 @@ export async function reviewSignal(tx: Tx, m: ModeratorCtx, signal: { kind: 'BRI
   if (row.reviewedAt) throw new TransitionInvalid('content', 'REVIEWED', 'REVIEWED');
   if (signal.kind === 'BRIGADE') await tx.brigadeSignal.update({ where: { id: signal.id }, data: { reviewedAt: toDate(at) } });
   else await tx.duplicateSignal.update({ where: { id: signal.id }, data: { reviewedAt: toDate(at) } });
-  await tx.moderationAction.create({ data: { orgId: m.orgId, actorId: m.profileId, kind: 'REVIEW_SIGNAL', nodeKind: row.nodeKind, nodeId: row.nodeId, fromState: 'UNREVIEWED', toState: 'REVIEWED', reason: `${signal.kind}: ${why}`, createdAt: toDate(at) } });
+  await tx.moderationAction.create({ data: { orgId: m.orgId, actorId: m.profileId, kind: 'REVIEW_SIGNAL', nodeKind: row.nodeKind, nodeId: row.nodeId, fromState: 'UNREVIEWED', toState: 'REVIEWED', reason: `${'kind' in row ? row.kind : signal.kind}: ${why}`, createdAt: toDate(at) } }); // the log names RING / AGED_BRIGADE / BRIGADE / DUPLICATE
 }
 
 // ---------------------------------------------------------------------------------------------------- queue
 
 export type QueueItem =
   | { kind: 'CASE'; id: string; node: NodeRef; state: string; openedAt: Date; reports: number; reasons: string[]; details: string[] }
-  | { kind: 'BRIGADE'; id: string; node: NodeRef; createdAt: Date; voterCount: number }
+  | { kind: 'BRIGADE'; id: string; node: NodeRef; createdAt: Date; voterCount: number; signal: 'BRIGADE' | 'RING' | 'AGED_BRIGADE' }
   | { kind: 'DUPLICATE'; id: string; node: NodeRef; createdAt: Date; match: NodeRef };
 
 /** Open cases, unreviewed brigade signals, unreviewed duplicate signals; oldest first. */
@@ -172,7 +172,7 @@ export async function queue(tx: Tx, orgId: string, limit: number): Promise<Queue
     const reports = await tx.report.findMany({ where: { nodeKind: c.nodeKind, nodeId: c.nodeId }, select: { reason: true, detail: true }, orderBy: { createdAt: 'asc' } });
     items.push({ kind: 'CASE', id: c.id, node: { kind: c.nodeKind, id: c.nodeId }, state: c.state, openedAt: c.openedAt, reports: reports.length, reasons: [...new Set(reports.map((r) => r.reason))].sort(), details: reports.map((r) => r.detail.trim()).filter(Boolean) });
   }
-  for (const b of brigades) items.push({ kind: 'BRIGADE', id: b.id, node: { kind: b.nodeKind, id: b.nodeId }, createdAt: b.createdAt, voterCount: b.voterCount });
+  for (const b of brigades) items.push({ kind: 'BRIGADE', id: b.id, node: { kind: b.nodeKind, id: b.nodeId }, createdAt: b.createdAt, voterCount: b.voterCount, signal: b.kind });
   for (const d of dups) items.push({ kind: 'DUPLICATE', id: d.id, node: { kind: d.nodeKind, id: d.nodeId }, createdAt: d.createdAt, match: { kind: d.matchKind, id: d.matchId } });
   const when = (i: QueueItem) => (i.kind === 'CASE' ? i.openedAt : i.createdAt).getTime();
   return items.sort((a, b) => when(a) - when(b)).slice(0, limit);
