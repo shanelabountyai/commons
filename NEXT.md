@@ -1,6 +1,6 @@
 # NEXT
 
-## ▶ Phase 5 in progress on `phase-5` (2026-11-01). PRD 5.3 approved and built: `tools/rank_study.py`, numbers in `docs/EVAL.md` §Phase 5. Post-study decisions taken (D-71 keep gravity, D-72 keep D-12 in Best, D-73 no limits change; 5.2 builds its own fixtures). Next: PRD 5.2 draft for review.
+## ▶ Phase 5 in progress on `phase-5` (2026-11-01). PRD 5.3 approved and built: `tools/rank_study.py`, numbers in `docs/EVAL.md` §Phase 5. Post-study decisions taken (D-71 keep gravity, D-72 keep D-12 in Best, D-73 no limits change; 5.2 builds its own fixtures). PRD 5.2 drafted (`docs/prd/5.2-vote-signals-as-data.md`), awaiting Shane's review. Model now Opus 5.5 (D-74).
 
 - **5.3 result:** Hot ≈ New on every board at gravity 45k/90k/150k (ρ ≥ 0.981, 0 hot-only top-5 posts); Best is pure tiebreak in 120/878 sibling groups; dropping the author's +1 from Best changes 45/878 top comments; the fixture cannot calibrate the age gate, aged-brigade signal or comment window (no aged sockpuppets; generator comment timestamps). Phase 4.1 merged as `091435f` (D-70).
 
