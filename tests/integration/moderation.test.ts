@@ -129,6 +129,15 @@ describe('signals in the queue (4.5, D-31)', () => {
     expect((await queue(db, orgId, 50)).filter((i) => i.kind !== 'CASE')).toHaveLength(0);
     await expect(tx((t) => reviewSignal(t, modCtx('mod'), { kind: 'BRIGADE', id: b.id }, 'again', T0 + 502))).rejects.toMatchObject({ code: 'TRANSITION_INVALID' });
   });
+
+  it('5.4 A (found by the e2e sweep): a copy posted inside the same epoch second as its original is still a duplicate', async () => {
+    const at = T0 + 3 * 3600; // D-7 clocks are whole seconds; the first version's window ended strictly before `at`
+    const body = 'two copies of this body land in the very same second, on purpose';
+    await tx((t) => submitPost(t, { orgId, profileId: P.reporter!, boardId, publicId: 'M-P10', title: 't', body, at }, limits, mod));
+    const dup = await tx((t) => submitPost(t, { orgId, profileId: P.mod!, boardId, publicId: 'M-P11', title: 't', body, at }, limits, mod));
+    expect(dup.duplicate).toBe(true);
+    expect((await queue(db, orgId)).filter((i) => i.kind === 'DUPLICATE')).toHaveLength(1);
+  });
 });
 
 describe('context for moderators (4.1.8, 4.1.9)', () => {

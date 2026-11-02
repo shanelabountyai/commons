@@ -44,13 +44,15 @@ function checkText(field: string, value: string, max: number): void {
 /** Task 4.5: normalised body hash; a match inside the window by a different node is accepted and queued (P1-3). */
 export const bodyHash = (body: string): string => createHash('sha256').update(body.toLowerCase().replace(/\s+/g, ' ').trim()).digest('hex');
 
+/** `lte`, not `lt`: clocks are whole seconds (D-7), so a copy posted in the same second as its original is still inside
+ *  the window — the e2e sweep posted two in one second and raised nothing (PRD 5.4 A, D-80). `NOT id` keeps a node from matching itself. */
 async function duplicateSignal(tx: Tx, orgId: string, node: NodeRef, body: string, at: number, mod?: ModerationRules): Promise<boolean> {
   if (!mod || body.trim().length < mod.duplicate.min_chars) return false;
   const h = bodyHash(body);
   const since = toDate(at - mod.duplicate.window_seconds);
   const [post, comment] = await Promise.all([
-    tx.post.findFirst({ where: { orgId, bodyHash: h, createdAt: { gte: since, lt: toDate(at) }, NOT: { id: node.id } }, select: { id: true }, orderBy: { createdAt: 'desc' } }),
-    tx.comment.findFirst({ where: { orgId, bodyHash: h, createdAt: { gte: since, lt: toDate(at) }, NOT: { id: node.id } }, select: { id: true }, orderBy: { createdAt: 'desc' } }),
+    tx.post.findFirst({ where: { orgId, bodyHash: h, createdAt: { gte: since, lte: toDate(at) }, NOT: { id: node.id } }, select: { id: true }, orderBy: { createdAt: 'desc' } }),
+    tx.comment.findFirst({ where: { orgId, bodyHash: h, createdAt: { gte: since, lte: toDate(at) }, NOT: { id: node.id } }, select: { id: true }, orderBy: { createdAt: 'desc' } }),
   ]);
   const match: NodeRef | null = post ? { kind: 'POST', id: post.id } : comment ? { kind: 'COMMENT', id: comment.id } : null;
   if (!match) return false;
