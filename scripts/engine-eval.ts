@@ -5,7 +5,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { evaluate } from '../src/eval';
 import { expectedRows, loadFixtures } from '../src/fixtures/load';
-import { parseLimitRules, parseRankingRules } from '../src/rules';
+import type { SwarmScenario } from '../src/limits/report-swarm';
+import { parseLimitRules, parseModerationRules, parseRankingRules } from '../src/rules';
 import type { SignalScenario } from '../src/votes/signals';
 
 const arg = (name: string, dflt: string) => {
@@ -19,7 +20,10 @@ const limits = parseLimitRules(JSON.parse(readFileSync(join(rulesDir, 'limits.js
 const fx = loadFixtures(fixturesDir);
 const scenariosPath = join(fixturesDir, 'signals', 'scenarios.json');
 const scenarios = existsSync(scenariosPath) ? (JSON.parse(readFileSync(scenariosPath, 'utf8')) as { scenarios: SignalScenario[] }).scenarios : [];
-const report = evaluate(fx, ranking, limits, (name) => expectedRows(name, fixturesDir), undefined, scenarios);
+const mod = parseModerationRules(JSON.parse(readFileSync(join(rulesDir, 'moderation.json'), 'utf8')));
+const swarmsPath = join(fixturesDir, 'moderation', 'scenarios.json');
+const swarms = existsSync(swarmsPath) ? (JSON.parse(readFileSync(swarmsPath, 'utf8')) as { scenarios: SwarmScenario[] }).scenarios : [];
+const report = evaluate(fx, ranking, limits, (name) => expectedRows(name, fixturesDir), undefined, scenarios, swarms, mod);
 
 console.log(`engine:eval — ${report.nodes} nodes, ${report.visiblePosts} visible posts, now ${report.now}, fixtures ${fixturesDir}, rules ${rulesDir}`);
 console.log('vote outcomes: ' + Object.entries(report.outcomes).map(([k, v]) => `${k} ${v}`).join(', '));

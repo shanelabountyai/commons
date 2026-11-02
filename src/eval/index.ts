@@ -5,9 +5,10 @@ import type { CsvRow } from '@/fixtures/csv';
 import { NOW, type Fixtures } from '@/fixtures/load';
 import { isYoung, replay, type Account } from '@/limits';
 import { hot, net, orderPosts, orderSiblings, wilsonLower, type Counts, type PostSort } from '@/ranking';
-import type { LimitRules, RankingRules } from '@/rules';
+import type { LimitRules, ModerationRules, RankingRules } from '@/rules';
 import { assignPaths, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
 import { reduceVotes, type Outcome } from '@/votes';
+import { detectReportSwarms, type SwarmScenario } from '@/limits/report-swarm';
 import { detectSignals, type Signal, type SignalScenario } from '@/votes/signals';
 
 export type Diff = { file: string; row: number; field: string; expected: string; actual: string };
@@ -29,7 +30,7 @@ const NAMED_THREADS = ['P-THICK', 'P-CHAIN', 'P-GW'];
 const HOT_TOLERANCE = 1e-7;
 const WILSON_TOLERANCE = 5e-5;
 
-export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules, expected: (name: string) => CsvRow[], now = NOW, signalScenarios: readonly SignalScenario[] = []): EvalReport {
+export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules, expected: (name: string) => CsvRow[], now = NOW, signalScenarios: readonly SignalScenario[] = [], swarmScenarios: readonly SwarmScenario[] = [], mod?: ModerationRules): EvalReport {
   const accounts = new Map(fx.users.map((u) => [u.id, u.created_at]));
   const nodes = new Map<string, string>();
   for (const p of fx.posts) nodes.set(p.id, p.author);
@@ -172,6 +173,10 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
   if (signalScenarios.length > 0) {
     const sigRows = signalScenarios.flatMap((sc) => detectSignals(sc, limits).map((s) => ({ scenario: sc.id, kind: s.kind, node: s.node, voters: s.voters, window_start: s.window_start })));
     compare('signals/expected_signals.csv', sigRows);
+  }
+  // 5.4 B: the report-swarm scenarios (the community fixture has no reports; its false-positive check is the organic scenarios)
+  if (swarmScenarios.length > 0 && mod) {
+    compare('moderation/expected_report_signals.csv', swarmScenarios.flatMap((sc) => detectReportSwarms(sc, mod).map((s) => ({ scenario: sc.id, author: s.author, reporters: s.reporters, window_start: s.window_start }))));
   }
   const community: SignalScenario = {
     id: 'community',
