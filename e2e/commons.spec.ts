@@ -353,3 +353,85 @@ test('5.1: one click to vote, the pressed state shows, the author sees a fixed +
   await expect(page.locator('li.c > article').first().getByRole('button', { name: /^Upvote comment/ })).toBeVisible();
   await expectAccessible(page, 'permalink at 320px with vote controls', 'Comment in context');
 });
+
+// ---- PRD 5.4 Part A (D-79): triage — filters with counts, act in place, reporter records, log paging with seq. Red before the page lands. ----
+
+test('5.4 A: the queue filters by kind, warns the author and locks the thread in place, shows reporter records, pages the log with seq', async ({ page }) => {
+  // the member reports two posts: one the owner clears (that becomes the member's record), one that stays open for triage
+  await member.signIn(db, page);
+  for (const [id, reason] of [['P-GW', 'off_topic'], ['P-CHAIN', 'harassment']] as const) {
+    await page.goto(`/o/${SLUG}/f/p/${id}`);
+    await page.locator('article[aria-label="Post"] summary').first().click();
+    await page.getByLabel('Reason for reporting this post').selectOption(reason);
+    await page.getByRole('button', { name: 'Report', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Reported');
+  }
+  // a DUPLICATE signal needs the same ≥ 40-char body twice inside the window (rules/moderation.json duplicate). The owner's
+  // account is minutes old, so its post window is young_max 1/h (rules/limits.json): the test's own row is aged past 24 h.
+  await db.query(`UPDATE "Profile" p SET "joinedAt" = now() - interval '2 days' FROM "User" u WHERE p."userId" = u.id AND u.email = $1`, [owner.email]);
+  await signIn(page);
+  for (const title of ['Duplicate check one', 'Duplicate check two']) {
+    await page.goto(`/o/${SLUG}/f/selfhosting`);
+    await page.waitForLoadState('networkidle');
+    await page.getByLabel('Title', { exact: true }).fill(title);
+    await page.getByLabel(/^Body/).fill('The same body, posted twice on purpose, so the duplicate signal reaches the moderation queue.');
+    await page.getByRole('button', { name: 'Post', exact: true }).click();
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  }
+  // three kinds present; each filter shows only its kind, with the count beside it
+  await page.goto(`/o/${SLUG}/f/mod`);
+  const kinds = page.getByRole('navigation', { name: 'Filter by kind' });
+  for (const [k, n] of [['BRIGADE', 1], ['DUPLICATE', 1], ['CASE', 2]] as const) {
+    await kinds.getByRole('link', { name: `${k} (${n})` }).click();
+    await expect(page).toHaveURL(new RegExp(`\\?kind=${k}$`));
+    await expect(page.getByRole('region')).toHaveCount(n);
+    await expect(page.getByRole('region').first()).toHaveAttribute('aria-label', new RegExp(`^${k} on `));
+  }
+  await expectAccessible(page, 'queue filtered to cases', 'Moderation queue');
+  // the reporter's record: clearing P-GW gives the member "0 removed / 1 cleared" on the P-CHAIN case; the redirect keeps the filter
+  const gw = page.getByRole('region', { name: 'CASE on P-GW title' });
+  await gw.getByLabel('Reason for P-GW title').fill('on topic enough');
+  await gw.getByRole('button', { name: 'Clear' }).click();
+  await expect(page).toHaveURL(/\/f\/mod\?kind=CASE$/);
+  await expect(page.getByRole('region')).toHaveCount(1);
+  const chain = page.getByRole('region', { name: 'CASE on P-CHAIN title' });
+  const reporters = chain.getByRole('list', { name: 'Reporters' });
+  await expect(reporters).toContainText(/member-homelab\S* \(joined .*; 0 removed \/ 1 cleared before\): harassment/);
+  // the body is a ≤ 240-char excerpt until "Show full text" is opened
+  expect(((await chain.locator('.excerpt').textContent()) ?? '').length).toBeLessThanOrEqual(241);
+  await expect(chain.locator('details').first()).toHaveJSProperty('open', false);
+  // warn the author and lock the thread without leaving the queue
+  await chain.getByText('Author and thread actions').click();
+  await chain.getByLabel('Reason for the author of P-CHAIN title').fill('first warning: harassment');
+  await chain.getByRole('button', { name: 'Warn' }).click();
+  await expect(page).toHaveURL(/\/f\/mod\?kind=CASE$/);
+  await expect(chain.locator('.meta').first()).toContainText('(WARNED;');
+  await chain.getByText('Author and thread actions').click();
+  await chain.getByLabel('Reason for the thread of P-CHAIN title').fill('cooling off');
+  await chain.getByRole('button', { name: 'Lock thread' }).click();
+  await expect(page).toHaveURL(/\/f\/mod\?kind=CASE$/);
+  await expect(chain.locator('.meta').first()).toContainText('thread locked');
+  await chain.getByText('Author and thread actions').click();
+  await expect(chain.getByRole('button', { name: 'Unlock thread' })).toBeVisible();
+  // both in the log, newest first, with seq in total order and the target linked
+  const rows = page.locator('table tbody tr');
+  await expect(rows.nth(0)).toContainText('LOCK');
+  await expect(rows.nth(1)).toContainText('WARN');
+  const seq = async (i: number) => Number(await rows.nth(i).locator('td').first().textContent());
+  expect(await seq(0)).toBeGreaterThan(await seq(1));
+  await expect(rows.nth(0).getByRole('link', { name: 'P-CHAIN title' })).toBeVisible();
+  // log paging at queue.page_size (50): synthetic rows in the test's own org push the earlier entries onto page 2
+  const { rows: [{ id: actor }] } = await db.query(`SELECT p.id FROM "Profile" p JOIN "User" u ON u.id = p."userId" WHERE u.email = $1`, [owner.email]);
+  await db.query(`INSERT INTO "ModerationAction" (id, "orgId", "actorId", "subjectId", kind, "fromState", "toState", reason, "createdAt") SELECT gen_random_uuid(), $1, $2, $2, 'WARN', 'ACTIVE', 'WARNED', 'synthetic log row ' || g, now() FROM generate_series(1, 50) g`, [orgId, actor]);
+  await page.goto(`/o/${SLUG}/f/mod?kind=CASE`);
+  await expect(rows).toHaveCount(50);
+  await page.getByRole('link', { name: 'Next log page' }).click();
+  await expect(page).toHaveURL(/logPage=2$/);
+  await expect(page.getByText('Log page 2 of 2')).toBeVisible();
+  await expect(rows.last()).toContainText('REMOVE'); // the very first action of the run, from the Phase 4 capstone
+  // 320 px: no horizontal scroll; axe clean in light and dark on the filtered queue
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(`/o/${SLUG}/f/mod?kind=CASE`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true);
+  await expectAccessible(page, 'filtered queue at 320px', 'Moderation queue');
+});
