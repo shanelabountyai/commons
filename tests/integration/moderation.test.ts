@@ -146,7 +146,22 @@ describe('context for moderators (4.1.8, 4.1.9)', () => {
     await tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'other', detail: 'links to a crypto miner disguised as a NAS script', at: T0 + 901 }, limits, mod));
     await expect(tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'spam', at: T0 + 902 }, limits, mod))).rejects.toMatchObject({ code: 'ALREADY_REPORTED' });
     const item = (await queue(db, orgId, 50)).find((i) => i.kind === 'CASE' && i.node.id === post.id);
-    expect(item && item.kind === 'CASE' ? item.details : null).toEqual(['links to a crypto miner disguised as a NAS script']);
+    expect(item && item.kind === 'CASE' ? item.reporters.map((r) => r.detail) : null).toEqual(['links to a crypto miner disguised as a NAS script']);
+  });
+
+  it('5.4 A: each reporter comes with their handle, join date and how their past reports ended (REMOVED vs CLEARED, last action wins)', async () => {
+    const a = await tx((t) => submitPost(t, { orgId, profileId: P.author!, boardId, publicId: 'M-P8', title: 't', body: 'a body the reporter gets right', at: T0 + 2 * 3600 }, limits, mod));
+    const b = await tx((t) => submitPost(t, { orgId, profileId: P.author!, boardId, publicId: 'M-P9', title: 't', body: 'a body the reporter gets wrong', at: T0 + 2 * 3600 + 1 }, limits, mod));
+    for (const post of [a, b]) await tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'spam', at: T0 + 2 * 3600 + 2 }, limits, mod));
+    await tx((t) => actOnContent(t, modCtx('mod'), 'REMOVE', { kind: 'POST', id: a.id }, 'spam indeed', T0 + 2 * 3600 + 3, mod));
+    await tx((t) => actOnContent(t, modCtx('mod'), 'CLEAR', { kind: 'POST', id: b.id }, 'not spam', T0 + 2 * 3600 + 4, mod));
+    const p7 = await db.post.findFirstOrThrow({ where: { publicId: 'M-P7' } });
+    const item = (await queue(db, orgId)).find((i) => i.kind === 'CASE' && i.node.id === p7.id); // no limit: every open item
+    const r = item && item.kind === 'CASE' ? item.reporters[0]! : null;
+    expect(r?.handle).toBe('reporter');
+    expect(r?.joinedAt).toEqual(toDate(T0 - 400 * DAY));
+    // M-P1 was removed then restored (counts for neither); M-P8 ended REMOVED, M-P9 CLEARED; the open ones count for neither
+    expect([r?.removed, r?.cleared]).toEqual([1, 1]);
   });
 
   it('edit history is readable for moderators: previous bodies, newest first, with the window flag (P0-6)', async () => {

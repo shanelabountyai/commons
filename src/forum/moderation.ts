@@ -156,26 +156,91 @@ export async function reviewSignal(tx: Tx, m: ModeratorCtx, signal: { kind: 'BRI
 // ---------------------------------------------------------------------------------------------------- queue
 
 export type QueueItem =
-  | { kind: 'CASE'; id: string; node: NodeRef; state: string; openedAt: Date; reports: number; reasons: string[]; details: string[] }
+  | { kind: 'CASE'; id: string; node: NodeRef; state: string; openedAt: Date; reports: number; reasons: string[]; reporters: Reporter[] }
   | { kind: 'BRIGADE'; id: string; node: NodeRef; createdAt: Date; voterCount: number; signal: 'BRIGADE' | 'RING' | 'AGED_BRIGADE' }
   | { kind: 'DUPLICATE'; id: string; node: NodeRef; createdAt: Date; match: NodeRef };
 
-/** Open cases, unreviewed brigade signals, unreviewed duplicate signals; oldest first. */
-export async function queue(tx: Tx, orgId: string, limit: number): Promise<QueueItem[]> {
+/** 5.4 A: who reported, how old their account is, and how their past reports ended — from the log, no new table. */
+export type Reporter = { handle: string; joinedAt: Date; reason: string; detail: string; removed: number; cleared: number };
+
+/** Per reporter: how many nodes they reported whose LAST content action (by seq) left them REMOVED vs CLEARED.
+ *  A node later RESTORED or reopened counts for neither; the case cache is not consulted (rule 3's spirit). */
+export async function reporterRecords(tx: Tx, reporterIds: string[]): Promise<Map<string, { removed: number; cleared: number }>> {
+  const out = new Map(reporterIds.map((id) => [id, { removed: 0, cleared: 0 }]));
+  if (reporterIds.length === 0) return out;
+  const reports = await tx.report.findMany({ where: { reporterId: { in: reporterIds } }, select: { reporterId: true, nodeKind: true, nodeId: true } });
+  const byKind = (k: 'POST' | 'COMMENT') => reports.filter((r) => r.nodeKind === k).map((r) => r.nodeId);
+  const actions = await tx.moderationAction.findMany({
+    where: { kind: { in: ['REMOVE', 'RESTORE', 'CLEAR', 'REOPEN'] }, OR: [{ nodeKind: 'POST', nodeId: { in: byKind('POST') } }, { nodeKind: 'COMMENT', nodeId: { in: byKind('COMMENT') } }] },
+    orderBy: { seq: 'desc' },
+    select: { nodeKind: true, nodeId: true, toState: true },
+  });
+  const last = new Map<string, string>(); // newest first, so the first write per node wins
+  for (const a of actions) if (!last.has(`${a.nodeKind}:${a.nodeId}`)) last.set(`${a.nodeKind}:${a.nodeId}`, a.toState);
+  for (const r of reports) {
+    const end = last.get(`${r.nodeKind}:${r.nodeId}`);
+    const rec = out.get(r.reporterId)!;
+    if (end === 'REMOVED') rec.removed++;
+    else if (end === 'CLEARED') rec.cleared++;
+  }
+  return out;
+}
+
+/** Open cases, unreviewed brigade signals, unreviewed duplicate signals; oldest first. No `limit` returns them all
+ *  (5.4 A: the page filters by kind and reason, counts, and pages). */
+export async function queue(tx: Tx, orgId: string, limit?: number): Promise<QueueItem[]> {
   const [cases, brigades, dups] = await Promise.all([
     tx.moderationCase.findMany({ where: { orgId, state: 'OPEN' }, orderBy: { openedAt: 'asc' }, take: limit }),
     tx.brigadeSignal.findMany({ where: { orgId, reviewedAt: null }, orderBy: { createdAt: 'asc' }, take: limit }),
     tx.duplicateSignal.findMany({ where: { orgId, reviewedAt: null }, orderBy: { createdAt: 'asc' }, take: limit }),
   ]);
   const items: QueueItem[] = [];
-  for (const c of cases) {
-    const reports = await tx.report.findMany({ where: { nodeKind: c.nodeKind, nodeId: c.nodeId }, select: { reason: true, detail: true }, orderBy: { createdAt: 'asc' } });
-    items.push({ kind: 'CASE', id: c.id, node: { kind: c.nodeKind, id: c.nodeId }, state: c.state, openedAt: c.openedAt, reports: reports.length, reasons: [...new Set(reports.map((r) => r.reason))].sort(), details: reports.map((r) => r.detail.trim()).filter(Boolean) });
-  }
+  const reportsByCase = await Promise.all(
+    cases.map((c) => tx.report.findMany({ where: { nodeKind: c.nodeKind, nodeId: c.nodeId }, select: { reason: true, detail: true, reporter: { select: { id: true, handle: true, joinedAt: true } } }, orderBy: { createdAt: 'asc' } })),
+  );
+  const records = await reporterRecords(tx, [...new Set(reportsByCase.flat().map((r) => r.reporter.id))]);
+  cases.forEach((c, i) => {
+    const reports = reportsByCase[i]!;
+    items.push({
+      kind: 'CASE',
+      id: c.id,
+      node: { kind: c.nodeKind, id: c.nodeId },
+      state: c.state,
+      openedAt: c.openedAt,
+      reports: reports.length,
+      reasons: [...new Set(reports.map((r) => r.reason))].sort(),
+      reporters: reports.map((r) => ({ handle: r.reporter.handle, joinedAt: r.reporter.joinedAt, reason: r.reason, detail: r.detail.trim(), ...records.get(r.reporter.id)! })),
+    });
+  });
   for (const b of brigades) items.push({ kind: 'BRIGADE', id: b.id, node: { kind: b.nodeKind, id: b.nodeId }, createdAt: b.createdAt, voterCount: b.voterCount, signal: b.kind });
   for (const d of dups) items.push({ kind: 'DUPLICATE', id: d.id, node: { kind: d.nodeKind, id: d.nodeId }, createdAt: d.createdAt, match: { kind: d.matchKind, id: d.matchId } });
   const when = (i: QueueItem) => (i.kind === 'CASE' ? i.openedAt : i.createdAt).getTime();
-  return items.sort((a, b) => when(a) - when(b)).slice(0, limit);
+  const sorted = items.sort((a, b) => when(a) - when(b));
+  return limit === undefined ? sorted : sorted.slice(0, limit);
+}
+
+/** 5.4 A: one page of the append-only log, newest first, with `seq` (D-56) and the target resolved to a path under
+ *  `/o/<slug>/f` (a member's profile or the node's thread) so the page can link it. */
+export async function modLog(tx: Tx, orgId: string, page: number, size: number) {
+  const [rows, total] = await Promise.all([
+    tx.moderationAction.findMany({ where: { orgId }, orderBy: { seq: 'desc' }, skip: (page - 1) * size, take: size, include: { actor: { select: { handle: true } }, subject: { select: { handle: true } } } }),
+    tx.moderationAction.count({ where: { orgId } }),
+  ]);
+  const ids = (k: 'POST' | 'COMMENT') => rows.filter((r) => r.nodeKind === k && r.nodeId).map((r) => r.nodeId!);
+  const [posts, comments] = await Promise.all([
+    tx.post.findMany({ where: { id: { in: ids('POST') }, orgId }, select: { id: true, publicId: true, title: true } }),
+    tx.comment.findMany({ where: { id: { in: ids('COMMENT') }, orgId }, select: { id: true, publicId: true, post: { select: { publicId: true, title: true } } } }),
+  ]);
+  const target = (r: (typeof rows)[number]): { label: string; path: string } | null => {
+    if (r.subject) return { label: r.subject.handle, path: `/u/${r.subject.handle}` };
+    if (r.nodeKind === 'POST') {
+      const p = posts.find((x) => x.id === r.nodeId);
+      return p ? { label: p.title, path: `/p/${p.publicId}` } : null;
+    }
+    const c = comments.find((x) => x.id === r.nodeId);
+    return c ? { label: `comment on ${c.post.title}`, path: `/p/${c.post.publicId}/c/${c.publicId}` } : null;
+  };
+  return { total, pages: Math.max(1, Math.ceil(total / size)), rows: rows.map((r) => ({ ...r, target: target(r) })) };
 }
 
 /** 4.1.8 (P0-5): the author's history beside a queue item — reports on any of their nodes, posts and comments, and prior actions against them. */
