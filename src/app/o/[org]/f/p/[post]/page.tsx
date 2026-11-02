@@ -6,7 +6,8 @@ import { db } from '@/core/db';
 import { ForumForm as ActionForm } from '@/components/forum-form';
 import { ago, Markdown, ScopeNote, Text, when } from '@/components/forum';
 import { canModerate, editHistoryForThread } from '@/forum/moderation';
-import { ensureProfile, nowEpoch, thread, type ThreadNode } from '@/forum/view';
+import { downvoteGateNote, ensureProfile, myVotes, nowEpoch, thread, type ThreadNode } from '@/forum/view';
+import { VoteControl } from '@/components/vote-control';
 import { parseLimitRules, parseModerationRules, parseRankingRules } from '@/rules';
 import type { RenderedRow } from '@/tree';
 import { deleteOwn, edit, moderateContent, moderateThread, reply, report, vote } from '../../actions';
@@ -37,6 +38,9 @@ export default async function Thread({ params, searchParams }: { params: Promise
   if (!t) notFound();
   const { post } = t;
   const isMod = canModerate(me);
+  // 5.1: the viewer's votes on everything rendered, and whether their ▼ would count now
+  const mine = await myVotes(ctx.orgId, me.profileId, [{ kind: 'POST', id: post.id }, ...t.rows.map((r) => ({ kind: 'COMMENT' as const, id: r.node.dbId }))]);
+  const gateNote = await downvoteGateNote(me.profileId, nowEpoch(), limits);
   const edits: Awaited<ReturnType<typeof editHistoryForThread>> = isMod ? await editHistoryForThread(db, ctx.orgId, post.id, t.nodes.map((n) => n.dbId)) : new Map();
   const here = `/o/${ctx.slug}/f/p/${publicId}`;
   const bound = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
@@ -69,6 +73,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
     const removed = r.rendered_as !== 'body';
     return (
       <article aria-label={`Comment by ${removed ? 'removed' : n.author}`}>
+        {!removed && <VoteControl action={bound(vote)} postId={post.id} commentId={n.dbId} label={`comment by ${n.author}`} mine={mine.get(n.dbId) ?? 0} isAuthor={n.author === me.handle} gateNote={gateNote} />}
         <div className="meta">
           {removed ? <span className="removed">[{r.rendered_as}]</span> : <Link href={`/o/${ctx.slug}/f/u/${n.author}`}><Text value={n.author} /></Link>} · {n.ups - n.downs} points · {when(new Date(n.created_at * 1000))}
           {n.editedAt && ' · edited'} · <Link href={`${here}/c/${n.publicId}`}>permalink</Link>
@@ -81,15 +86,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
         )}
         {!removed && (
           <details>
-            <summary>Reply, vote, report{myCommentIds.has(n.publicId) ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
-            <span className="votes">
-              <ActionForm action={bound(vote)}>
-                <input type="hidden" name="postId" value={post.id} />
-                <input type="hidden" name="commentId" value={n.dbId} />
-                <button type="submit" name="value" value="1" aria-label={`Upvote comment by ${n.author}`}>▲</button>
-                <button type="submit" name="value" value="-1" aria-label={`Downvote comment by ${n.author}`}>▼</button>
-              </ActionForm>
-            </span>
+            <summary>Reply, report{myCommentIds.has(n.publicId) ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
             {!post.lockedAt && (
               <ActionForm action={bound(reply)}>
                 <input type="hidden" name="postId" value={post.id} />
@@ -203,6 +200,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
         <h1 className={[post.pinnedAt ? 'pin' : '', post.lockedAt ? 'lock' : ''].join(' ').trim() || undefined}>
           {post.status === 'visible' ? <Text value={post.title} /> : <span className="removed">[{post.status}]</span>}
         </h1>
+        {post.status === 'visible' && <VoteControl action={bound(vote)} postId={post.id} label="post" mine={mine.get(post.id) ?? 0} isAuthor={post.author.id === me.profileId} gateNote={gateNote} />}
         <div className="meta">
           {post.ups - post.downs} points · by <Link href={`/o/${ctx.slug}/f/u/${post.author.handle}`}><Text value={post.author.handle} /></Link> · {when(post.createdAt)}
           {post.editedAt && ' · edited'} · {post.commentCount} comments · ranked {ago(t.rankedAt)}{isMod && <> · hot {t.postScore.hot.toFixed(2)} (moderators only, D-9)</>}
@@ -221,14 +219,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
         )}
         {sp.upload && <p role="alert">{sp.upload}</p>}
         <details open={sp.upload ? true : undefined}>
-          <summary>Vote, report{post.author.id === me.profileId ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
-          <span className="votes">
-            <ActionForm action={bound(vote)}>
-              <input type="hidden" name="postId" value={post.id} />
-              <button type="submit" name="value" value="1" aria-label="Upvote post">▲</button>
-              <button type="submit" name="value" value="-1" aria-label="Downvote post">▼</button>
-            </ActionForm>
-          </span>
+          <summary>Report{post.author.id === me.profileId ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
           <ReportForm kind="POST" label="this post" />
           {post.author.id === me.profileId && (
             <ActionForm action={bound(edit)}>

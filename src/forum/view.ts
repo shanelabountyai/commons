@@ -4,9 +4,10 @@
 import type { OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { hot, net, orderPosts, orderSiblings, wilsonLower, type Counts, type PostSort } from '@/ranking';
-import type { RankingRules } from '@/rules';
+import { downvoteAllowed } from '@/limits';
+import type { LimitRules, RankingRules } from '@/rules';
 import { assignPaths, pageCount, permalink, renderThread, type RenderedRow, type TreeNode } from '@/tree';
-import { toEpoch } from './db';
+import { contributionsAt, toDate, toEpoch } from './db';
 import type { ModeratorCtx } from './moderation';
 
 export type ProfileCtx = ModeratorCtx & { handle: string; modState: string; bannedUntil: Date | null };
@@ -142,4 +143,12 @@ export async function myVotes(orgId: string, profileId: string, nodes: readonly 
   const rows = await db.vote.findMany({ where: { orgId, voterId: profileId, nodeId: { in: nodes.map((n) => n.id) } }, select: { nodeId: true, value: true } });
   for (const r of rows) out.set(r.nodeId, r.value === 1 ? 1 : -1);
   return out;
+}
+
+/** PRD 5.1: null when the viewer's downvote would count now; otherwise the sentence that names the gate, from the rules file. */
+export async function downvoteGateNote(profileId: string, now: number, rules: LimitRules): Promise<string | null> {
+  const p = await db.profile.findUniqueOrThrow({ where: { id: profileId }, select: { joinedAt: true } });
+  const account = { created_at: toEpoch(p.joinedAt), contributions: await contributionsAt(db, profileId, toDate(now)) };
+  if (downvoteAllowed(account, now, rules)) return null;
+  return `recorded, not counted until your account is ${rules.downvote_gate.min_age_hours} h old with ${rules.downvote_gate.min_contributions} contributions`;
 }

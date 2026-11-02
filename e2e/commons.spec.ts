@@ -226,7 +226,7 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   // the owner is not P-GW's author: create an own post first through the board form
   await page.goto(`/o/${SLUG}/f/selfhosting`);
   await page.waitForLoadState('networkidle'); // a click before hydration posts the form natively to the page (CI runners are slow)
-  await page.getByLabel('Title').fill('Upload refusal check');
+  await page.getByLabel('Title', { exact: true }).fill('Upload refusal check'); // 5.1's board vote buttons name each post title
   await page.getByLabel(/^Body/).fill('A post to attach a bad file to.');
   await page.getByRole('button', { name: 'Post', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Upload refusal check' })).toBeVisible();
@@ -330,7 +330,9 @@ test('5.1: one click to vote, the pressed state shows, the author sees a fixed +
     expect(box.width).toBeGreaterThanOrEqual(24);
     expect(box.height).toBeGreaterThanOrEqual(24);
   }
-  // the member's own comment: no buttons, the fixed +1 in words (D-12)
+  // the member's own comment: no buttons, the fixed +1 in words (D-12). The member is young (2 comments / 60 s) and the
+  // 4.1.12 test spent that window; clear the store as the other per-action tests do — the limit is proven by abuse:spam
+  await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]);
   await page.getByLabel('New comment').fill('A comment the member wrote for 5.1.');
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   const own = page.locator('li.c > article', { hasText: 'A comment the member wrote for 5.1.' }).first();

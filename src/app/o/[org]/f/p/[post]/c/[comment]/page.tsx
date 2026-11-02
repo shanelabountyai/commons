@@ -4,7 +4,9 @@ import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Markdown, Text, when } from '@/components/forum';
-import { ensureProfile, nowEpoch, permalinkView } from '@/forum/view';
+import { downvoteGateNote, ensureProfile, myVotes, nowEpoch, permalinkView } from '@/forum/view';
+import { VoteControl } from '@/components/vote-control';
+import { vote } from '../../../../actions';
 import { parseLimitRules, parseRankingRules } from '@/rules';
 
 const ranking = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8')));
@@ -22,11 +24,14 @@ export async function generateMetadata({ params }: { params: Promise<{ org: stri
 
 export default async function Permalink({ params }: { params: Promise<{ org: string; post: string; comment: string }> }) {
   const ctx = await requireOrg((await params).org);
-  await ensureProfile(ctx);
+  const me = await ensureProfile(ctx);
   const { post, comment } = await params;
   const v = await permalinkView(ctx.orgId, post, comment, limits.max_depth_rendered, nowEpoch(), ranking);
   if (!v) notFound();
   const here = `/o/${ctx.slug}/f/p/${post}`;
+  const mine = await myVotes(ctx.orgId, me.profileId, v.rows.map((r) => ({ kind: 'COMMENT' as const, id: r.node.dbId })));
+  const gateNote = await downvoteGateNote(me.profileId, nowEpoch(), limits);
+  const castVote = vote.bind(null, ctx.slug);
   return (
     <main id="main" tabIndex={-1}>
       <p className="meta">
@@ -48,6 +53,7 @@ export default async function Permalink({ params }: { params: Promise<{ org: str
         {v.rows.map((r) => (
           <li key={r.id} id={r.id} className="c" style={{ marginLeft: `${r.depth * 1.25}rem` }}>
             <article aria-label={`Comment by ${r.rendered_as === 'body' ? r.node.author : 'removed'}`}>
+              {r.rendered_as === 'body' && <VoteControl action={castVote} postId={v.post.id} commentId={r.node.dbId} label={`comment by ${r.node.author}`} mine={mine.get(r.node.dbId) ?? 0} isAuthor={r.node.author === me.handle} gateNote={gateNote} />}
               <div className="meta">
                 {r.rendered_as === 'body' ? <Text value={r.node.author} /> : <span className="removed">[{r.rendered_as}]</span>} · {r.node.ups - r.node.downs} points · {when(new Date(r.node.created_at * 1000))} · depth {r.depth}
               </div>
