@@ -151,6 +151,10 @@ export const report = orgAction(null, nodeSchema.extend({ reason: z.string().min
 // ----------------------------------------------------------------------------------------------- moderation
 
 const modSchema = z.object({ reason: z.string().min(1).max(1000), back: z.string().default('') });
+/** `back` is where the form came from (the thread, or 5.4 A's filtered queue page). Only a same-site path is followed, so a
+ *  tampered field cannot redirect off-site; anything else falls to the action's default. Checked at the redirect, not in the
+ *  schema, so the org-scope refusals (INV-02/03) stay first. */
+const sitePath = (b: string): string => (b.startsWith('/') && !b.startsWith('//') ? b : '');
 
 export const moderateContent = orgAction(null, nodeSchema.extend({ ...modSchema.shape, action: z.enum(['REMOVE', 'RESTORE', 'CLEAR', 'REOPEN']) }), async (ctx, i) => {
   const me = await ensureProfile(ctx);
@@ -164,7 +168,7 @@ export const moderateContent = orgAction(null, nodeSchema.extend({ ...modSchema.
     refused(e);
   }
   revalidatePath(`${base(ctx.slug)}/mod`);
-  redirect(i.back ? `${i.back}${anchor}` : `${base(ctx.slug)}/mod`);
+  redirect(sitePath(i.back) ? `${sitePath(i.back)}${anchor}` : `${base(ctx.slug)}/mod`);
 });
 
 export const moderateThread = orgAction(null, z.object({ postId: ref('post'), action: z.enum(['LOCK', 'UNLOCK', 'PIN', 'UNPIN']), ...modSchema.shape }), async (ctx, i) => {
@@ -178,7 +182,8 @@ export const moderateThread = orgAction(null, z.object({ postId: ref('post'), ac
   } catch (e) {
     refused(e);
   }
-  redirect(`${base(ctx.slug)}/p/${postPublicId}`);
+  revalidatePath(`${base(ctx.slug)}/mod`);
+  redirect(sitePath(i.back) || `${base(ctx.slug)}/p/${postPublicId}`);
 });
 
 export const moderateUser = orgAction(null, z.object({ handle: z.string().min(1), action: z.enum(['WARN', 'BAN', 'UNBAN']), hours: z.string().optional(), ...modSchema.shape }), async (ctx, i) => {
@@ -193,7 +198,7 @@ export const moderateUser = orgAction(null, z.object({ handle: z.string().min(1)
   } catch (e) {
     refused(e);
   }
-  redirect(i.back || `${base(ctx.slug)}/u/${i.handle}`);
+  redirect(sitePath(i.back) || `${base(ctx.slug)}/u/${i.handle}`);
 });
 
 /** 4.1.11 (D-48): owner/admin grant or revoke the moderator flag; logged as GRANT_MOD / REVOKE_MOD. */

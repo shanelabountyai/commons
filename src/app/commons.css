@@ -50,3 +50,9 @@ table { display: block; max-width: 100%; overflow-x: auto; }
 .vote-control button[aria-pressed='true'] { font-weight: bold; outline: 2px solid CanvasText; outline-offset: 1px; }
 .vote-control .vote-state { font-size: 0.8em; margin-left: 0.25em; }
 .vote-control [role='status'], .vote-control [role='alert'] { display: inline-block; margin: 0 0 0 0.5rem; font-size: 0.85em; }
+
+/* 5.4 A — the triage queue: a text badge per item kind, a plain-text excerpt before the full body */
+.badge { font-size: 0.8em; border: 1px solid CanvasText; border-radius: 3px; padding: 0 0.3rem; vertical-align: middle; }
+.excerpt { max-width: 48rem; margin: 0.25rem 0; }
+.filters a { margin-right: 0.75rem; }
+.filters a[aria-current='page'] { font-weight: bold; }
