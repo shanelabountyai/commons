@@ -302,3 +302,52 @@ test('4.1.13: every page has its own title; the thread is usable and axe-clean a
   await expectAccessible(page, 'thread after a vote', 'P-GW title');
   await expect(page.locator('time').first()).toHaveAttribute('datetime', /^\d{4}-/);
 });
+
+// ---- PRD 5.1 (D-77): vote control — state, outcome, placement. Red before the VoteControl lands. ----
+
+test('5.1: one click to vote, the pressed state shows, the author sees a fixed +1, the board page votes too', async ({ page }) => {
+  await member.signIn(db, page);
+  await page.goto(`/o/${SLUG}/f/p/P-GW`);
+  const c = page.locator('li#C-GW-10-10 > article');
+  const up = c.getByRole('button', { name: /^Upvote comment/ });
+  const down = c.getByRole('button', { name: /^Downvote comment/ });
+  await expect(up).toBeVisible(); // no panel to open first
+  await expect(up).toHaveAttribute('aria-pressed', 'false');
+  await up.click();
+  await expect(c.getByRole('status')).toContainText('APPLIED');
+  await expect(up).toHaveAttribute('aria-pressed', 'true');
+  await expect(c.getByText('upvoted', { exact: true })).toBeVisible(); // state in text, not colour alone
+  await up.click();
+  await expect(c.getByRole('status')).toContainText('TOGGLED_OFF');
+  await expect(up).toHaveAttribute('aria-pressed', 'false');
+  // the member is minutes old: ▼ says why it will not count, and pressing it records a gated vote
+  await expect(down).toHaveAccessibleName(/recorded, not counted until your account is 24 h old with 3 contributions/);
+  await down.click();
+  await expect(c.getByRole('status')).toContainText('GATED_DOWNVOTE');
+  await expect(down).toHaveAttribute('aria-pressed', 'false');
+  for (const b of [up, down]) {
+    const box = (await b.boundingBox())!;
+    expect(box.width).toBeGreaterThanOrEqual(24);
+    expect(box.height).toBeGreaterThanOrEqual(24);
+  }
+  // the member's own comment: no buttons, the fixed +1 in words (D-12)
+  await page.getByLabel('New comment').fill('A comment the member wrote for 5.1.');
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  const own = page.locator('li.c > article', { hasText: 'A comment the member wrote for 5.1.' }).first();
+  await expect(own.getByText('+1 (yours, fixed)')).toBeVisible();
+  await expect(own.getByRole('button', { name: /^(Upvote|Downvote) comment/ })).toHaveCount(0);
+  await expectAccessible(page, 'thread after 5.1 votes', 'P-GW title');
+  // the board page: a vote control per post, with the same state
+  await page.goto(`/o/${SLUG}/f/sbc`);
+  const row = page.locator('li.post', { hasText: 'P-GW title' });
+  const postUp = row.getByRole('button', { name: /^Upvote post/ });
+  await postUp.click();
+  await expect(row.getByRole('status')).toContainText('APPLIED');
+  await expect(postUp).toHaveAttribute('aria-pressed', 'true');
+  await expectAccessible(page, 'board after a vote', 'sbc');
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true);
+  await expect(page.locator('li.c > article').first().getByRole('button', { name: /^Upvote comment/ })).toBeVisible();
+  await expectAccessible(page, 'permalink at 320px with vote controls', 'Comment in context');
+});
