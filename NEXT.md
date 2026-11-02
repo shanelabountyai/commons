@@ -1,5 +1,13 @@
 # NEXT
 
+## ▶ PRD 5.4 approved (D-79, 2026-11-02). Next: build Part A on `phase-5.4a` off `phase-5`, PR against `phase-5`; then Part B on `phase-5.4b`. Model: Opus 5.5 (D-74).
+
+**Mac session (2026-11-02, Fable, Shane present).** Decision only, no code. Local checkout switched from the stale `kickoff` kit to `phase-5`; `npm ci` and `npm run db:setup` green (`commons`, `commons_test` created and migrated, 14 migrations; `.env.local` / `.env.test` written, gitignored). Not yet run on the Mac: `commons:load`, `npm test`, Playwright. The `new-project` port-table refusal noted by a side agent does not apply: the scaffold ran in the cloud on 2026-10-29 and 7500 is already stamped.
+- **Part A (first):** compact rows + 240-char excerpt in `<details>`, `?kind=` / `?reason=` / `?page=` filters with counts, inline warn / ban / unban / lock / unlock through the existing `moderateUser` and `moderateThread` with a required reason, reporter handles + age + prior REMOVED/CLEARED counts from the log, log paging with `seq` and linked targets. Acceptance in the PRD §Acceptance A (e2e + axe 0 light/dark/320 px).
+- **Part B (second):** `fixtures/moderation/scenarios.json` + `tools/modlib.py` + `expected_report_signals.csv` first (4 reporters under 7 days in 24 h, by the same target author; the four scenarios in the PRD), then the `REPORT_SWARM` queue item, `lock_refuses: ["reply","vote","edit"]` with red tests in `actions.test.ts` first, `engine:eval` and `engine:eval:db` extended, community fixture untouched.
+
+---
+
 ## ▶ Phase 5 in progress on `phase-5` (2026-11-01). PRD 5.3 approved and built: `tools/rank_study.py`, numbers in `docs/EVAL.md` §Phase 5. Post-study decisions taken (D-71 keep gravity, D-72 keep D-12 in Best, D-73 no limits change; 5.2 builds its own fixtures). PRD 5.2 approved (D-75) and built (D-76): RING and AGED_BRIGADE signals as data, fixture first; local gate green incl. Playwright 18/18. Model now Opus 5.5 (D-74). PRD 5.1 approved (D-77) and built (D-78): vote control with pressed state, one click, author's fixed +1, gate named; full Playwright 19/19. CI green on PG 17 at `63cee2a` (run 41476591049; 5.3 + 5.2 + 5.1 on PR #4). Remaining Phase 5: PRD 5.4 (mod queue v2) drafted at `docs/prd/5.4-mod-queue-v2.md`, awaiting Shane's call (A+B, A only, or other thresholds).
 
 - **5.3 result:** Hot ≈ New on every board at gravity 45k/90k/150k (ρ ≥ 0.981, 0 hot-only top-5 posts); Best is pure tiebreak in 120/878 sibling groups; dropping the author's +1 from Best changes 45/878 top comments; the fixture cannot calibrate the age gate, aged-brigade signal or comment window (no aged sockpuppets; generator comment timestamps). Phase 4.1 merged as `091435f` (D-70).
