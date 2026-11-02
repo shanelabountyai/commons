@@ -6,7 +6,7 @@
 // The fixture loader does not come through here: a historical bulk load is not a user action.
 import { createHash } from 'node:crypto';
 import { MAX_BODY_CHARS } from '@/render';
-import type { LimitRules, ModerationRules } from '@/rules';
+import type { Lockable, LimitRules, ModerationRules } from '@/rules';
 import { ForumRefused, nodeInfo, toDate, toEpoch, type NodeRef, type Tx } from './db';
 import { guardAndRecord } from './limits-store';
 import { editNode, type EditInput } from './edit';
@@ -39,6 +39,19 @@ function checkText(field: string, value: string, max: number): void {
   // Postgres text cannot hold NUL; without this the write dies with a 500 instead of a refusal (X-37, found by the
   // Phase 4 capstone). Other control characters are left to the renderer, which encodes them.
   if (value.includes('\u0000')) throw new ForumRefused('INPUT_INVALID', `${field} contains a NUL byte`);
+}
+
+/** PRD 5.4 B: a lock locks. What it refuses is data (rules/moderation.json lock_refuses); a caller that passes no
+ *  moderation rules gets the strictest reading, so a forgotten argument can only refuse more, never less. Checked
+ *  before the window, like a ban: a refused write records no hit. Moderator actions do not come through here. */
+async function refuseIfLocked(tx: Tx, orgId: string, node: NodeRef, what: Lockable, mod?: ModerationRules): Promise<void> {
+  if (mod && !mod.lock_refuses.includes(what)) return;
+  const post =
+    node.kind === 'POST'
+      ? await tx.post.findUnique({ where: { id: node.id }, select: { orgId: true, lockedAt: true } })
+      : (await tx.comment.findUnique({ where: { id: node.id }, select: { post: { select: { orgId: true, lockedAt: true } } } }))?.post;
+  if (!post || post.orgId !== orgId) throw new ForumRefused('UNKNOWN_NODE', `${node.kind} ${node.id}`);
+  if (post.lockedAt) throw new ForumRefused('THREAD_LOCKED', `locked at ${toEpoch(post.lockedAt)}`);
 }
 
 /** Task 4.5: normalised body hash; a match inside the window by a different node is accepted and queued (P1-3). */
@@ -76,9 +89,7 @@ export type SubmitComment = { orgId: string; profileId: string; postId: string; 
 export async function submitComment(tx: Tx, s: SubmitComment, rules: LimitRules, mod?: ModerationRules): Promise<{ id: string; path: string; depth: number; duplicate: boolean }> {
   await admit(tx, s.orgId, s.profileId, s.at);
   checkText('body', s.body, MAX_BODY_CHARS);
-  const post = await tx.post.findUnique({ where: { id: s.postId }, select: { lockedAt: true, orgId: true } });
-  if (!post || post.orgId !== s.orgId) throw new ForumRefused('UNKNOWN_NODE', `POST ${s.postId}`);
-  if (post.lockedAt) throw new ForumRefused('THREAD_LOCKED', `locked at ${toEpoch(post.lockedAt)}`);
+  await refuseIfLocked(tx, s.orgId, { kind: 'POST', id: s.postId }, 'reply', mod);
   const g = await guardAndRecord(tx, { orgId: s.orgId, profileId: s.profileId, action: 'comment', at: s.at }, rules);
   if (g.verdict === 'refuse') throw new RateLimited('comment', g.retryAfter);
   const row = await createComment(tx, { orgId: s.orgId, postId: s.postId, parentId: s.parentId, authorId: s.profileId, publicId: s.publicId, body: s.body, createdAt: s.at });
@@ -89,9 +100,10 @@ export async function submitComment(tx: Tx, s: SubmitComment, rules: LimitRules,
 /** 4.1.1 (D-64): edits come through the same door as creates — membership and ban, then text checks, then the
  * writer; the body is rehashed so the duplicate detector sees edited bodies. Edits have no sliding window (D-32
  * governs the mark, not a rate). */
-export async function submitEdit(tx: Tx, s: EditInput, rules: LimitRules): Promise<{ withinWindow: boolean }> {
+export async function submitEdit(tx: Tx, s: EditInput, rules: LimitRules, mod?: ModerationRules): Promise<{ withinWindow: boolean }> {
   await admit(tx, s.orgId, s.editorId, s.at);
   checkText('body', s.body, MAX_BODY_CHARS);
+  await refuseIfLocked(tx, s.orgId, s.node, 'edit', mod); // 5.4 B
   const r = await editNode(tx, s, rules);
   const h = bodyHash(s.body);
   if (s.node.kind === 'POST') await tx.post.update({ where: { id: s.node.id }, data: { bodyHash: h } });
@@ -100,8 +112,9 @@ export async function submitEdit(tx: Tx, s: EditInput, rules: LimitRules): Promi
 }
 
 export type SubmitVote = { orgId: string; profileId: string; node: { kind: 'POST' | 'COMMENT'; id: string }; value: 1 | -1; at: number };
-export async function submitVote(tx: Tx, s: SubmitVote, rules: LimitRules): Promise<CastResult> {
+export async function submitVote(tx: Tx, s: SubmitVote, rules: LimitRules, mod?: ModerationRules): Promise<CastResult> {
   await admit(tx, s.orgId, s.profileId, s.at);
+  await refuseIfLocked(tx, s.orgId, s.node, 'vote', mod); // 5.4 B
   const g = await guardAndRecord(tx, { orgId: s.orgId, profileId: s.profileId, action: 'vote', at: s.at }, rules);
   if (g.verdict === 'refuse') throw new RateLimited('vote', g.retryAfter);
   return castVote(tx, { orgId: s.orgId, voterId: s.profileId, node: s.node, value: s.value, castAt: s.at }, rules);

@@ -5,10 +5,11 @@ import { db } from '@/core/db';
 import { deleteOwn, RateLimited, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { toDate } from '@/forum/db';
 import { guardAndRecord, sweepLimitHits } from '@/forum/limits-store';
-import { parseLimitRules } from '@/rules';
+import { parseLimitRules, parseModerationRules } from '@/rules';
 import { makeOrg } from '../helpers/org';
 
 const rules = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
+const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
 const T0 = 1_793_232_000;
 const DAY = 86_400;
 let orgId: string;
@@ -122,3 +123,36 @@ describe('the action door', () => {
     expect(await tx((t) => guardAndRecord(t, { orgId, profileId: P.vet!, action: 'report', at: T0 + 10 * DAY }, rules))).toMatchObject({ verdict: 'allow' });
   });
 });
+
+// PRD 5.4 B: a lock locks. What it refuses is data (rules/moderation.json lock_refuses); red before the door changed.
+describe('a locked thread refuses what lock_refuses lists', () => {
+  const T = T0 + 50 * DAY;
+  it('reply, vote and edit on a locked thread are THREAD_LOCKED (post and comment alike); nothing is recorded; unlock reverses', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-LOCK', title: 't', body: 'b', at: T }, rules));
+    const c = await tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: post.id, parentId: null, publicId: 'A-LOCK-C', body: 'c', at: T + 1 }, rules, mod));
+    const voter = await profile('lock-voter', T0 - 400 * DAY);
+    await db.post.update({ where: { id: post.id }, data: { lockedAt: toDate(T + 2) } }); // the moderator's LOCK, minus the log (moderation.test covers that)
+    const hits = await db.limitHit.count({ where: { orgId } });
+    await expect(tx((t) => submitComment(t, { orgId, profileId: voter, postId: post.id, parentId: null, publicId: 'A-LOCK-X', body: 'c', at: T + 3 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitVote(t, { orgId, profileId: voter, node: { kind: 'POST', id: post.id }, value: 1, at: T + 4 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitVote(t, { orgId, profileId: voter, node: { kind: 'COMMENT', id: c.id }, value: 1, at: T + 5 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'POST', id: post.id }, body: 'edited', at: T + 6 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'COMMENT', id: c.id }, body: 'edited', at: T + 7 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    expect(await db.limitHit.count({ where: { orgId } })).toBe(hits); // refused before the window, like a ban
+    expect(await db.voteEvent.count({ where: { nodeId: post.id } })).toBe(0);
+    expect(await db.editHistory.count({ where: { nodeId: post.id } })).toBe(0);
+    await db.post.update({ where: { id: post.id }, data: { lockedAt: null } });
+    await expect(tx((t) => submitVote(t, { orgId, profileId: voter, node: { kind: 'COMMENT', id: c.id }, value: 1, at: T + 8 }, rules, mod))).resolves.toMatchObject({ outcome: 'APPLIED' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'POST', id: post.id }, body: 'edited', at: T + 9 }, rules, mod))).resolves.toMatchObject({ withinWindow: true }); // 9 s after posting: inside the edit window
+  });
+  it('the set is data: with lock_refuses = ["reply"] a vote on a locked thread goes through; without rules the door takes the strictest reading', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-LOCK2', title: 't', body: 'b', at: T + 100 }, rules));
+    const voter = await profile('lock-voter2', T0 - 400 * DAY);
+    await db.post.update({ where: { id: post.id }, data: { lockedAt: toDate(T + 101) } });
+    const replyOnly = { ...mod, lock_refuses: ['reply' as const] };
+    await expect(tx((t) => submitVote(t, { orgId, profileId: voter, node: { kind: 'POST', id: post.id }, value: 1, at: T + 102 }, rules, replyOnly))).resolves.toMatchObject({ outcome: 'APPLIED' });
+    await expect(tx((t) => submitComment(t, { orgId, profileId: voter, postId: post.id, parentId: null, publicId: 'A-LOCK2-C', body: 'c', at: T + 103 }, rules, replyOnly))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'POST', id: post.id }, body: 'edited', at: T + 104 }, rules))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+  });
+});
+
