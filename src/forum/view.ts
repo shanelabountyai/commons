@@ -53,7 +53,10 @@ async function scores(orgId: string, kind: 'POST' | 'COMMENT', nodes: { id: stri
 export const POST_SORTS: PostSort[] = ['hot', 'top_day', 'top_week', 'top_all', 'new'];
 export const SORT_LABEL: Record<PostSort, string> = { hot: 'Hot', top_day: 'Top today', top_week: 'Top this week', top_all: 'Top all time', new: 'New' };
 
-export async function boardPosts(orgId: string, boardSlug: string, sort: PostSort, now: number, rules: RankingRules) {
+/** 6.1 A (D-84): board rows per page. Presentation, not a limit (D-15 is the depth cut); not in `rules/`. */
+export const BOARD_PAGE_SIZE = 25;
+
+export async function boardPosts(orgId: string, boardSlug: string, sort: PostSort, now: number, rules: RankingRules, page = 1) {
   const board = await db.board.findUnique({ where: { orgId_slug: { orgId, slug: boardSlug } } });
   if (!board) return null;
   const rows = await db.post.findMany({ where: { orgId, boardId: board.id, status: 'visible' }, include: { author: { select: { handle: true } } } });
@@ -68,7 +71,12 @@ export async function boardPosts(orgId: string, boardSlug: string, sort: PostSor
   else ordered = orderPosts(nodes, counts, sort, now, rules).sort((a, b) => by.get(b.id)!.net - by.get(a.id)!.net || tie(a, b));
   const pinned = ordered.filter((p) => p.pinnedAt);
   const rest = ordered.filter((p) => !p.pinnedAt);
-  return { board, posts: [...pinned, ...rest].map((p) => ({ ...p, score: by.get(p.id)! })), rankedAt };
+  const all = [...pinned, ...rest];
+  const pages = Math.max(1, Math.ceil(all.length / BOARD_PAGE_SIZE));
+  const pg = Math.min(Math.max(1, page), pages);
+  const posts = all.slice((pg - 1) * BOARD_PAGE_SIZE, pg * BOARD_PAGE_SIZE).map((p) => ({ ...p, score: by.get(p.id)! }));
+  // `empty`: the board has no visible post at all; a Top window that filters everything out is "nothing in this window"
+  return { board, posts, rankedAt, page: pg, pages, total: all.length, empty: rows.length === 0 };
 }
 
 export type ThreadNode = TreeNode & { dbId: string; author: string; body: string; ups: number; downs: number; editedAt: Date | null; publicId: string };
