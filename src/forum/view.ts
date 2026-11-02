@@ -133,3 +133,13 @@ export async function search(orgId: string, q: string, limit = 50) {
 }
 
 export const nowEpoch = (): number => Math.floor(Date.now() / 1000);
+
+/** PRD 5.1 (D-77): the viewer's current vote on each node shown, read once per page, scoped by org (INV-03).
+ * 1 / −1 for a current Vote row, 0 for none (never voted, or toggled off — V-3). The author's +1 is a row (D-12). */
+export async function myVotes(orgId: string, profileId: string, nodes: readonly { kind: 'POST' | 'COMMENT'; id: string }[]): Promise<Map<string, 1 | -1 | 0>> {
+  const out = new Map<string, 1 | -1 | 0>(nodes.map((n) => [n.id, 0]));
+  if (nodes.length === 0) return out;
+  const rows = await db.vote.findMany({ where: { orgId, voterId: profileId, nodeId: { in: nodes.map((n) => n.id) } }, select: { nodeId: true, value: true } });
+  for (const r of rows) out.set(r.nodeId, r.value === 1 ? 1 : -1);
+  return out;
+}

@@ -27,9 +27,10 @@ async function profile(handle: string, org: string) {
 }
 
 beforeAll(async () => {
-  await db.org.deleteMany({ where: { slug: { in: ['view-test', 'view-other'] } } });
-  orgId = (await makeOrg('view-test')).id;
-  otherOrgId = (await makeOrg('view-other')).id;
+  // vote events are append-only (D-29), so an org that has them cannot be deleted; a fresh slug per run instead
+  const run = Date.now().toString(36);
+  orgId = (await makeOrg(`view-test-${run}`)).id;
+  otherOrgId = (await makeOrg(`view-other-${run}`)).id;
   boardId = (await db.board.create({ data: { orgId, slug: 'help', title: 'Help' } })).id;
   await profile('author', orgId);
   await profile('voter', orgId);
