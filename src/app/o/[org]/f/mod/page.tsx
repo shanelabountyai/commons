@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ForumForm as ActionForm } from '@/components/forum-form';
-import { ago, Markdown, Text, when } from '@/components/forum';
+import { Badge, Markdown, Text, ago, when } from '@/components/forum';
 import { authorHistory, canModerate, modLog, queue, type QueueItem } from '@/forum/moderation';
 import { ensureProfile } from '@/forum/view';
 import { parseLimitRules, parseModerationRules } from '@/rules';
@@ -120,7 +120,7 @@ export default async function ModQueue({ params, searchParams }: { params: Promi
             return (
               <section key={`${item.kind}-${item.id}`} aria-label={`REPORT_SWARM on ${item.subject.handle}`} className="post">
                 <h2>
-                  <span className="badge">REPORT_SWARM</span> Suspected report swarm: {item.reporters.length} accounts under {mod.report_swarm.max_reporter_age_days} days reported{' '}
+                  <Badge>REPORT_SWARM</Badge> Suspected report swarm: {item.reporters.length} accounts under {mod.report_swarm.max_reporter_age_days} days reported{' '}
                   <Link href={`${base}/u/${item.subject.handle}`}><Text value={item.subject.handle} /></Link> within {Math.round(mod.report_swarm.window_seconds / 3600)} h
                 </h2>
                 <p className="meta">
@@ -149,7 +149,7 @@ export default async function ModQueue({ params, searchParams }: { params: Promi
           return (
             <section key={`${item.kind}-${item.id}`} aria-label={`${item.kind} on ${c.title}`} className="post">
               <h2>
-                <span className="badge">{kindOf(item)}</span> {item.kind === 'CASE' ? `Reported (${item.reports}): ${item.reasons.join(', ')}` : item.kind === 'BRIGADE' ? signalHeading(item.signal, item.voterCount) : 'Suspected duplicate'} · <Link href={c.link}><Text value={c.title} /></Link>
+                <Badge>{kindOf(item)}</Badge> {item.kind === 'CASE' ? `Reported (${item.reports}): ${item.reasons.join(', ')}` : item.kind === 'BRIGADE' ? signalHeading(item.signal, item.voterCount) : 'Suspected duplicate'} · <Link href={c.link}><Text value={c.title} /></Link>
               </h2>
               <p className="meta">
                 by <Link href={`${base}/u/${c.author.handle}`}><Text value={c.author.handle} /></Link> ({c.author.modState}; {hist.reports} reports on their posts, {hist.actions} prior actions) · status {c.status}
