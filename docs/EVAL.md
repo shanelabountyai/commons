@@ -235,6 +235,15 @@ Commands: `npm run engine:eval`, `npm run engine:eval:db`, `npm test`, `python3 
 - **Cost, measured:** the bulk load of the community through the writers took 71 s before 5.2 and 132–138 s after (two runs), because each applied upvote now counts the voter's contributions for the young check. The page path pays one or two extra indexed count queries per vote.
 - **What it is not:** thresholds were set by scenarios the author wrote; a ring of accounts older than 24 h with 5 contributions, or a brigade spread over 11 minutes, raises nothing. Every vote still counts — a signal asks a human to look.
 
+## Phase 5 — vote control (PRD 5.1, 2026-11-02)
+
+Commands: `npm test`, `npx playwright test` (production build, as CI).
+
+- **The viewer's votes** (`myVotes`, one org-scoped read per page): `tests/integration/view.test.ts` — 1 / −1 / 0 per node, 0 after a toggle (V-3), the author's fixed +1 reads 1 (D-12), nothing from another org (INV-03).
+- **In the browser** (`e2e/commons.spec.ts`, 5.1 test): on a comment, one click on ▲ with no panel opened → `APPLIED`, `aria-pressed="true"` and the visible text "upvoted"; again → `TOGGLED_OFF`, unpressed; a minutes-old member's ▼ is named "… recorded, not counted until your account is 24 h old with 3 contributions" and answers `GATED_DOWNVOTE`, unpressed; both buttons ≥ 24 × 24 px; the member's own comment shows "+1 (yours, fixed)" and no vote buttons; on the board page a post's ▲ answers `APPLIED` and shows pressed; the permalink page at 320 px has no horizontal scroll and shows the control. axe 0 violations in light and dark on the thread and board after votes and on the permalink at 320 px.
+- **Gate:** vitest 347/347 (48 files); full Playwright 19/19 in 3.8 min; harness 14/14; `engine:eval` unchanged (13 files, 0 differences).
+- **What it is not:** no optimistic update — the state shown is the server's after the action returns; the gate note is computed per page view, so an account that crosses 24 h mid-page sees it on the next load.
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
