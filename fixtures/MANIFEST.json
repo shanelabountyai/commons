@@ -13,6 +13,8 @@
   "expected_post_order_top_week.csv": "2c94a6c3da16ff41bd65b0016f808a7f4db8c66147d4bd3982ccb5b48ed30e0d",
   "expected_tree.csv": "a36f24bc18ffb187c6a502a705f55bbc0a87b6092d68ae56e792f97191b5679f",
   "expected_vote_outcomes.csv": "adbafe08dc8b7166e3fd6f49bef40613c351caca0c2f95b1bd347e5e4ece5063",
+  "moderation/expected_report_signals.csv": "dd2d6db5e356e6047ee602e894e2e5a6f50163ce950b4c5d97f8ad9209fb87b5",
+  "moderation/scenarios.json": "aeeadb8097d9bf617ee724e3f6684b1d68e4e97cd3802de1c1f002ac9d4fbb10",
   "posts.csv": "7d2c0ca35893de8c934e77ada04004032f3fe49cdee6d8d84cbb81a03926996d",
   "signals/expected_signals.csv": "095ddb4e5143bfc7e8453bd707984ffd6936339a0eb014d14bf82bffe1e2cb8d",
   "signals/scenarios.json": "b71ae6c6826737045d9bac2ab3c6ffdd821ca2cd5b52e08fbb92e8b4582ec5d4",

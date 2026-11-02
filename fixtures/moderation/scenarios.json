@@ -1,0 +1,687 @@
+{
+ "version": 1,
+ "seed": 20261102,
+ "instant": 1793836800,
+ "scenarios": [
+  {
+   "id": "S-SWARM",
+   "note": "4 accounts 1-3 days old each report 2 of one author's posts inside 6 h",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800
+    },
+    {
+     "id": "f0",
+     "created_at": 1793750400
+    },
+    {
+     "id": "f1",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f2",
+     "created_at": 1793577600
+    },
+    {
+     "id": "f3",
+     "created_at": 1793750400
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N0",
+     "author": "author"
+    },
+    {
+     "id": "N1",
+     "author": "author"
+    },
+    {
+     "id": "N2",
+     "author": "author"
+    },
+    {
+     "id": "N3",
+     "author": "author"
+    },
+    {
+     "id": "N4",
+     "author": "author"
+    }
+   ],
+   "reports": [
+    {
+     "row": 0,
+     "reporter": "f0",
+     "node_id": "N0",
+     "reported_at": 1793836818
+    },
+    {
+     "row": 1,
+     "reporter": "f0",
+     "node_id": "N1",
+     "reported_at": 1793837402
+    },
+    {
+     "row": 2,
+     "reporter": "f1",
+     "node_id": "N1",
+     "reported_at": 1793841830
+    },
+    {
+     "row": 3,
+     "reporter": "f1",
+     "node_id": "N2",
+     "reported_at": 1793842412
+    },
+    {
+     "row": 4,
+     "reporter": "f2",
+     "node_id": "N2",
+     "reported_at": 1793846820
+    },
+    {
+     "row": 5,
+     "reporter": "f2",
+     "node_id": "N3",
+     "reported_at": 1793847420
+    },
+    {
+     "row": 6,
+     "reporter": "f3",
+     "node_id": "N3",
+     "reported_at": 1793851805
+    },
+    {
+     "row": 7,
+     "reporter": "f3",
+     "node_id": "N4",
+     "reported_at": 1793852403
+    }
+   ]
+  },
+  {
+   "id": "S-SWARM-GROWS",
+   "note": "5 fresh accounts: the 4th report opens the signal, the 5th 20 h later updates its count to 5",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800
+    },
+    {
+     "id": "f0",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f1",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f2",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f3",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f4",
+     "created_at": 1793664000
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N0",
+     "author": "author"
+    },
+    {
+     "id": "N1",
+     "author": "author"
+    },
+    {
+     "id": "N2",
+     "author": "author"
+    },
+    {
+     "id": "N3",
+     "author": "author"
+    },
+    {
+     "id": "N4",
+     "author": "author"
+    }
+   ],
+   "reports": [
+    {
+     "row": 0,
+     "reporter": "f0",
+     "node_id": "N0",
+     "reported_at": 1793836800
+    },
+    {
+     "row": 1,
+     "reporter": "f1",
+     "node_id": "N1",
+     "reported_at": 1793837100
+    },
+    {
+     "row": 2,
+     "reporter": "f2",
+     "node_id": "N2",
+     "reported_at": 1793837400
+    },
+    {
+     "row": 3,
+     "reporter": "f3",
+     "node_id": "N3",
+     "reported_at": 1793837700
+    },
+    {
+     "row": 4,
+     "reporter": "f4",
+     "node_id": "N4",
+     "reported_at": 1793908800
+    }
+   ]
+  },
+  {
+   "id": "S-ORGANIC",
+   "note": "6 accounts 60-200 days old report the same author inside 1 h: no signal",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800
+    },
+    {
+     "id": "o0",
+     "created_at": 1788652800
+    },
+    {
+     "id": "o1",
+     "created_at": 1786233600
+    },
+    {
+     "id": "o2",
+     "created_at": 1783814400
+    },
+    {
+     "id": "o3",
+     "created_at": 1781395200
+    },
+    {
+     "id": "o4",
+     "created_at": 1778976000
+    },
+    {
+     "id": "o5",
+     "created_at": 1776556800
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N0",
+     "author": "author"
+    },
+    {
+     "id": "N1",
+     "author": "author"
+    },
+    {
+     "id": "N2",
+     "author": "author"
+    },
+    {
+     "id": "N3",
+     "author": "author"
+    },
+    {
+     "id": "N4",
+     "author": "author"
+    }
+   ],
+   "reports": [
+    {
+     "row": 0,
+     "reporter": "o0",
+     "node_id": "N0",
+     "reported_at": 1793836800
+    },
+    {
+     "row": 1,
+     "reporter": "o1",
+     "node_id": "N1",
+     "reported_at": 1793837200
+    },
+    {
+     "row": 2,
+     "reporter": "o2",
+     "node_id": "N2",
+     "reported_at": 1793837600
+    },
+    {
+     "row": 3,
+     "reporter": "o3",
+     "node_id": "N3",
+     "reported_at": 1793838000
+    },
+    {
+     "row": 4,
+     "reporter": "o4",
+     "node_id": "N4",
+     "reported_at": 1793838400
+    },
+    {
+     "row": 5,
+     "reporter": "o5",
+     "node_id": "N0",
+     "reported_at": 1793838800
+    }
+   ]
+  },
+  {
+   "id": "S-UNDER",
+   "note": "3 fresh accounts inside 1 h: one under the threshold",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800
+    },
+    {
+     "id": "f0",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f1",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f2",
+     "created_at": 1793664000
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N0",
+     "author": "author"
+    },
+    {
+     "id": "N1",
+     "author": "author"
+    },
+    {
+     "id": "N2",
+     "author": "author"
+    },
+    {
+     "id": "N3",
+     "author": "author"
+    },
+    {
+     "id": "N4",
+     "author": "author"
+    }
+   ],
+   "reports": [
+    {
+     "row": 0,
+     "reporter": "f0",
+     "node_id": "N0",
+     "reported_at": 1793836800
+    },
+    {
+     "row": 1,
+     "reporter": "f1",
+     "node_id": "N1",
+     "reported_at": 1793837700
+    },
+    {
+     "row": 2,
+     "reporter": "f2",
+     "node_id": "N2",
+     "reported_at": 1793838600
+    }
+   ]
+  },
+  {
+   "id": "S-ONE-MANY",
+   "note": "one account 1 day old reports 8 nodes in 2 h: one reporter is not a swarm",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800
+    },
+    {
+     "id": "f0",
+     "created_at": 1793750400
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N0",
+     "author": "author"
+    },
+    {
+     "id": "N1",
+     "author": "author"
+    },
+    {
+     "id": "N2",
+     "author": "author"
+    },
+    {
+     "id": "N3",
+     "author": "author"
+    },
+    {
+     "id": "N4",
+     "author": "author"
+    },
+    {
+     "id": "N5",
+     "author": "author"
+    },
+    {
+     "id": "N6",
+     "author": "author"
+    },
+    {
+     "id": "N7",
+     "author": "author"
+    }
+   ],
+   "reports": [
+    {
+     "row": 0,
+     "reporter": "f0",
+     "node_id": "N0",
+     "reported_at": 1793836800
+    },
+    {
+     "row": 1,
+     "reporter": "f0",
+     "node_id": "N1",
+     "reported_at": 1793837600
+    },
+    {
+     "row": 2,
+     "reporter": "f0",
+     "node_id": "N2",
+     "reported_at": 1793838400
+    },
+    {
+     "row": 3,
+     "reporter": "f0",
+     "node_id": "N3",
+     "reported_at": 1793839200
+    },
+    {
+     "row": 4,
+     "reporter": "f0",
+     "node_id": "N4",
+     "reported_at": 1793840000
+    },
+    {
+     "row": 5,
+     "reporter": "f0",
+     "node_id": "N5",
+     "reported_at": 1793840800
+    },
+    {
+     "row": 6,
+     "reporter": "f0",
+     "node_id": "N6",
+     "reported_at": 1793841600
+    },
+    {
+     "row": 7,
+     "reporter": "f0",
+     "node_id": "N7",
+     "reported_at": 1793842400
+    }
+   ]
+  },
+  {
+   "id": "S-WINDOW-EDGE",
+   "note": "4 fresh accounts; the 4th report is exactly window_seconds after the first, which has left the window",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800
+    },
+    {
+     "id": "f0",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f1",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f2",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f3",
+     "created_at": 1793664000
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N0",
+     "author": "author"
+    },
+    {
+     "id": "N1",
+     "author": "author"
+    },
+    {
+     "id": "N2",
+     "author": "author"
+    },
+    {
+     "id": "N3",
+     "author": "author"
+    },
+    {
+     "id": "N4",
+     "author": "author"
+    }
+   ],
+   "reports": [
+    {
+     "row": 0,
+     "reporter": "f0",
+     "node_id": "N0",
+     "reported_at": 1793836800
+    },
+    {
+     "row": 1,
+     "reporter": "f1",
+     "node_id": "N1",
+     "reported_at": 1793847600
+    },
+    {
+     "row": 2,
+     "reporter": "f2",
+     "node_id": "N2",
+     "reported_at": 1793869200
+    },
+    {
+     "row": 3,
+     "reporter": "f3",
+     "node_id": "N3",
+     "reported_at": 1793923200
+    }
+   ]
+  },
+  {
+   "id": "S-AGE-EDGE",
+   "note": "3 fresh accounts and a 4th exactly max_reporter_age_days old at its report: not younger, no signal",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800
+    },
+    {
+     "id": "f0",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f1",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f2",
+     "created_at": 1793664000
+    },
+    {
+     "id": "e",
+     "created_at": 1793233000
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N0",
+     "author": "author"
+    },
+    {
+     "id": "N1",
+     "author": "author"
+    },
+    {
+     "id": "N2",
+     "author": "author"
+    },
+    {
+     "id": "N3",
+     "author": "author"
+    },
+    {
+     "id": "N4",
+     "author": "author"
+    }
+   ],
+   "reports": [
+    {
+     "row": 0,
+     "reporter": "f0",
+     "node_id": "N0",
+     "reported_at": 1793836800
+    },
+    {
+     "row": 1,
+     "reporter": "f1",
+     "node_id": "N1",
+     "reported_at": 1793837100
+    },
+    {
+     "row": 2,
+     "reporter": "f2",
+     "node_id": "N2",
+     "reported_at": 1793837400
+    },
+    {
+     "row": 3,
+     "reporter": "e",
+     "node_id": "N3",
+     "reported_at": 1793837800
+    }
+   ]
+  },
+  {
+   "id": "S-MIXED",
+   "note": "3 fresh accounts and 3 old ones inside 1 h: the old ones do not count",
+   "accounts": [
+    {
+     "id": "author",
+     "created_at": 1759276800
+    },
+    {
+     "id": "f0",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f1",
+     "created_at": 1793664000
+    },
+    {
+     "id": "f2",
+     "created_at": 1793664000
+    },
+    {
+     "id": "o0",
+     "created_at": 1786060800
+    },
+    {
+     "id": "o1",
+     "created_at": 1786060800
+    },
+    {
+     "id": "o2",
+     "created_at": 1786060800
+    }
+   ],
+   "nodes": [
+    {
+     "id": "N0",
+     "author": "author"
+    },
+    {
+     "id": "N1",
+     "author": "author"
+    },
+    {
+     "id": "N2",
+     "author": "author"
+    },
+    {
+     "id": "N3",
+     "author": "author"
+    },
+    {
+     "id": "N4",
+     "author": "author"
+    }
+   ],
+   "reports": [
+    {
+     "row": 0,
+     "reporter": "f0",
+     "node_id": "N0",
+     "reported_at": 1793836800
+    },
+    {
+     "row": 1,
+     "reporter": "f1",
+     "node_id": "N1",
+     "reported_at": 1793837100
+    },
+    {
+     "row": 2,
+     "reporter": "f2",
+     "node_id": "N2",
+     "reported_at": 1793837400
+    },
+    {
+     "row": 3,
+     "reporter": "o0",
+     "node_id": "N0",
+     "reported_at": 1793837800
+    },
+    {
+     "row": 4,
+     "reporter": "o1",
+     "node_id": "N1",
+     "reported_at": 1793838100
+    },
+    {
+     "row": 5,
+     "reporter": "o2",
+     "node_id": "N2",
+     "reported_at": 1793838400
+    }
+   ]
+  }
+ ]
+}

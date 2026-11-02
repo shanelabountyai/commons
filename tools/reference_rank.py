@@ -20,6 +20,7 @@ from votelib import reduce_votes  # noqa: E402
 from treelib import assign_paths, depth, render, permalink  # noqa: E402
 from limitslib import replay  # noqa: E402
 from signallib import expected_rows as signal_rows, load_scenarios  # noqa: E402
+from modlib import expected_rows as swarm_rows, load_scenarios as load_mod_scenarios  # noqa: E402
 
 FIX = os.path.join(HERE, "..", "fixtures")
 T0 = 1_793_232_000
@@ -29,8 +30,10 @@ NAMED_THREADS = ["P-THICK", "P-CHAIN", "P-GW"]
 EXPECTED = ["expected_post_order_hot.csv", "expected_post_order_top_day.csv", "expected_post_order_top_week.csv",
             "expected_post_order_top_all.csv", "expected_post_order_new.csv", "expected_comment_order_best.csv",
             "expected_counts.csv", "expected_vote_outcomes.csv", "expected_tree.csv", "expected_pages.csv",
-            "expected_permalink.csv", "expected_limits.csv", "signals/expected_signals.csv"]
-INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json", "signals/scenarios.json"]
+            "expected_permalink.csv", "expected_limits.csv", "signals/expected_signals.csv",
+            "moderation/expected_report_signals.csv"]
+INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json", "signals/scenarios.json",
+          "moderation/scenarios.json"]
 
 
 def read(name):
@@ -151,6 +154,8 @@ def compute(users, posts, comments, votes):
     out["expected_limits.csv"] = limit_rows
     # PRD 5.2 (D-75): the additive signal scenarios, computed by signallib from their own inputs
     out["signals/expected_signals.csv"] = signal_rows(load_scenarios(FIX))
+    # PRD 5.4 B: report-swarm scenarios, computed by modlib from their own inputs
+    out["moderation/expected_report_signals.csv"] = swarm_rows(load_mod_scenarios(FIX))
     return out, counts
 
 
@@ -172,10 +177,13 @@ def table(out):
         lines.append(f"limits {r['script']:28s}: {r['attempts']:3d} attempts, {r['allowed']:3d} allowed, {r['refused']:3d} refused, first retryAfter {r['first_retry_after']}")
     for r in out["signals/expected_signals.csv"]:
         lines.append(f"signal {r['scenario']:18s}: {r['kind']:12s} on {r['node']} voters {r['voters']}")
+    for r in out["moderation/expected_report_signals.csv"]:
+        lines.append(f"swarm  {r['scenario']:18s}: REPORT_SWARM on {r['author']} reporters {r['reporters']}")
     return "\n".join(lines)
 
 
-FIELDS = {"signals/expected_signals.csv": ["scenario", "kind", "node", "voters", "window_start"], "expected_post_order_hot.csv": ["rank", "post_id", "score"], "expected_post_order_top_day.csv": ["rank", "post_id", "score"],
+FIELDS = {"signals/expected_signals.csv": ["scenario", "kind", "node", "voters", "window_start"], "moderation/expected_report_signals.csv": ["scenario", "author", "reporters", "window_start"],
+          "expected_post_order_hot.csv": ["rank", "post_id", "score"], "expected_post_order_top_day.csv": ["rank", "post_id", "score"],
           "expected_post_order_top_week.csv": ["rank", "post_id", "score"], "expected_post_order_top_all.csv": ["rank", "post_id", "score"],
           "expected_post_order_new.csv": ["rank", "post_id", "score"]}
 
