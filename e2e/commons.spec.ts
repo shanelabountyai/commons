@@ -342,6 +342,10 @@ test('5.1: one click to vote, the pressed state shows, the author sees a fixed +
   // the board page: a vote control per post, with the same state
   await page.goto(`/o/${SLUG}/f/sbc`);
   const row = page.locator('li.post', { hasText: 'P-GW title' });
+  for (let n = 2; (await row.count()) === 0; n++) {
+    if (n > 10) throw new Error('P-GW not on any sbc page'); // 6.1 A: 25 rows a page; P-GW ranks 135th under Hot
+    await page.goto(`/o/${SLUG}/f/sbc?page=${n}`);
+  }
   const postUp = row.getByRole('button', { name: /^Upvote post/ });
   await postUp.click();
   await expect(row.getByRole('status')).toContainText('APPLIED');
