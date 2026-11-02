@@ -265,6 +265,16 @@ Commands: `npm run engine:eval`, `npm run engine:eval:db`, `npm test`, `npm run 
 - **Gate:** vitest 363/363 (49 files; +14 over Part A: 10 detector, 2 swarm live, 2 lock), harness 14/14 with `reviewSwarm` discovered; full Playwright 20/20 on the production build (1.0 min of tests), axe 0 on 32 measurements; `engine:eval` 14 files / 19,576 rows / 0 differences; `engine:eval:db` 2/2 swarm rows through `submitReport` over 8 scenarios (3 reports refused by the report window); `fixtures:check` OK (22 files in the manifest, 14 expected files reproduce); `engine:lint`, `foundation:drift`, `migrate diff` (empty), eslint, tsc clean.
 - **What it is not:** the acceptance line "the community's reports raise no `REPORT_SWARM`" is vacuous — the frozen community fixture has no reports, so the false-positive evidence is the three organic scenarios the author wrote, nothing measured on realistic report traffic. Four thresholds (4 / 7 days / 24 h) are D-79's proposal, untuned. The swarm row names reporters; it hides nothing and ranks nobody (D-31).
 
+## Phase 5 — gate (2026-11-02)
+
+Commands: `npm run engine:lint`, `npm run fixtures:check`, `npm run engine:eval`, `npm run foundation:drift`, `npm test`, `npx tsc --noEmit`; browser numbers from CI run 41529479036 on PR #6 (`4839634`). Head checked: `f311a51`, which contains `phase-5`, PR #5 and PR #6.
+
+- **Signals, fixture first:** `RING` and `AGED_BRIGADE` (`tools/signallib.py`, 9 scenarios / 74 events / 6 rows) and `REPORT_SWARM` (`tools/modlib.py`, 8 scenarios / 44 reports / 2 rows); `engine:eval` 14 files / 19,576 rows / 0 differences, `fixtures:check` OK (22 files in the manifest, 14 expected files reproduce).
+- **Suite:** vitest 363/363 in 49 files, harness 14/14 (`reviewSwarm`, `deleteOwn`, `moderatorFlag` discovered); `engine:lint` OK over the three rules files; `foundation:drift` and tsc clean.
+- **Browser (CI):** full Playwright 20/20 on the production build, axe 0 on 32 measurements, light and dark, 320 px included.
+- **Not re-run locally:** Playwright and `engine:eval:db`; CI owns the sweep and it is green on the code head. The docs-only commit on top (`f311a51`) changes no tested path.
+- **What the gate does not say:** `phase-5` has not been re-tested with 5.4 merged in, because merging is Shane's; the three Phase 5 caveats stand (D-82: `min_contribution_chars`, the vacuous community-report check, GH-08 / GW-09 pending).
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
