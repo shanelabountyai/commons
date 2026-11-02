@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ForumForm as ActionForm } from '@/components/forum-form';
-import { ago, Markdown, ScopeNote, Text, when } from '@/components/forum';
+import { ago, Badge, Crumbs, Markdown, Text, when } from '@/components/forum';
 import { canModerate, editHistoryForThread } from '@/forum/moderation';
 import { downvoteGateNote, ensureProfile, myVotes, nowEpoch, thread, type ThreadNode } from '@/forum/view';
 import { VoteControl } from '@/components/vote-control';
@@ -193,12 +193,12 @@ export default async function Thread({ params, searchParams }: { params: Promise
 
   return (
     <main id="main" tabIndex={-1}>
-      <p className="meta">
-        <Link href={`/o/${ctx.slug}/f`}>Boards</Link> › <Link href={`/o/${ctx.slug}/f/${post.board.slug}`}><Text value={post.board.title} /></Link> ›
-      </p>
+      <Crumbs items={[{ href: `/o/${ctx.slug}/f`, text: 'Boards' }, { href: `/o/${ctx.slug}/f/${post.board.slug}`, text: <Text value={post.board.title} /> }, { text: 'Thread' }]} />
       <article aria-label="Post">
-        <h1 className={[post.pinnedAt ? 'pin' : '', post.lockedAt ? 'lock' : ''].join(' ').trim() || undefined}>
+        <h1>
           {post.status === 'visible' ? <Text value={post.title} /> : <span className="removed">[{post.status}]</span>}
+          {post.pinnedAt && <> <Badge role="pin">Pinned</Badge></>}
+          {post.lockedAt && <> <Badge role="warn">Locked</Badge></>}
         </h1>
         {post.status === 'visible' && <VoteControl action={bound(vote)} postId={post.id} label="post" mine={mine.get(post.id) ?? 0} isAuthor={post.author.id === me.profileId} gateNote={gateNote} />}
         <div className="meta">
@@ -262,7 +262,6 @@ export default async function Thread({ params, searchParams }: { params: Promise
           )}
         </details>
       </article>
-      <ScopeNote />
       <h2 id="comments">
         {post.commentCount} comments · {t.topLevelShown} top-level shown
       </h2>
@@ -285,7 +284,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
           <button type="submit">Comment</button>
         </ActionForm>
       )}
-      {post.lockedAt && <p className="lock">This thread is locked; no new replies.</p>}
+      {post.lockedAt && <p><Badge role="warn">Locked</Badge> This thread is locked; no new replies.</p>}
       <Tree rows={t.rows as Row[]} />
       {t.pages > 1 && (
         <nav aria-label="Comment pages">

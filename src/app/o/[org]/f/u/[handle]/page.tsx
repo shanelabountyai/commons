@@ -43,6 +43,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ org: s
         )}
       </p>
       <h2>Posts</h2>
+      {v.posts.length === 0 && <p>No posts yet.</p>}
       <ul>
         {v.posts.map((p) => (
           <li key={p.publicId}>
@@ -56,6 +57,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ org: s
         ))}
       </ul>
       <h2>Comments</h2>
+      {v.comments.length === 0 && <p>No comments yet.</p>}
       <ul>
         {v.comments.map((c) => (
           <li key={c.publicId}>

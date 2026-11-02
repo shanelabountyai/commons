@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
-import { Markdown, Text, when } from '@/components/forum';
+import { Crumbs, Markdown, Text, when } from '@/components/forum';
 import { downvoteGateNote, ensureProfile, myVotes, nowEpoch, permalinkView } from '@/forum/view';
 import { VoteControl } from '@/components/vote-control';
 import { vote } from '../../../../actions';
@@ -34,9 +34,7 @@ export default async function Permalink({ params }: { params: Promise<{ org: str
   const castVote = vote.bind(null, ctx.slug);
   return (
     <main id="main" tabIndex={-1}>
-      <p className="meta">
-        <Link href={`/o/${ctx.slug}/f`}>Boards</Link> › <Link href={here}><Text value={v.post.title} /></Link> › comment
-      </p>
+      <Crumbs items={[{ href: `/o/${ctx.slug}/f`, text: 'Boards' }, { href: `/o/${ctx.slug}/f/${v.post.board.slug}`, text: <Text value={v.post.board.title} /> }, { href: here, text: <Text value={v.post.title} /> }, { text: 'Comment' }]} />
       <h1>Comment in context</h1>
       {v.ancestors.length > 0 && (
         <ol aria-label="Ancestors">

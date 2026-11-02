@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { requireOrg } from '@/core/authz/guards';
-import { ScopeNote, Text } from '@/components/forum';
+import { Text } from '@/components/forum';
 import { boards, ensureProfile } from '@/forum/view';
 
 export const metadata = { title: 'Boards · Commons' };
@@ -12,8 +12,7 @@ export default async function Boards({ params }: { params: Promise<{ org: string
   return (
     <main id="main" tabIndex={-1}>
       <h1>Boards</h1>
-      <ScopeNote />
-      {bs.length === 0 && <p>No boards yet. Load the fixture (<code>npm run commons:load -- --org {ctx.slug}</code>) or ask an admin to create one.</p>}
+      {bs.length === 0 && <p>{ctx.role === 'owner' ? 'No boards yet.' : 'No boards yet; ask an owner.'}</p>}
       <ul>
         {bs.map((b) => (
           <li key={b.id}>
