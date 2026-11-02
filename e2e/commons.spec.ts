@@ -435,3 +435,49 @@ test('5.4 A: the queue filters by kind, warns the author and locks the thread in
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true);
   await expectAccessible(page, 'filtered queue at 320px', 'Moderation queue');
 });
+
+// ---- PRD 6.1 Part A (D-84): tokens, text badges, board page 25/page, breadcrumbs, scope footer, empty states. Red first. ----
+const WIDTHS = [320, 768, 1280] as const; // the Phase 6 gate's three widths; axe.ts does light and dark at each
+const SCOPE = 'Learning project, synthetic community.';
+
+test('6.1 A: the board pages at 25 with a pager, pinned is a text badge, meta carries a relative <time>, and the scope sentence sits once in the footer', async ({ page }) => {
+  await signIn(page);
+  // pin P-GH-50 through the thread's moderation form (the fixture has no pinned post)
+  await page.goto(`/o/${SLUG}/f/p/P-GH-50`);
+  await page.getByRole('article', { name: 'Post' }).locator('summary').first().click();
+  await page.getByLabel('Reason for thread action').fill('6.1 pin check');
+  await page.getByRole('button', { name: 'Pin', exact: true }).click();
+  await expect(page.locator('h1 .badge', { hasText: 'Pinned' })).toBeVisible();
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('h1')!, '::before').content)).toBe('none'); // no CSS emoji
+  // the board: 25 rows, the pinned one first with its badge, a relative age with a machine-readable time
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await expect(page.locator('ol li.post')).toHaveCount(25);
+  const first = page.locator('ol li.post').first();
+  await expect(first).toContainText('P-GH-50');
+  await expect(first.locator('.badge', { hasText: 'Pinned' })).toBeVisible();
+  await expect(first.locator('.meta time')).toHaveAttribute('datetime', /^\d{4}-/);
+  await expect(first.locator('.meta')).toContainText(/(just now|\d+ (min|h|d|mo|y) ago)/);
+  await expect(first.locator('.meta')).not.toContainText(/\d{4}-\d{2}-\d{2}/);
+  await page.getByRole('link', { name: 'Page 2' }).click();
+  await expect(page.getByRole('link', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('ol li.post')).toHaveCount(25);
+  await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Boards' })).toBeVisible();
+  expect(await page.getByRole('navigation', { name: 'Breadcrumb' }).textContent()).not.toMatch(/›\s*$/);
+  // the scope sentence once per page, in the footer; "delete org" out of the forum nav and into the footer (owner)
+  for (const path of [`/o/${SLUG}/f`, `/o/${SLUG}/f/selfhosting`, `/o/${SLUG}/f/p/P-CHAIN`, `/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, `/o/${SLUG}/f/search?q=P-GW`, `/o/${SLUG}/f/u/homelabber059`, `/o/${SLUG}/f/mod`]) {
+    await page.goto(path);
+    await expect(page.getByText(SCOPE), path).toHaveCount(1);
+    await expect(page.locator('footer').getByText(SCOPE), path).toHaveCount(1);
+    await expect(page.getByRole('navigation', { name: 'Forum' }).getByRole('link', { name: /delete org/i }), path).toHaveCount(0);
+    await expect(page.locator('footer').getByRole('link', { name: /delete org/i }), path).toHaveCount(1);
+  }
+  // axe at the three widths, light and dark, on Boards and the board; no horizontal scroll at 320
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`/o/${SLUG}/f`);
+    await expectAccessible(page, `boards at ${width}px`, 'Boards');
+    await page.goto(`/o/${SLUG}/f/selfhosting?page=2`);
+    expect(await page.evaluate((w) => document.documentElement.scrollWidth <= w, width)).toBe(true);
+    await expectAccessible(page, `board page 2 at ${width}px`, 'Hot');
+  }
+});
