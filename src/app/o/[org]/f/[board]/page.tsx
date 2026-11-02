@@ -41,7 +41,7 @@ export default async function Board({ params, searchParams }: { params: Promise<
       <h1>
         <Text value={v.board.title} />
       </h1>
-      <p className="meta"><a href="#compose">New post</a></p>
+      <p className="meta"><a href="#compose">Write a post</a></p>
       <nav className="tabs" aria-label="Sort">
         {POST_SORTS.map((s) => (
           <span key={s}>
