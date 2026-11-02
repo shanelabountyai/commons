@@ -54,6 +54,7 @@ model Profile {
   edits       EditHistory[]
   limitHits   LimitHit[]
   reports     Report[]
+  reportSwarms ReportSwarmSignal[]
   modActions  ModerationAction[] @relation("ModerationActor")
   modSubject  ModerationAction[] @relation("ModerationSubject")
   uploads     Upload[]
@@ -296,6 +297,25 @@ model ModerationAction {
 }
 
 /// Task 4.5: a near-duplicate body inside the window; accepted, queued, never acted on automatically.
+/// PRD 5.4 B (D-31): ≥ report_swarm.min_reporters distinct reporters younger than max_reporter_age_days reporting one
+/// author's nodes inside window_seconds. One row per (author, window); the reporters are kept so the queue can name
+/// them. Signal only: nothing is hidden or acted on.
+model ReportSwarmSignal {
+  id            String    @id @default(uuid()) @db.Uuid
+  orgId         String    @db.Uuid
+  org           Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subjectId     String    @db.Uuid
+  subject       Profile   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  windowStart   DateTime  @db.Timestamptz(6)
+  reporterCount Int
+  reporterIds   String[]  @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  reviewedAt    DateTime? @db.Timestamptz(6)
+
+  @@unique([subjectId, windowStart])
+  @@index([orgId, reviewedAt, createdAt])
+}
+
 model DuplicateSignal {
   id          String    @id @default(uuid()) @db.Uuid
   orgId       String    @db.Uuid

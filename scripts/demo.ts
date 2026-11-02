@@ -63,6 +63,7 @@ for (const sort of ['hot', 'top_all', 'new'] as PostSort[]) {
 h('Act 2 — a spam wave from an account 1 hour old (young: comment window young_max 2 / 60 s, post young_max 1 / 3600 s)');
 const label = async (items: Awaited<ReturnType<typeof queue>>) =>
   (await Promise.all(items.map(async (i) => {
+    if (i.kind === 'REPORT_SWARM') return `REPORT_SWARM(${i.reporters.length} reporters) on ${i.subject.handle}`;
     const pid = i.node.kind === 'POST' ? (await db.post.findUnique({ where: { id: i.node.id }, select: { publicId: true } }))?.publicId : (await db.comment.findUnique({ where: { id: i.node.id }, select: { publicId: true } }))?.publicId;
     return i.kind === 'BRIGADE' ? `BRIGADE(${i.voterCount} voters) on ${pid}` : i.kind === 'CASE' ? `CASE(${i.reports} report: ${i.reasons.join(',')}) on ${pid}` : `${i.kind} on ${pid}`;
   }))).join(', ') || 'none';

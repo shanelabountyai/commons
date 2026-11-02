@@ -2,29 +2,33 @@
 // loads the fixture through the real writers (tree writer, vote path), recomputes ranks at NOW, then diffs what is
 // STORED against the same 12 expected files: orderings from RankSnapshot, counts from the caches, outcomes from
 // VoteEvent, paths and renders from the stored Comment rows. Also: votes:verify clean, exactly one BrigadeSignal
-// (D-31), commentCount = comments per post. Exit 1 naming the first difference. Runs against .env.test's database.
+// (D-31), commentCount = comments per post; the 5.2 vote-signal scenarios through the vote path and the 5.4 B
+// report-swarm scenarios through submitReport. Exit 1 naming the first difference. Runs against .env.test's database.
 import { readFileSync } from 'node:fs';
 import { db } from '@/core/db';
 import type { CsvRow } from '@/fixtures/csv';
 import { expectedRows, loadFixtures, NOW } from '@/fixtures/load';
 import { toEpoch } from '@/forum/db';
 import { loadForum } from '@/forum/load';
+import { submitReport } from '@/forum/moderation';
+import type { SwarmScenario } from '@/limits/report-swarm';
 import { recomputeRanks } from '@/forum/rank';
 import { castVote, votesVerify } from '@/forum/votes';
 import { createPost } from '@/forum/tree-write';
 import type { SignalScenario } from '@/votes/signals';
 import { toDate } from '@/forum/db';
 import { replay } from '@/limits';
-import { parseLimitRules, parseRankingRules } from '@/rules';
+import { parseLimitRules, parseModerationRules, parseRankingRules } from '@/rules';
 import { assignPaths, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
 
 const ranking = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8')));
 const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
+const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
 const fx = loadFixtures();
 const SLUG = 'homelab-eval';
 
 // fresh org
-await db.$executeRawUnsafe(`TRUNCATE "RankSnapshot", "EditHistory", "BrigadeSignal", "VoteEvent", "Vote", "Comment", "Post", "Board", "Profile" CASCADE`);
+await db.$executeRawUnsafe(`TRUNCATE "ReportSwarmSignal", "Report", "ModerationCase", "LimitHit", "RankSnapshot", "EditHistory", "BrigadeSignal", "VoteEvent", "Vote", "Comment", "Post", "Board", "Profile" CASCADE`);
 await db.org.deleteMany({ where: { slug: SLUG } });
 const org = await db.org.create({ data: { slug: SLUG, name: SLUG } });
 const t0 = Date.now();
@@ -231,6 +235,54 @@ const sigOk = JSON.stringify(stored) === JSON.stringify(want);
 console.log(`${sigOk ? 'ok  ' : 'DIFF'} signals/expected_signals.csv through the vote path: ${stored.length}/${want.length} rows over ${scenarios.length} scenarios`);
 if (!sigOk) console.log({ stored, want });
 failed ||= !sigOk;
+
+// 5.4 B: every report-swarm scenario through the door (submitReport: membership, report window, one report per node), one org,
+// stored ReportSwarmSignal rows diffed against expected_report_signals.csv. A reporter the `report` window refuses is counted, not hidden.
+// The community fixture holds no reports, so its "no swarm" check is vacuous; the organic scenarios are the false-positive evidence.
+const swarms = (JSON.parse(readFileSync('fixtures/moderation/scenarios.json', 'utf8')) as { scenarios: SwarmScenario[] }).scenarios;
+const SW_SLUG = 'swarm-eval';
+await db.org.deleteMany({ where: { slug: SW_SLUG } });
+const swOrg = await db.org.create({ data: { slug: SW_SLUG, name: SW_SLUG } });
+const swBoard = await db.board.create({ data: { orgId: swOrg.id, slug: 'swarms', title: 'Swarms' } });
+const swTag = swOrg.id.slice(0, 8);
+const subjectOf = new Map<string, { scenario: string; id: string }>();
+let rateLimited = 0;
+for (const sc of swarms) {
+  await db.$transaction(
+    async (tx) => {
+      const prof = new Map<string, string>();
+      for (const a of sc.accounts) {
+        const user = await tx.user.create({ data: { email: `${sc.id}-${a.id}-${swTag}@swarms.example.test` } });
+        await tx.membership.create({ data: { orgId: swOrg.id, userId: user.id, role: 'member' } });
+        const p = await tx.profile.create({ data: { orgId: swOrg.id, userId: user.id, handle: `${sc.id}-${a.id}`.toLowerCase(), joinedAt: toDate(a.created_at) } });
+        prof.set(a.id, p.id);
+        subjectOf.set(p.id, { scenario: sc.id, id: a.id });
+      }
+      const byNode = new Map<string, string>();
+      const first = Math.min(...sc.reports.map((r) => r.reported_at));
+      for (const n of sc.nodes) byNode.set(n.id, (await createPost(tx, { orgId: swOrg.id, boardId: swBoard.id, authorId: prof.get(n.author)!, publicId: `${sc.id}-${n.id}`, title: n.id, body: n.id, createdAt: first - 3600 })).id);
+      for (const r of [...sc.reports].sort((a, b) => a.reported_at - b.reported_at || a.row - b.row)) {
+        try {
+          await submitReport(tx, { orgId: swOrg.id, profileId: prof.get(r.reporter)!, node: { kind: 'POST', id: byNode.get(r.node_id)! }, reason: 'spam', at: r.reported_at }, limits, mod);
+        } catch (e) {
+          if ((e as { code?: string }).code !== 'RATE_LIMITED') throw e;
+          rateLimited++;
+        }
+      }
+    },
+    { timeout: 120_000 },
+  );
+}
+const storedSwarms = (await db.reportSwarmSignal.findMany({ where: { orgId: swOrg.id } }))
+  .map((r) => ({ scenario: subjectOf.get(r.subjectId)!.scenario, author: subjectOf.get(r.subjectId)!.id, reporters: String(r.reporterCount), window_start: String(toEpoch(r.windowStart)) }))
+  .sort((a, b) => (a.scenario + a.author + a.window_start < b.scenario + b.author + b.window_start ? -1 : 1));
+const wantSwarms = expectedRows('moderation/expected_report_signals.csv')
+  .map((r) => ({ scenario: r.scenario!, author: r.author!, reporters: r.reporters!, window_start: r.window_start! }))
+  .sort((a, b) => (a.scenario + a.author + a.window_start < b.scenario + b.author + b.window_start ? -1 : 1));
+const swOk = JSON.stringify(storedSwarms) === JSON.stringify(wantSwarms);
+console.log(`${swOk ? 'ok  ' : 'DIFF'} moderation/expected_report_signals.csv through submitReport: ${storedSwarms.length}/${wantSwarms.length} rows over ${swarms.length} scenarios (${rateLimited} reports refused by the report window, as the rules say)`);
+if (!swOk) console.log({ storedSwarms, wantSwarms });
+failed ||= !swOk;
 await db.$disconnect();
 if (failed) {
   console.error('engine:eval:db: FAIL');

@@ -8,7 +8,7 @@ import { ago, Markdown, Text, when } from '@/components/forum';
 import { authorHistory, canModerate, modLog, queue, type QueueItem } from '@/forum/moderation';
 import { ensureProfile } from '@/forum/view';
 import { parseLimitRules, parseModerationRules } from '@/rules';
-import { moderateContent, moderateThread, moderateUser, reviewBrigade, reviewDuplicate } from '../actions';
+import { moderateContent, moderateThread, moderateUser, reviewBrigade, reviewDuplicate, reviewSwarm } from '../actions';
 
 const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
 const signalRules = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8'))).signals;
@@ -22,8 +22,8 @@ const signalHeading = (kind: 'BRIGADE' | 'RING' | 'AGED_BRIGADE', n: number) =>
       ? `Suspected brigade from accounts under ${signalRules.aged_brigade.max_account_age_days} days: ${n} downvotes within ${mins(signalRules.aged_brigade.window_seconds)} min`
       : `Suspected brigade: ${n} gated downvotes`;
 
-/** 5.4 A: the filterable kinds — a BRIGADE row carries which vote signal it is. */
-const KINDS = ['CASE', 'BRIGADE', 'RING', 'AGED_BRIGADE', 'DUPLICATE'] as const;
+/** 5.4 A: the filterable kinds — a BRIGADE row carries which vote signal it is. 5.4 B adds the report swarm. */
+const KINDS = ['CASE', 'BRIGADE', 'RING', 'AGED_BRIGADE', 'DUPLICATE', 'REPORT_SWARM'] as const;
 type Kind = (typeof KINDS)[number];
 const kindOf = (i: QueueItem): Kind => (i.kind === 'BRIGADE' ? i.signal : i.kind);
 const EXCERPT = 240;
@@ -65,8 +65,9 @@ export default async function ModQueue({ params, searchParams }: { params: Promi
   const items = filtered.slice((pageNo - 1) * size, pageNo * size);
 
   // context for every node on this page
-  const postIds = items.filter((i) => i.node.kind === 'POST').map((i) => i.node.id);
-  const commentIds = items.filter((i) => i.node.kind === 'COMMENT').map((i) => i.node.id);
+  const noded = items.filter((i) => i.kind !== 'REPORT_SWARM');
+  const postIds = noded.filter((i) => i.node.kind === 'POST').map((i) => i.node.id);
+  const commentIds = noded.filter((i) => i.node.kind === 'COMMENT').map((i) => i.node.id);
   const [posts, comments] = await Promise.all([
     db.post.findMany({ where: { id: { in: postIds }, orgId: ctx.orgId }, include: { author: true } }),
     db.comment.findMany({ where: { id: { in: commentIds }, orgId: ctx.orgId }, include: { author: true, post: { select: { publicId: true, title: true, lockedAt: true } } } }),
@@ -86,7 +87,7 @@ export default async function ModQueue({ params, searchParams }: { params: Promi
     <main id="main" tabIndex={-1}>
       <h1>Moderation queue</h1>
       <p className="meta">
-        {all.length} open item{all.length === 1 ? '' : 's'}: cases from reports, vote signals (brigade: ≥ {brigadeRule.min_voters} gated downvotes in {mins(brigadeRule.window_seconds)} min; ring: ≥ {signalRules.ring.min_voters} upvotes from new accounts in {mins(signalRules.ring.window_seconds)} min; aged brigade: ≥ {signalRules.aged_brigade.min_voters} downvotes from accounts under {signalRules.aged_brigade.max_account_age_days} days in {mins(signalRules.aged_brigade.window_seconds)} min), duplicate signals. Nothing here was acted on automatically.
+        {all.length} open item{all.length === 1 ? '' : 's'}: cases from reports, vote signals (brigade: ≥ {brigadeRule.min_voters} gated downvotes in {mins(brigadeRule.window_seconds)} min; ring: ≥ {signalRules.ring.min_voters} upvotes from new accounts in {mins(signalRules.ring.window_seconds)} min; aged brigade: ≥ {signalRules.aged_brigade.min_voters} downvotes from accounts under {signalRules.aged_brigade.max_account_age_days} days in {mins(signalRules.aged_brigade.window_seconds)} min), duplicate signals, report swarms (≥ {mod.report_swarm.min_reporters} reporters under {mod.report_swarm.max_reporter_age_days} days on one member in {Math.round(mod.report_swarm.window_seconds / 3600)} h). Nothing here was acted on automatically.
       </p>
       <nav className="filters" aria-label="Filter by kind">
         <Link href={`${base}/mod${query({ reason })}`} aria-current={kind ? undefined : 'page'}>
@@ -113,6 +114,35 @@ export default async function ModQueue({ params, searchParams }: { params: Promi
       {filtered.length === 0 && <p>{all.length === 0 ? 'The queue is empty.' : 'Nothing matches this filter.'}</p>}
       {await Promise.all(
         items.map(async (item) => {
+          if (item.kind === 'REPORT_SWARM') {
+            // 5.4 B: a swarm names a member and the reporters; the reports themselves stay in their cases (D-31)
+            const hist = await authorHistory(db, item.subject.id);
+            return (
+              <section key={`${item.kind}-${item.id}`} aria-label={`REPORT_SWARM on ${item.subject.handle}`} className="post">
+                <h2>
+                  <span className="badge">REPORT_SWARM</span> Suspected report swarm: {item.reporters.length} accounts under {mod.report_swarm.max_reporter_age_days} days reported{' '}
+                  <Link href={`${base}/u/${item.subject.handle}`}><Text value={item.subject.handle} /></Link> within {Math.round(mod.report_swarm.window_seconds / 3600)} h
+                </h2>
+                <p className="meta">
+                  target {item.subject.modState}; {hist.reports} reports on their posts, {hist.actions} prior actions · first report {when(item.windowStart)} · opened {when(item.createdAt)}
+                </p>
+                <ul aria-label="Reporters">
+                  {item.reporters.map((r, i) => (
+                    <li key={i} className="meta">
+                      <Link href={`${base}/u/${r.handle}`}><Text value={r.handle} /></Link> (joined {ago(r.joinedAt)})
+                    </li>
+                  ))}
+                </ul>
+                <ActionForm action={reviewSwarm.bind(null, ctx.slug)}>
+                  <input type="hidden" name="reportSwarmSignalId" value={item.id} />
+                  <label>
+                    Note <input name="reason" required maxLength={1000} aria-label={`Review note for the report swarm on ${item.subject.handle}`} />
+                  </label>
+                  <button type="submit">Mark reviewed</button>
+                </ActionForm>
+              </section>
+            );
+          }
           const c = ctxOf(item.node);
           if (!c) return null;
           const hist = await authorHistory(db, c.author.id);

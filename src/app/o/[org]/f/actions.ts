@@ -93,7 +93,7 @@ export const vote = orgAction(null, nodeSchema.extend({ value: z.enum(['1', '-1'
   const { node } = await resolveNode(ctx.orgId, i);
   let outcome = '';
   try {
-    outcome = (await db.$transaction((tx) => submitVote(tx, { orgId: ctx.orgId, profileId: me.profileId, node, value: i.value === '1' ? 1 : -1, at: nowEpoch() }, limits))).outcome;
+    outcome = (await db.$transaction((tx) => submitVote(tx, { orgId: ctx.orgId, profileId: me.profileId, node, value: i.value === '1' ? 1 : -1, at: nowEpoch() }, limits, mod))).outcome;
   } catch (e) {
     refused(e);
   }
@@ -107,7 +107,7 @@ export const edit = orgAction(null, nodeSchema.extend({ body: z.string().min(1).
   const { node, postPublicId, anchor } = await resolveNode(ctx.orgId, i);
   try {
     await db.$transaction(async (tx) => {
-      const r = await submitEdit(tx, { orgId: ctx.orgId, editorId: me.profileId, node, body: i.body, at: nowEpoch() }, limits);
+      const r = await submitEdit(tx, { orgId: ctx.orgId, editorId: me.profileId, node, body: i.body, at: nowEpoch() }, limits, mod);
       await audit(ctx, 'forum.edited', { targetType: node.kind.toLowerCase(), targetId: node.id, data: { withinWindow: r.withinWindow } }, tx);
     });
   } catch (e) {
@@ -219,7 +219,7 @@ export const moderatorFlag = orgAction(null, z.object({ handle: z.string().min(1
 });
 
 // Two actions, one per signal table, so each id is a ref('<model>') the invariant harness can scope (FR-08).
-async function review(ctx: OrgCtx, kind: 'BRIGADE' | 'DUPLICATE', signalId: string, reason: string) {
+async function review(ctx: OrgCtx, kind: 'BRIGADE' | 'DUPLICATE' | 'REPORT_SWARM', signalId: string, reason: string) {
   const me = await ensureProfile(ctx);
   try {
     await db.$transaction(async (tx) => {
@@ -233,3 +233,4 @@ async function review(ctx: OrgCtx, kind: 'BRIGADE' | 'DUPLICATE', signalId: stri
 }
 export const reviewBrigade = orgAction(null, z.object({ brigadeSignalId: ref('brigadeSignal'), reason: z.string().min(1).max(1000) }), (ctx, i) => review(ctx, 'BRIGADE', i.brigadeSignalId, i.reason));
 export const reviewDuplicate = orgAction(null, z.object({ duplicateSignalId: ref('duplicateSignal'), reason: z.string().min(1).max(1000) }), (ctx, i) => review(ctx, 'DUPLICATE', i.duplicateSignalId, i.reason));
+export const reviewSwarm = orgAction(null, z.object({ reportSwarmSignalId: ref('reportSwarmSignal'), reason: z.string().min(1).max(1000) }), (ctx, i) => review(ctx, 'REPORT_SWARM', i.reportSwarmSignalId, i.reason));
