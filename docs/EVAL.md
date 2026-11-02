@@ -244,6 +244,16 @@ Commands: `npm test`, `npx playwright test` (production build, as CI).
 - **Gate:** vitest 347/347 (48 files); full Playwright 19/19 in 3.8 min; harness 14/14; `engine:eval` unchanged (13 files, 0 differences).
 - **What it is not:** no optimistic update — the state shown is the server's after the action returns; the gate note is computed per page view, so an account that crosses 24 h mid-page sees it on the next load.
 
+## Phase 5 — mod queue triage, Part A (PRD 5.4 A, 2026-11-02)
+
+Commands: `npm test`, `npx playwright test` (production build, as CI).
+
+- **Reporter records from the log** (`reporterRecords`): `tests/integration/moderation.test.ts` — a reporter whose two earlier reports ended one `REMOVED` and one `CLEARED` reads `1 / 1`; a report removed then restored counts for neither; the handle and `joinedAt` ride along.
+- **Same-second duplicate** (found by run 3 of the sweep): two copies of one ≥ 40-char body at the same epoch second raised no `DUPLICATE` signal under the strict `lt`; red test M-P10/M-P11, then `lte` (D-80).
+- **In the browser** (`e2e/commons.spec.ts`, 5.4 A test): with CASE (2), BRIGADE (1) and DUPLICATE (1) present, each kind filter shows exactly its items and the count beside the link; clearing one case returns to the same `?kind=CASE` page; the remaining case's reporter line reads `… 0 removed / 1 cleared before): harassment`; the excerpt is ≤ 240 chars (+ellipsis) with the full body closed; Warn and Lock from the queue land on the same filtered page, the row reads `(WARNED;` then `thread locked`, and the log's first two rows are LOCK then WARN with `seq` strictly descending and the post title linked; 50 synthetic rows push the run's first REMOVE onto log page 2 ("Log page 2 of 2"); the filtered queue at 320 px has no horizontal scroll. axe 0 violations light and dark on the filtered queue at 1280 and at 320 px.
+- **Gate:** vitest 349/349 (48 files); harness 14/14; full Playwright 20/20 in 57.5 s of tests (plus the production build); `engine:eval` 13 files / 19,574 rows / 0 differences; `fixtures:check` OK.
+- **What it is not:** the reporter record is a count of how a moderator ruled on that reporter's past reports, not a reputation score, and it hides nothing (D-31); the filters are reads over the open queue in memory (fine at the fixture's scale, revisit past a few thousand open items); nothing in Part A changes what a lock refuses or raises a swarm signal — that is Part B.
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
