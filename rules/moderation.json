@@ -22,5 +22,7 @@
   },
   "ban_durations_hours": [24, 168, 720, 0],
   "duplicate": { "window_seconds": 86400, "min_chars": 40 },
-  "queue": { "page_size": 50 }
+  "queue": { "page_size": 50 },
+  "report_swarm": { "min_reporters": 4, "window_seconds": 86400, "max_reporter_age_days": 7 },
+  "lock_refuses": ["reply", "vote", "edit"]
 }

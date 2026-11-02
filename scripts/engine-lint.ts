@@ -102,10 +102,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (problems.length) process.exit(1);
   let rulesNote = 'rules schema check pending task 1.4';
   if (existsSync('src/rules/index.ts')) {
-    const { parseRankingRules, parseLimitRules } = await import('../src/rules/index');
+    const { parseRankingRules, parseLimitRules, parseModerationRules } = await import('../src/rules/index');
     const r = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8')));
     const l = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
-    rulesNote = `rules/ranking.json valid (gravity ${r.hot.gravity_seconds}s, z ${r.best.z}); rules/limits.json valid (${l.windows.length} windows)`;
+    const m = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
+    rulesNote = `rules/ranking.json valid (gravity ${r.hot.gravity_seconds}s, z ${r.best.z}); rules/limits.json valid (${l.windows.length} windows); rules/moderation.json valid (swarm ≥ ${m.report_swarm.min_reporters} in ${m.report_swarm.window_seconds}s, lock refuses ${m.lock_refuses.join('/')})`;
   }
   console.log(`engine:lint: OK (${files} files under ${ENGINE_DIRS.join(', ')} clean; ${rulesNote})`);
 }

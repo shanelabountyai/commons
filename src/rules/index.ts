@@ -76,6 +76,8 @@ export function windowFor(rules: LimitRules, action: Action): WindowRule {
 }
 
 // Moderation as data (Phase 4, task 4.1): report reasons, the two state machines, ban durations, the duplicate window.
+export const LOCKABLE = ['reply', 'vote', 'edit'] as const;
+export type Lockable = (typeof LOCKABLE)[number];
 const stateMachine = z.record(z.string().regex(/^[A-Z_]+$/), z.array(z.string().regex(/^[A-Z_]+$/)));
 export const ModerationRulesSchema = z
   .object({
@@ -86,6 +88,13 @@ export const ModerationRulesSchema = z
     ban_durations_hours: z.array(nonNegInt).nonempty(), // 0 = permanent
     duplicate: z.object({ window_seconds: positiveInt, min_chars: positiveInt }).strict(),
     queue: z.object({ page_size: positiveInt }).strict(),
+    /** PRD 5.4 B: ≥ min_reporters distinct reporters younger than max_reporter_age_days reporting one author's nodes inside window_seconds → one REPORT_SWARM signal (signal only, D-31). */
+    report_swarm: z.object({ min_reporters: positiveInt, window_seconds: positiveInt, max_reporter_age_days: positiveInt }).strict(),
+    /** PRD 5.4 B: what a locked thread refuses; moderator actions are never in this set. */
+    lock_refuses: z
+      .array(z.enum(LOCKABLE))
+      .nonempty()
+      .refine((xs) => new Set(xs).size === xs.length, { message: 'duplicate entry' }),
   })
   .strict();
 export type ModerationRules = z.infer<typeof ModerationRulesSchema>;
