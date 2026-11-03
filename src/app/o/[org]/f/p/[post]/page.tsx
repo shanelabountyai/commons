@@ -188,17 +188,18 @@ export default async function Thread({ params, searchParams }: { params: Promise
         </div>
         {post.status === 'visible' ? <Markdown body={post.body} /> : <p className="removed">This post was {post.status}{isMod ? '; the body is below for moderators.' : '.'}</p>}
         {post.status !== 'visible' && isMod && <Markdown body={post.body} />}
-        {post.uploads.length > 0 && (
+        {post.uploads.length > 0 && (post.status === 'visible' || isMod) && (
           <ul aria-label="Attachments">
             {post.uploads.map((u) => (
               <li key={u.id}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- served by our own guarded route with the stored mime; next/image would re-fetch it through the optimizer, outside the guard */}
-                <img src={`/o/${ctx.slug}/f/uploads/${u.id}`} alt={`Attachment ${u.id.slice(0, 8)} (${u.mime}, ${Math.round(u.bytes / 1024)} kB)`} style={{ maxWidth: '100%', maxHeight: '24rem' }} />
+                <img src={`/o/${ctx.slug}/f/uploads/${u.id}`} alt={u.alt ?? 'Undescribed attachment'} style={{ maxWidth: '100%', maxHeight: '24rem' }} />
+                {u.alt === null && post.author.id === me.profileId && <p className="meta">No description: this was attached before descriptions existed (PRD 6.2).</p>}
               </li>
             ))}
           </ul>
         )}
-        {sp.upload && <p role="alert">{sp.upload}</p>}
+        {sp.upload && <p role="alert" id="upload-refusal">{sp.upload}</p>}
         <details open={sp.upload ? true : undefined}>
           <summary>Report{post.author.id === me.profileId ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
           <ReportForm kind="POST" label="this post" />
@@ -222,7 +223,19 @@ export default async function Thread({ params, searchParams }: { params: Promise
             <form method="post" encType="multipart/form-data" action={`/o/${ctx.slug}/f/uploads?post=${post.id}`}>
               <label>
                 Attach an image (png, jpeg or webp, up to {Math.round(limits.upload.max_bytes / 1_000_000)} MB)
-                <input type="file" name="file" accept={limits.upload.types.join(',')} required />
+                <input type="file" name="file" accept={limits.upload.types.join(',')} required aria-describedby={sp.upload ? 'upload-refusal upload-hint' : 'upload-hint'} />
+              </label>
+              <p className="meta" id="upload-hint">
+                Up to {limits.upload.max_per_post} per post. Location and camera data are removed before the image is stored.
+              </p>
+              <label>
+                Describe the image <input name="alt" maxLength={300} aria-describedby={sp.upload ? 'upload-refusal alt-hint' : 'alt-hint'} />
+              </label>
+              <p className="meta" id="alt-hint">
+                What someone who cannot see it needs to know, up to 300 characters.
+              </p>
+              <label>
+                <input type="checkbox" name="decorative" /> Decorative (no description)
               </label>
               <button type="submit">Attach</button>
             </form>

@@ -238,6 +238,7 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   await expect(uploadForm).toHaveAttribute('action', /\/f\/uploads\?post=/);
   expect(await page.evaluate(() => document.querySelectorAll('form form').length), 'no nested forms').toBe(0);
   await post.getByLabel(/Attach an image/).setInputFiles({ name: 'evil.png', mimeType: 'image/png', buffer: Buffer.from('<svg onload=alert(1)></svg>') });
+  await post.getByLabel('Describe the image').fill('not really a png'); // 6.2: described, so the refusal is the bytes'
   const posted = page.waitForRequest((r) => r.method() === 'POST', { timeout: 15_000 });
   await post.getByRole('button', { name: 'Attach', exact: true }).click();
   const req = await posted;
@@ -246,6 +247,7 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   const detail = `POST ${req.url()} → ${res?.status()} ${JSON.stringify(res?.headers() ?? {})}; page now ${page.url()}; body: ${(await page.textContent('body'))?.slice(0, 300)}`;
   await expect(page.locator('p[role="alert"]'), detail).toBeVisible(); // not inside a closed <details>
   await expect(page.locator('p[role="alert"]')).toContainText('INPUT_INVALID');
+  await expect(page.locator('p[role="alert"]')).toContainText('do not look like image/png');
 });
 
 test('4.1.12: a refused comment keeps what was typed (RATE_LIMITED on a young account)', async ({ page }) => {
@@ -537,5 +539,55 @@ test('6.1 B: one h3 per comment, removed and deleted named by status, subtrees i
       const step = await page.locator('ol.thread details > ol').first().evaluate((e) => parseFloat(getComputedStyle(e).marginLeft) + parseFloat(getComputedStyle(e).paddingLeft));
       expect(step).toBeLessThanOrEqual(16);
     }
+  }
+});
+
+// ---- PRD 6.2 (D-87): author alt text, decorative, the refusal named by aria-describedby, alt as attribute text. Red first. ----
+const uploadCases = (JSON.parse(readFileSync('fixtures/uploads/cases.json', 'utf8')) as { cases: { id: string; hex: string }[] }).cases;
+const pngFile = (name: string) => ({ name, mimeType: 'image/png', buffer: Buffer.from(uploadCases.find((c) => c.id === 'U-STRIP-PNG')!.hex, 'hex') });
+
+test('6.2: an attachment is named by its description; decorative is alt=""; a missing description is refused and described; hostile alt stays text', async ({ page }) => {
+  await signIn(page);
+  await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]); // the owner is young: 4.1.6 just spent the post window
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await page.waitForLoadState('networkidle');
+  await page.getByLabel('Title', { exact: true }).fill('Attachment alt check');
+  await page.getByLabel(/^Body/).fill('A post with described attachments.');
+  await page.getByRole('button', { name: 'Post', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Attachment alt check' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const post = page.locator('article[aria-label="Post"]');
+  const attach = async (o: { alt?: string; decorative?: boolean }) => {
+    await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]); // the young window is not what this spec measures
+    if ((await post.locator('details').first().getAttribute('open')) === null) await post.locator('summary').first().click(); // open="" is open
+    await post.getByLabel(/Attach an image/).setInputFiles(pngFile('rack.png'));
+    if (o.alt !== undefined) await post.getByLabel('Describe the image').fill(o.alt);
+    if (o.decorative) await post.getByLabel('Decorative (no description)').check();
+    await post.getByRole('button', { name: 'Attach', exact: true }).click();
+    await page.waitForLoadState('networkidle');
+  };
+  // no description, not decorative: refused above the panel, and the file input names the refusal
+  await attach({});
+  const alert = page.locator('p[role="alert"]');
+  await expect(alert).toContainText('description is empty');
+  await expect(alert).toContainText('INPUT_INVALID');
+  const describedBy = (await post.getByLabel(/Attach an image/).getAttribute('aria-describedby')) ?? '';
+  expect(describedBy.split(' ')).toContain(await alert.getAttribute('id'));
+  await expect(page.locator('ul[aria-label="Attachments"] img')).toHaveCount(0);
+  // described, decorative, hostile
+  await attach({ alt: 'A 12U rack, front view, patch panel at the top' });
+  await expect(page.getByRole('img', { name: 'A 12U rack, front view, patch panel at the top' })).toBeVisible();
+  await attach({ decorative: true });
+  await expect(page.locator('ul[aria-label="Attachments"] img[alt=""]')).toHaveCount(1);
+  const hostile = '"><img src=x onerror=alert(1)>';
+  await attach({ alt: hostile });
+  await expect(page.locator('ul[aria-label="Attachments"] img')).toHaveCount(3); // no second img from the description
+  expect(await page.locator('ul[aria-label="Attachments"] img').nth(2).getAttribute('alt')).toBe(hostile);
+  expect(await page.evaluate(() => document.querySelectorAll('[onerror]').length)).toBe(0);
+  // axe at the three widths, light and dark, on a thread with attachments
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.reload();
+    await expectAccessible(page, `thread with attachments at ${width}px`, 'Attachment alt check');
   }
 });
