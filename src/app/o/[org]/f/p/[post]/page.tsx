@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ForumForm as ActionForm } from '@/components/forum-form';
-import { ago, Badge, Crumbs, Markdown, Text, when } from '@/components/forum';
+import { ago, Badge, CommentHeading, Crumbs, Markdown, Pager, removedName, Text, Tree, when, whenText } from '@/components/forum';
 import { canModerate, editHistoryForThread } from '@/forum/moderation';
 import { downvoteGateNote, ensureProfile, myVotes, nowEpoch, thread, type ThreadNode } from '@/forum/view';
 import { VoteControl } from '@/components/vote-control';
@@ -47,41 +47,22 @@ export default async function Thread({ params, searchParams }: { params: Promise
   const myCommentIds = new Set((await db.comment.findMany({ where: { postId: post.id, authorId: me.profileId }, select: { publicId: true } })).map((c) => c.publicId));
   const reasons = mod.report_reasons;
 
-  // Rows come flat with depth; nest them into <ol>s so the tree is in the markup, not only in the indent.
-  function Tree({ rows }: { rows: Row[] }) {
-    const render = (from: number, depth: number): [React.ReactNode[], number] => {
-      const items: React.ReactNode[] = [];
-      let i = from;
-      while (i < rows.length && rows[i]!.depth === depth) {
-        const r = rows[i]!;
-        const [kids, next] = render(i + 1, depth + 1);
-        items.push(
-          <li key={r.id} id={r.id} className="c" tabIndex={-1}>
-            <CommentView r={r} />
-            {kids.length > 0 && <ol>{kids}</ol>}
-          </li>,
-        );
-        i = next;
-      }
-      return [items, i];
-    };
-    return <ol className="thread">{render(0, 0)[0]}</ol>;
-  }
-
   function CommentView({ r }: { r: Row }) {
     const n = r.node;
     const removed = r.rendered_as !== 'body';
+    const who = removed ? removedName(r.rendered_as).toLowerCase() : `comment by ${n.author}`; // M5: names that tell links apart
     return (
-      <article aria-label={`Comment by ${removed ? 'removed' : n.author}`}>
+      <article>
+        <CommentHeading status={r.rendered_as} author={n.author} href={`/o/${ctx.slug}/f/u/${n.author}`} />
         {!removed && <VoteControl action={bound(vote)} postId={post.id} commentId={n.dbId} label={`comment by ${n.author}`} mine={mine.get(n.dbId) ?? 0} isAuthor={n.author === me.handle} gateNote={gateNote} />}
         <div className="meta">
-          {removed ? <span className="removed">[{r.rendered_as}]</span> : <Link href={`/o/${ctx.slug}/f/u/${n.author}`}><Text value={n.author} /></Link>} · {n.ups - n.downs} points · {when(new Date(n.created_at * 1000))}
-          {n.editedAt && ' · edited'} · <Link href={`${here}/c/${n.publicId}`}>permalink</Link>
+          {n.ups - n.downs} points · {ago(new Date(n.created_at * 1000))}
+          {n.editedAt && <> · <Badge>Edited</Badge></>} · <Link href={`${here}/c/${n.publicId}`} aria-label={`Permalink to ${who}, ${whenText(new Date(n.created_at * 1000))}`}>permalink</Link>
         </div>
         {!removed && <Markdown body={n.body} />}
         {r.continue_thread && (
           <p>
-            <Link href={`${here}/c/${n.publicId}`}>Continue this thread →</Link>
+            <Link href={`${here}/c/${n.publicId}`}>Continue the thread under {removed ? `the ${r.rendered_as} comment` : `${n.author}'s comment`}</Link>
           </p>
         )}
         {!removed && (
@@ -202,8 +183,8 @@ export default async function Thread({ params, searchParams }: { params: Promise
         </h1>
         {post.status === 'visible' && <VoteControl action={bound(vote)} postId={post.id} label="post" mine={mine.get(post.id) ?? 0} isAuthor={post.author.id === me.profileId} gateNote={gateNote} />}
         <div className="meta">
-          {post.ups - post.downs} points · by <Link href={`/o/${ctx.slug}/f/u/${post.author.handle}`}><Text value={post.author.handle} /></Link> · {when(post.createdAt)}
-          {post.editedAt && ' · edited'} · {post.commentCount} comments · ranked {ago(t.rankedAt)}{isMod && <> · hot {t.postScore.hot.toFixed(2)} (moderators only, D-9)</>}
+          {post.ups - post.downs} points · by <Link href={`/o/${ctx.slug}/f/u/${post.author.handle}`}><Text value={post.author.handle} /></Link> · {ago(post.createdAt)}
+          {post.editedAt && <> · <Badge>Edited</Badge></>} · {post.commentCount} comments · ranked {ago(t.rankedAt)}{isMod && <> · hot {t.postScore.hot.toFixed(2)} (moderators only, D-9)</>}
         </div>
         {post.status === 'visible' ? <Markdown body={post.body} /> : <p className="removed">This post was {post.status}{isMod ? '; the body is below for moderators.' : '.'}</p>}
         {post.status !== 'visible' && isMod && <Markdown body={post.body} />}
@@ -285,18 +266,8 @@ export default async function Thread({ params, searchParams }: { params: Promise
         </ActionForm>
       )}
       {post.lockedAt && <p><Badge role="warn">Locked</Badge> This thread is locked; no new replies.</p>}
-      <Tree rows={t.rows as Row[]} />
-      {t.pages > 1 && (
-        <nav aria-label="Comment pages">
-          {Array.from({ length: t.pages }, (_, i) => i + 1).map((p) => (
-            <span key={p}>
-              <Link href={`${here}?sort=${sort}&page=${p}`} aria-current={p === page ? 'page' : undefined}>
-                {p}
-              </Link>{' '}
-            </span>
-          ))}
-        </nav>
-      )}
+      <Tree rows={t.rows as Row[]} item={(r) => <CommentView r={r} />} />
+      <Pager page={page} pages={t.pages} label="Comment pages" href={(p) => `${here}?sort=${sort}&page=${p}`} />
     </main>
   );
 }
