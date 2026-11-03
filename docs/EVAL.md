@@ -297,6 +297,16 @@ Commands: `npm run test:e2e` (production build), `npm test`, `npm run xss:check`
 - **Gate:** full Playwright 22/22 on the production build (1.1 min of tests), axe 0 on 62 measurements light and dark, the thread, the deep thread and the permalink at 320 / 768 / 1280 px included, no horizontal scroll at any of them; vitest 363/363; `xss:check` 61/61 unchanged; `engine:eval` 14 files / 19,576 rows / 0 differences; `fixtures:check` OK; `engine:lint`, `foundation:drift`, eslint, tsc clean.
 - **What it is not:** distinct permalink names rest on the UTC minute; two comments by one member in the same minute would still share a name. Collapse state is the browser's and is not remembered. axe is the automated subset; no screen-reader session was run.
 
+## Phase 6 — board descriptions (PRD 6.3, 2026-11-03)
+
+Commands: `npm test`, `npm run test:e2e` (production build), `npm run xss:check`, `npm run engine:eval`, `npm run fixtures:check`, `npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema --exit-code` (with `SHADOW_DATABASE_URL`).
+
+- **Red first:** `tests/integration/boards.test.ts` 8 of 8 red (`describeBoard is not a function`); the 6.3 e2e red on the pre-change build (no `Self-hosting` link: titles were slugs).
+- **Rules held:** owner and admin set a description; a member and a moderator-flagged member are refused `Missing permission: org.update`; 301 chars, a newline and a NUL refused `INPUT_INVALID`; 300 chars allowed; `'   '` clears to `''`; one `forum.board.describe` audit row with `{ from, to }`. The loader writes six descriptions and the six `boards.csv` titles; a second run inserts nothing.
+- **Browser:** a stored `<img src=x onerror=alert(1)>` description renders as text (0 `img`, 0 `[onerror]`); a member sees no edit control; the owner's edit shows on both pages.
+- **Gate:** vitest 382/382 (51 files; +8), harness with `describeBoard` discovered (0 findings); full Playwright 24/24 on the production build (2.8 min), axe 0 on Boards and a board page at 320 / 768 / 1280 px, light and dark; `xss:check` 61/61 (`src/render` untouched); `engine:eval` 15 files / 19,607 rows / 0 differences; `fixtures:check` OK, `fixtures/` unchanged; `engine:lint`, `foundation:drift`, `migrate diff` (empty), eslint, tsc clean.
+- **What it is not:** a description is plain text, so a link in one is not a link. Orgs loaded before the migration show none until an owner writes one or the dev DB is reloaded.
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
