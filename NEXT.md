@@ -1,5 +1,13 @@
 # NEXT
 
+## ▶ PRD 6.3 built on `phase-6.3` (D-91, 2026-11-03). PR: https://github.com/shanelabountyai/commons/pull/10 (base `phase-6.2`), CI: pending at push. Next session item: **draft PRD 6.4** (§C measurements, `docs/phase-6-tasks.md` row 6.4) for review; nothing built; stop at the draft. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9 → #10, each into its base; confirm or reverse D-88's three calls and D-91's two.
+
+**Gate (local, Mac):** vitest 382/382 (51 files; boards 8/8 red first); harness covers `describeBoard` with 0 findings; Playwright 24/24 on the production build (2.8 min; 6.3 red first), axe 0 at 320/768/1280 light and dark; `xss:check` 61/61; `engine:eval` 15 files / 19,607 rows / 0 differences; `fixtures:check` OK; `engine:lint`, `foundation:drift`, `migrate diff` (empty, needs `SHADOW_DATABASE_URL` → `commons_shadow`), eslint and tsc are clean.
+
+**Environment, not code:** one harness run hit its 180 s timeout while the load average was 75 (Spotlight indexing). A per-action timing run took 315 s for 36 actions, and every action had 0 findings. The full `npm test` passed once the load fell to 15. The test DB has migration `20261103180000`. Run `npm run db:migrate` on the dev DB, and reload it to get the descriptions and titles, before `npm run dev` or a demo.
+
+---
+
 ## ▶ PRD 6.3 approved (D-90, 2026-11-03) on `phase-6.3`, off `phase-6.2`. Next session item: **build 6.3** on `phase-6.3`, red first: `tests/integration/boards.test.ts` (owner/admin set, member and moderator refused, 301 chars / newline / NUL refused, blank clears, loader writes six descriptions and the `boards.csv` titles) and the e2e (description on Boards and board page, edit visible only to owner, `<img onerror>` as text, axe 0 at 320/768/1280 light and dark), then migration `Board.description`, the shared control-character helper, `describeBoard`, the render sites; move the e2e locators from slugs to titles. Open a PR against `phase-6.2` at the end. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9, each into its base, and confirm or reverse D-88's three calls.
 
 **Found while drafting (D-89):** `loadForum` created every board with `title: slug`; `fixtures/boards.csv`'s titles were never read. D-90 (2) fixes it in the build.
