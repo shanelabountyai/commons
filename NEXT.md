@@ -1,5 +1,11 @@
 # NEXT
 
+## ▶ PRD 6.4 drafted on `phase-6.4` (D-92, 2026-11-03), off `phase-6.3`; awaiting Shane's review. Nothing built, no gate run (doc work only); no PR opened for a draft (same as 6.1, 6.2, 6.3). Next session item: **build 6.4** once approved, oracle first: `tools/limitslib.py` scoped check, `tools/reference_rank.py --write-expected` adds `spam-flood-thread`, `normal-community-thread`, `spam-deep-chain`, `normal-community-depth` (seven existing rows byte-identical), the same rows in `scripts/abuse.ts` and `scripts/engine-eval-db.ts`, then red unit and integration tests, then rules, engine, door, the three attack-only measures and `docs/EVAL.md` §6.4. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → … → #10, each into its base; confirm or reverse D-88's three calls and D-91's two; answer PRD 6.4's four decisions.
+
+**Found while drafting:** only two of the five §C hypotheses can be measured on both sides. The community fixture has no bodies (link hosts), writes unique titles and bodies by construction (repost: any window refuses 0, vacuously) and holds no pins. The fixture-regeneration owner decision now unlocks five things, not two.
+
+---
+
 ## ▶ PRD 6.3 built on `phase-6.3` (D-91, 2026-11-03). PR: https://github.com/shanelabountyai/commons/pull/10 (base `phase-6.2`), **CI green** (https://github.com/shanelabountyai/commons/actions/runs/41731816550: ci and modules-removed pass). Next session item: **draft PRD 6.4** (§C measurements, `docs/phase-6-tasks.md` row 6.4) for review; nothing built; stop at the draft. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9 → #10, each into its base; confirm or reverse D-88's three calls and D-91's two.
 
 **Gate (local, Mac):** vitest 382/382 (51 files; boards 8/8 red first); harness covers `describeBoard` with 0 findings; Playwright 24/24 on the production build (2.8 min; 6.3 red first), axe 0 at 320/768/1280 light and dark; `xss:check` 61/61; `engine:eval` 15 files / 19,607 rows / 0 differences; `fixtures:check` OK; `engine:lint`, `foundation:drift`, `migrate diff` (empty, needs `SHADOW_DATABASE_URL` → `commons_shadow`), eslint and tsc are clean.
