@@ -286,6 +286,17 @@ Commands: `npm run test:e2e` (production build), `npm test`, `npm run xss:check`
 - **Gate:** full Playwright 21/21 on the production build (1.2 min of tests), axe 0 on 44 measurements light and dark, Boards and board page 2 at 320 / 768 / 1280 px included, no horizontal scroll at 320; vitest 363/363 (49 files); `xss:check` 61/61 unchanged; `engine:eval` 14 files / 19,576 rows / 0 differences; `fixtures:check` OK; `engine:lint`, `foundation:drift`, eslint, tsc clean. No rules file, render rule or expected file changed.
 - **What it is not:** axe's 0 is the automated subset; the role colours were checked by arithmetic against Canvas white and black, not against a user's forced-colours or high-contrast theme. The board page's `total` is the visible count under the sort window, not a count query. The thread (type hierarchy, per-comment headings, subtree collapse, shared `Tree`, M2 / M5 link text) is Part B.
 
+## Phase 6 — readability + tokens, Part B (PRD 6.1 B, 2026-11-03)
+
+Commands: `npm run test:e2e` (production build), `npm test`, `npm run xss:check`, `npm run engine:eval`, `npm run fixtures:check`.
+
+- **Red first:** the 6.1 B spec failed on its first assertion against the pre-change build: `ol.thread li.c > article > h3` expected 8 on P-CHAIN, received 0.
+- **Thread:** one `h3` per rendered comment (the article `aria-label` dropped); removed and deleted comments headed `Removed comment (by moderator)` / `Deleted comment` with a badge; every subtree in `<details open>` whose summary counts the rows rendered below it (C-CHAIN-0's reads the count the page shows, not the tree module's); one `clamp()` indent rule (at 320 px a level costs ≤ 16 px, asserted); post `h1` at 24 px (`--fs-xl`, asserted); relative ages and an `Edited` badge; the comment pager is the shared `Pager`.
+- **Links (M5):** 8 permalinks on P-CHAIN, 8 distinct accessible names; continue-thread reads `Continue the thread under <handle>'s comment`, no arrow glyph.
+- **Permalink (M1):** the shared `Tree`, so nested `<ol>`s and no inline `margin-left`; an `h2` above the tree after axe's `heading-order` flagged `h1` → `h3` in the first sweep (fixed, D-85).
+- **Gate:** full Playwright 22/22 on the production build (1.1 min of tests), axe 0 on 62 measurements light and dark, the thread, the deep thread and the permalink at 320 / 768 / 1280 px included, no horizontal scroll at any of them; vitest 363/363; `xss:check` 61/61 unchanged; `engine:eval` 14 files / 19,576 rows / 0 differences; `fixtures:check` OK; `engine:lint`, `foundation:drift`, eslint, tsc clean.
+- **What it is not:** distinct permalink names rest on the UTC minute; two comments by one member in the same minute would still share a name. Collapse state is the browser's and is not remembered. axe is the automated subset; no screen-reader session was run.
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
