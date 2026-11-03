@@ -1,6 +1,6 @@
 # NEXT
 
-## ▶ PRD 6.3 built on `phase-6.3` (D-91, 2026-11-03). PR: https://github.com/shanelabountyai/commons/pull/10 (base `phase-6.2`), CI: pending at push. Next session item: **draft PRD 6.4** (§C measurements, `docs/phase-6-tasks.md` row 6.4) for review; nothing built; stop at the draft. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9 → #10, each into its base; confirm or reverse D-88's three calls and D-91's two.
+## ▶ PRD 6.3 built on `phase-6.3` (D-91, 2026-11-03). PR: https://github.com/shanelabountyai/commons/pull/10 (base `phase-6.2`), **CI green** (https://github.com/shanelabountyai/commons/actions/runs/41731816550: ci and modules-removed pass). Next session item: **draft PRD 6.4** (§C measurements, `docs/phase-6-tasks.md` row 6.4) for review; nothing built; stop at the draft. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9 → #10, each into its base; confirm or reverse D-88's three calls and D-91's two.
 
 **Gate (local, Mac):** vitest 382/382 (51 files; boards 8/8 red first); harness covers `describeBoard` with 0 findings; Playwright 24/24 on the production build (2.8 min; 6.3 red first), axe 0 at 320/768/1280 light and dark; `xss:check` 61/61; `engine:eval` 15 files / 19,607 rows / 0 differences; `fixtures:check` OK; `engine:lint`, `foundation:drift`, `migrate diff` (empty, needs `SHADOW_DATABASE_URL` → `commons_shadow`), eslint and tsc are clean.
 
