@@ -1,7 +1,7 @@
 // GL-01..GL-14 (brief §4) and the V- rules in TypeScript (tasks 1.7, 1.8).
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { checkLimit, downvoteAllowed, isYoung, replay } from '@/limits';
+import { checkLimit, downvoteAllowed, isYoung, replay, replayComments } from '@/limits';
 import { parseLimitRules } from '@/rules';
 import { reduceVotes, type VoteEventIn } from '@/votes';
 
@@ -37,6 +37,31 @@ describe('sliding window (L-3, L-4)', () => {
   it('GL-13/14 regular comment limit is 6', () => {
     expect(checkLimit([0, 1, 2, 3, 4].map((i) => T0 + i), 'comment', false, T0 + 5, rules).verdict).toBe('allow');
     expect(checkLimit([0, 1, 2, 3, 4, 5].map((i) => T0 + i), 'comment', false, T0 + 6, rules).verdict).toBe('refuse');
+  });
+  // PRD 6.4 (D-93): the profile+post comment window and max_depth_written
+  const aged = { a: T0 - 30 * DAY };
+  const many = () => 100;
+  it('GL-23 thread window 10/3600 s: 9 allow, 10 refuse with retryAfter 3590', () => {
+    expect(checkLimit([0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => T0 + i), 'comment', false, T0 + 9, rules, 'profile+post')).toEqual({ verdict: 'allow' });
+    expect(checkLimit([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => T0 + i), 'comment', false, T0 + 10, rules, 'profile+post')).toEqual({ verdict: 'refuse', retryAfter: 3590 });
+  });
+  it('GL-24 young thread window is 3', () => {
+    expect(checkLimit([T0, T0 + 100], 'comment', true, T0 + 200, rules, 'profile+post').verdict).toBe('allow');
+    expect(checkLimit([T0, T0 + 100, T0 + 200], 'comment', true, T0 + 300, rules, 'profile+post').verdict).toBe('refuse');
+  });
+  it('the profile rows are unchanged by the scoped row', () => {
+    expect(checkLimit([0, 1, 2, 3, 4].map((i) => T0 + i), 'comment', false, T0 + 5, rules)).toEqual({ verdict: 'allow' });
+    expect(checkLimit([T0, T0 + 1], 'comment', true, T0 + 2, rules)).toEqual({ verdict: 'refuse', retryAfter: 58 });
+  });
+  it('GL-25 the scoped row refuses the 11th comment on one post in an hour, and allows a 7th on another post', () => {
+    const onOne = replayComments(Array.from({ length: 11 }, (_, i) => ({ t: T0 + 70 * i, user: 'a', post: 'P1', depth: 0 })), aged, many, rules);
+    expect(onOne).toEqual({ allowed: 10, refused: 1, firstRetryAfter: 3600 - 700 });
+    const split = replayComments(Array.from({ length: 11 }, (_, i) => ({ t: T0 + 70 * i, user: 'a', post: i < 4 ? 'P1' : 'P2', depth: 0 })), aged, many, rules);
+    expect(split).toEqual({ allowed: 11, refused: 0, firstRetryAfter: null });
+  });
+  it('GL-26 max_depth_written 32: depth 32 allowed, 33 refused with no retryAfter, and it spends no slot', () => {
+    const r = replayComments([{ t: T0, user: 'a', post: 'P', depth: 32 }, { t: T0 + 100, user: 'a', post: 'P', depth: 33 }], aged, many, rules);
+    expect(r).toEqual({ allowed: 1, refused: 1, firstRetryAfter: null });
   });
   it('replay: 100 young votes at 1/s allows 20 (two windows), first retryAfter 50', () => {
     const r = replay(Array.from({ length: 100 }, (_, i) => T0 + i), 'vote', { created_at: T0 - 3600, contributionsAt: () => 0 }, rules);

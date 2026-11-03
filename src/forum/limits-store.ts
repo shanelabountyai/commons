@@ -3,7 +3,7 @@
 // action) advisory lock so two simultaneous attempts cannot both squeeze under the limit. Young-account status
 // (task 3.5) is computed here from Profile.joinedAt and live contributions (L-1, L-5).
 import { checkLimit, isYoung, type LimitVerdict } from '@/limits';
-import type { Action, LimitRules } from '@/rules';
+import { windowFor, type Action, type LimitRules } from '@/rules';
 import { contributionsAt, lockKey, toDate, toEpoch, type Tx } from './db';
 
 export type GuardInput = { orgId: string; profileId: string; action: Action; at: number };
@@ -20,7 +20,7 @@ export async function accountAt(tx: Tx, profileId: string, at: number): Promise<
 /** Check the window and, if allowed, record the hit. Returns the engine's verdict plus the young flag used. */
 export async function guardAndRecord(tx: Tx, g: GuardInput, rules: LimitRules): Promise<GuardResult> {
   await lockKey(tx, `limit:${g.profileId}:${g.action}`);
-  const w = rules.windows.find((x) => x.action === g.action)!;
+  const w = windowFor(rules, g.action);
   const at = toDate(g.at);
   const rows = await tx.limitHit.findMany({
     where: { profileId: g.profileId, action: g.action, at: { gt: toDate(g.at - w.per_seconds), lte: at } },

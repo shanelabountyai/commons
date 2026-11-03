@@ -3,10 +3,10 @@
 // shapes tools/reference_rank.py writes; a difference is a defect in one side, never a reason to edit the file.
 import type { CsvRow } from '@/fixtures/csv';
 import { NOW, type Fixtures } from '@/fixtures/load';
-import { isYoung, replay, type Account } from '@/limits';
+import { isYoung, replay, replayComments, type Account, type CommentAttempt } from '@/limits';
 import { hot, net, orderPosts, orderSiblings, wilsonLower, type Counts, type PostSort } from '@/ranking';
 import type { LimitRules, ModerationRules, RankingRules } from '@/rules';
-import { assignPaths, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
+import { assignPaths, depthOf, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
 import { reduceVotes, type Outcome } from '@/votes';
 import { detectReportSwarms, type SwarmScenario } from '@/limits/report-swarm';
 import { detectSignals, type Signal, type SignalScenario } from '@/votes/signals';
@@ -168,6 +168,11 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
     const r = replay(s.attempts, s.action, { created_at: accounts.get(s.user)!, contributionsAt: (t) => contributionsAt(s.user, t) }, limits);
     return { script: s.script, action: s.action, attempts: s.attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? '' };
   });
+  const communityComments = [...byPost.entries()].flatMap(([pid, cs]) => {
+    const paths = assignPaths(cs);
+    return cs.map((c) => ({ t: c.created_at, user: c.author, post: pid, depth: depthOf(paths.get(c.id)!) }));
+  });
+  limitRows.push(...commentLimitRows(communityComments, Object.fromEntries(accounts), contributionsAt, limits, now));
   compare('expected_limits.csv', limitRows);
 
   // 5.2 (D-75): the additive scenario set, and the community's own votes through the same detector
@@ -201,4 +206,23 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
     threads,
     communitySignals,
   };
+}
+
+/**
+ * PRD 6.4 (D-93): the four comment scripts, shared by engine:eval (paths from the fixture) and engine:eval:db (depths
+ * as stored). `community` is every community comment as an attempt; the rest are scripted here.
+ */
+export function commentLimitRows(community: readonly CommentAttempt[], createdAt: Readonly<Record<string, number>>, contributionsAt: (user: string, t: number) => number, limits: LimitRules, now = NOW) {
+  const t0 = now - 3600;
+  const sorted = [...community].sort((a, b) => a.t - b.t || (a.user < b.user ? -1 : a.user > b.user ? 1 : 0) || (a.post < b.post ? -1 : a.post > b.post ? 1 : 0) || a.depth - b.depth);
+  const scripts: [string, CommentAttempt[], ('profile' | 'profile+post')[]][] = [
+    ['spam-flood-thread', Array.from({ length: 360 }, (_, i) => ({ t: t0 + 10 * i, user: 'u050', post: 'P-FLOOD', depth: 0 })), ['profile', 'profile+post']],
+    ['normal-community-thread', sorted, ['profile+post']],
+    ['spam-deep-chain', Array.from({ length: 60 }, (_, i) => ({ t: now - 60 * 400 + 400 * i, user: 'u050', post: 'P-DEEP', depth: i })), ['profile', 'profile+post']],
+    ['normal-community-depth', sorted, []],
+  ];
+  return scripts.map(([script, attempts, scopes]) => {
+    const r = replayComments(attempts, createdAt, contributionsAt, limits, scopes);
+    return { script, action: 'comment' as const, attempts: attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? ('' as const) };
+  });
 }

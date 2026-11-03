@@ -6,6 +6,9 @@ import { RulesInvalid } from '@/shared/errors';
 
 export const ACTIONS = ['post', 'comment', 'vote', 'report', 'upload'] as const;
 export type Action = (typeof ACTIONS)[number];
+/** Whose history a window counts: the member's, or the member's on one post (PRD 6.4, D-93). */
+export const SCOPES = ['profile', 'profile+post'] as const;
+export type Scope = (typeof SCOPES)[number];
 
 const positiveInt = z.number().int().positive();
 const nonNegInt = z.number().int().nonnegative();
@@ -34,14 +37,18 @@ export const LimitRulesSchema = z
     windows: z
       .array(
         z
-          .object({ action: z.enum(ACTIONS), per_seconds: positiveInt, max: positiveInt, young_max: positiveInt })
+          .object({ action: z.enum(ACTIONS), scope: z.enum(SCOPES).optional(), per_seconds: positiveInt, max: positiveInt, young_max: positiveInt })
           .strict()
-          .refine((w) => w.young_max <= w.max, { message: 'young_max must not exceed max', path: ['young_max'] }),
+          .refine((w) => w.young_max <= w.max, { message: 'young_max must not exceed max', path: ['young_max'] })
+          // PRD 6.4 (D-93): only the comment door reads a profile+post history (the member's Comment rows on the post)
+          .refine((w) => (w.scope ?? 'profile') === 'profile' || w.action === 'comment', { message: 'profile+post scope is wired for comment only', path: ['scope'] }),
       )
-      .refine((ws) => new Set(ws.map((w) => w.action)).size === ws.length, { message: 'duplicate action' })
-      .refine((ws) => ACTIONS.every((a) => ws.some((w) => w.action === a)), { message: `every action needs a window: ${ACTIONS.join(', ')}` }),
+      .refine((ws) => new Set(ws.map((w) => `${w.action}:${w.scope ?? 'profile'}`)).size === ws.length, { message: 'duplicate action and scope' })
+      .refine((ws) => ACTIONS.every((a) => ws.some((w) => w.action === a && (w.scope ?? 'profile') === 'profile')), { message: `every action needs a window: ${ACTIONS.join(', ')}` }),
     edit_window_seconds: positiveInt,
     max_depth_rendered: positiveInt,
+    /** PRD 6.4 (D-93): a reply deeper than this (T-2 depth, top level 0) is refused at the door. */
+    max_depth_written: positiveInt,
     /** PRD 6.2 (D-87): max_pixels is width x height as the header claims it; max_per_post counts a post's attachments. */
     upload: z.object({ max_bytes: positiveInt, max_pixels: positiveInt, max_per_post: positiveInt, types: z.array(z.string().regex(/^image\//)).nonempty() }).strict(),
     /** D-31 as data (4.1.3): ≥ min_voters distinct gated downvoters on one node inside window_seconds → one signal. */
@@ -70,9 +77,9 @@ function parse<T>(schema: z.ZodType<T>, input: unknown, file: string): T {
 export const parseRankingRules = (input: unknown): RankingRules => parse(RankingRulesSchema, input, 'rules/ranking.json');
 export const parseLimitRules = (input: unknown): LimitRules => parse(LimitRulesSchema, input, 'rules/limits.json');
 
-export function windowFor(rules: LimitRules, action: Action): WindowRule {
-  const w = rules.windows.find((x) => x.action === action);
-  if (!w) throw new RulesInvalid('windows', `no window for ${action}`); // unreachable after parse; kept for callers with partial rules
+export function windowFor(rules: LimitRules, action: Action, scope: Scope = 'profile'): WindowRule {
+  const w = rules.windows.find((x) => x.action === action && (x.scope ?? 'profile') === scope);
+  if (!w) throw new RulesInvalid('windows', `no ${scope} window for ${action}`); // unreachable for profile after parse; kept for callers with partial rules
   return w;
 }
 
