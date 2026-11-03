@@ -1,8 +1,8 @@
 # NEXT
 
-## ▶ PRD 6.3 drafted on `phase-6.3` (D-89, 2026-11-03), off `phase-6.2`; awaiting Shane's review. Nothing built, no gate run (doc only). Next for Shane: review `docs/prd/6.3-board-descriptions.md` and answer its four decisions (copy; use `fixtures/boards.csv` titles instead of slugs; audit only vs mod log; owner/admin vs moderators). Next session item: **build 6.3** once approved, on `phase-6.3`, red integration test and e2e first. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9, each into its base, and confirm or reverse D-88's three calls.
+## ▶ PRD 6.3 approved (D-90, 2026-11-03) on `phase-6.3`, off `phase-6.2`. Next session item: **build 6.3** on `phase-6.3`, red first: `tests/integration/boards.test.ts` (owner/admin set, member and moderator refused, 301 chars / newline / NUL refused, blank clears, loader writes six descriptions and the `boards.csv` titles) and the e2e (description on Boards and board page, edit visible only to owner, `<img onerror>` as text, axe 0 at 320/768/1280 light and dark), then migration `Board.description`, the shared control-character helper, `describeBoard`, the render sites; move the e2e locators from slugs to titles. Open a PR against `phase-6.2` at the end. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9, each into its base, and confirm or reverse D-88's three calls.
 
-**Found while drafting:** `loadForum` creates every board with `title: slug`; `fixtures/boards.csv`'s titles are never read, so every loaded org shows slugs as headings (PRD decision 2). No PR opened for a draft (same as 6.1, 6.2).
+**Found while drafting (D-89):** `loadForum` created every board with `title: slug`; `fixtures/boards.csv`'s titles were never read. D-90 (2) fixes it in the build.
 
 ---
 
