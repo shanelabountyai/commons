@@ -59,10 +59,10 @@ test('the deep thread: removed and deleted comments in place, continue-thread, p
   await signIn(page);
   await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
   await expectAccessible(page, 'thread P-CHAIN', 'P-CHAIN title');
-  await expect(page.getByText('[deleted]')).toBeVisible(); // C-CHAIN-3, author delete, subtree kept
-  await expect(page.getByText('[removed]')).toBeVisible(); // C-CHAIN-5, moderator removal
+  await expect(page.getByRole('heading', { level: 3, name: 'Deleted comment' }).first()).toBeVisible(); // C-CHAIN-3, author delete, subtree kept
+  await expect(page.getByRole('heading', { level: 3, name: 'Removed comment (by moderator)' }).first()).toBeVisible(); // C-CHAIN-5, moderator removal (M2)
   await expect(page.getByText('11 comments · 2 top-level shown')).toBeVisible(); // two dead leaves hidden (D-13)
-  await page.getByRole('link', { name: 'Continue this thread →' }).first().click();
+  await page.getByRole('link', { name: /^Continue the thread under .+'s comment$/ }).first().click(); // M5
   await expectAccessible(page, 'permalink C-CHAIN-6', 'Comment in context');
   await expect(page.getByRole('list', { name: 'Ancestors' }).getByRole('listitem')).toHaveCount(6);
   await expect(page.getByText('depth 1')).toBeVisible(); // C-CHAIN-7 under the re-rooted C-CHAIN-6
@@ -87,7 +87,7 @@ test('reply, vote, edit; a young-looking owner cannot downvote yet; refusals car
   await mine.getByLabel('Edit your comment').fill('Edited within the window.');
   await mine.getByRole('button', { name: 'Save edit' }).click();
   await expect(page.locator('ol.thread')).toContainText('Edited within the window.');
-  await expect(page.locator('ol.thread')).not.toContainText('· edited'); // inside 900 s, no mark (D-32)
+  await expect(page.locator('ol.thread .badge', { hasText: 'Edited' })).toHaveCount(0); // inside 900 s, no mark (D-32)
   await expectAccessible(page, 'thread after reply', 'P-GW title');
 });
 
@@ -483,5 +483,59 @@ test('6.1 A: the board pages at 25 with a pager, pinned is a text badge, meta ca
     await page.goto(`/o/${SLUG}/f/selfhosting?page=2`);
     expect(await page.evaluate((w) => document.documentElement.scrollWidth <= w, width)).toBe(true);
     await expectAccessible(page, `board page 2 at ${width}px`, 'Hot');
+  }
+});
+
+// ---- PRD 6.1 Part B (D-84): the thread — headings per comment, status names, subtree <details>, shared Tree, indent, link text. Red first. ----
+test('6.1 B: one h3 per comment, removed and deleted named by status, subtrees in <details open>, distinct permalink names, nested permalink tree, clamp indent', async ({ page }) => {
+  await signIn(page);
+  await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
+  const articles = page.locator('ol.thread li.c > article');
+  const n = await articles.count();
+  expect(n).toBeGreaterThan(0);
+  await expect(page.locator('ol.thread li.c > article > h3')).toHaveCount(n); // heading navigation lists every comment
+  await expect(page.locator('ol.thread article[aria-label]')).toHaveCount(0); // one name, the heading
+  await expect(page.getByRole('heading', { level: 3, name: 'Deleted comment' }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'Removed comment (by moderator)' }).first()).toBeVisible();
+  await expect(page.locator('ol.thread li.c > article > h3 .badge', { hasText: 'Removed' }).first()).toBeVisible();
+  // the subtree under C-CHAIN-0 is open by default and counts the rows rendered below it on this page
+  const sub = page.locator('li#C-CHAIN-0 > details');
+  await expect(sub).toHaveAttribute('open', '');
+  const shown = await page.locator('li#C-CHAIN-0 > details li.c').count();
+  expect(shown).toBeGreaterThan(1);
+  await expect(sub.locator('> summary')).toHaveText(`${shown} replies shown`);
+  // every permalink has its own accessible name (M5), one per comment
+  const names = await page.getByRole('link', { name: /^Permalink to / }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
+  expect(names.length).toBe(n);
+  expect(new Set(names).size).toBe(names.length);
+  await expect(page.getByRole('link', { name: 'permalink', exact: true })).toHaveCount(0);
+  // the type scale: the post title at --fs-xl (1.5rem)
+  expect(await page.locator('article[aria-label="Post"] h1').evaluate((e) => getComputedStyle(e).fontSize)).toBe('24px');
+  // continue-thread names its comment, no arrow glyph; the permalink page nests its tree, no inline indent (M1)
+  const cont = page.getByRole('link', { name: /^Continue the thread under .+'s comment$/ });
+  await expect(cont).toHaveCount(1);
+  await expect(cont).not.toContainText('→');
+  await cont.click();
+  await expect(page.getByRole('heading', { name: 'Comment in context' })).toBeVisible();
+  expect(await page.locator('ol.thread ol').count()).toBeGreaterThan(0);
+  await expect(page.locator('ol.thread li[style]')).toHaveCount(0);
+  await expect(page.locator('ol.thread li.c > article > h3').first()).toBeVisible();
+  // the comment pager is the shared Pager (P-0001 has more than one page after the XSS walk)
+  await page.goto(`/o/${SLUG}/f/p/P-0001`);
+  await page.getByRole('navigation', { name: 'Comment pages' }).getByRole('link', { name: 'Page 2' }).click();
+  await expect(page.getByRole('navigation', { name: 'Comment pages' }).getByRole('link', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page');
+  // axe at the three widths, light and dark: the thread, the deep thread and the permalink; indent ≤ 1 rem a level at 320
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const [path, see] of [[`/o/${SLUG}/f/p/P-GW`, 'P-GW title'], [`/o/${SLUG}/f/p/P-CHAIN`, 'P-CHAIN title'], [`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, 'Comment in context']] as const) {
+      await page.goto(path);
+      expect(await page.evaluate((w) => document.documentElement.scrollWidth <= w, width), `${path} at ${width}px`).toBe(true);
+      await expectAccessible(page, `${path.split('/f/')[1]} at ${width}px`, see);
+    }
+    if (width === 320) {
+      await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
+      const step = await page.locator('ol.thread ol').first().evaluate((e) => parseFloat(getComputedStyle(e).marginLeft) + parseFloat(getComputedStyle(e).paddingLeft));
+      expect(step).toBeLessThanOrEqual(16);
+    }
   }
 });
