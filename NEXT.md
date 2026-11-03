@@ -1,5 +1,11 @@
 # NEXT
 
+## ▶ PRD 6.2 drafted on `phase-6.2` (D-86, 2026-11-03), off `phase-6.1b`; awaiting Shane's review. Nothing built, no gate run (doc work only). Next for Shane: (1) merge #5 → #6 → #7 → #8, each into its base; (2) review `docs/prd/6.2-upload-hardening-alt.md` and answer its four decisions (thresholds 10/h young 2, 4 per post, 25 MP; lock refuses `upload`; removed posts' uploads 404 except to moderators; EXIF strip at container level, or keep it deferred). Next session item: **build 6.2** once approved, on `phase-6.2`, fixture first (`tools/uploadlib.py` → `fixtures/uploads/cases.json`, then the `spam-young-uploads` row). Model: Opus 5.5 (D-74).
+
+**Mac session (2026-11-03, Opus 5.5, Shane's "go").** Read the upload path end to end for the draft. **Found:** `POST /f/uploads` skips `admit` (a banned member can attach; a locked thread still takes attachments), the route would 500 on a `RateLimited`, and the thread lists a removed post's attachments to every member. All are recorded in D-86 and become red tests first. a11y S3 was already closed by 4.1.6; only `aria-describedby` is left. No PR opened for a draft (same as 6.1).
+
+---
+
 ## ▶ PRD 6.1 done: Part B built on `phase-6.1b` (D-85, 2026-11-03), stacked on `phase-6.1` (PR #7). PR: https://github.com/shanelabountyai/commons/pull/8 (base `phase-6.1`), **CI green** at `690db7b` (https://github.com/shanelabountyai/commons/actions/runs/41689302932: ci + modules-removed pass). Next for Shane: merge #5 → #6 → #7 → this PR, each into its base; confirm or reverse D-85's three calls. Next session item: **draft PRD 6.2** (upload hardening + author alt text, `docs/phase-6-tasks.md` row 6.2) for review, nothing built; stop at the draft. Model: Opus 5.5 (D-74).
 
 **Mac session (2026-11-03, Opus 5.5, Shane's "go").** Spec first (`e2e/commons.spec.ts` 6.1 B, red: 0 of 8 comment `h3`s), then the shared `Tree` and `CommentHeading` in `src/components/forum.tsx`; the thread and permalink pages on them (h3 per comment, M2 status names, `<details open>` "N replies shown", M5 permalink and continue text, shared comment `Pager`, Edited badge, relative ages); `commons.css` type scale and one `clamp()` indent. The first sweep's axe caught `heading-order` on the permalink page (`h1` → `h3`); fixed with an `h2`.
