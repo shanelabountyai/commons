@@ -166,6 +166,7 @@ const scripts = [
   ['spam-young-comments', 'comment', 'u193', Array.from({ length: 60 }, (_, i) => tt + i)],
   ['spam-young-posts', 'post', 'u193', Array.from({ length: 20 }, (_, i) => tt + 60 * i)],
   ['spam-young-votes', 'vote', 'u193', Array.from({ length: 100 }, (_, i) => tt + i)],
+  ['spam-young-uploads', 'upload', 'u193', Array.from({ length: 30 }, (_, i) => tt + 10 * i)], // PRD 6.2 (D-87)
   ['normal-u050-posts', 'post', 'u050', fx.posts.filter((p) => p.author === 'u050').map((p) => p.created_at).sort((a, b) => a - b)],
   ['normal-u050-comments', 'comment', 'u050', fx.comments.filter((c) => c.author === 'u050').map((c) => c.created_at).sort((a, b) => a - b)],
   ['normal-u050-votes', 'vote', 'u050', fx.votes.filter((v) => v.voter === 'u050').map((v) => v.cast_at).sort((a, b) => a - b)],
