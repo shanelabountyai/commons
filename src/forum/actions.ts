@@ -41,6 +41,13 @@ export function checkText(field: string, value: string, max: number): void {
   if (value.includes('\u0000')) throw new ForumRefused('INPUT_INVALID', `${field} contains a NUL byte`);
 }
 
+/** One line of plain text (upload alt, PRD 6.2; board description, PRD 6.3): checkText, and no C0 or DEL control
+ *  character, which also refuses newlines. */
+export function checkLine(field: string, value: string, max: number): void {
+  checkText(field, value, max);
+  if (/[\u0000-\u001f\u007f]/.test(value)) throw new ForumRefused('INPUT_INVALID', `${field} contains a control character`);
+}
+
 /** PRD 5.4 B: a lock locks. What it refuses is data (rules/moderation.json lock_refuses); a caller that passes no
  *  moderation rules gets the strictest reading, so a forgotten argument can only refuse more, never less. Checked
  *  before the window, like a ban: a refused write records no hit. Moderator actions do not come through here. */

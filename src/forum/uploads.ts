@@ -9,7 +9,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readImageHeader, stripMetadata } from '@/limits/image-header';
 import type { LimitRules, ModerationRules } from '@/rules';
-import { admit, checkText, RateLimited, refuseIfLocked } from './actions';
+import { admit, checkLine, RateLimited, refuseIfLocked } from './actions';
 import { ForumRefused, lockKey, type Tx } from './db';
 import { guardAndRecord } from './limits-store';
 
@@ -39,8 +39,7 @@ export function checkUpload(mime: string, bytes: Buffer, rules: LimitRules): voi
 function checkAlt(alt: string, decorative: boolean): string {
   if (decorative) return '';
   const t = alt.trim();
-  checkText('description', t, MAX_ALT_CHARS);
-  if (/[\u0000-\u001f\u007f]/.test(t)) throw new ForumRefused('INPUT_INVALID', 'description contains a control character');
+  checkLine('description', t, MAX_ALT_CHARS);
   return t;
 }
 
