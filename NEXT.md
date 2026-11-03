@@ -1,5 +1,19 @@
 # NEXT
 
+## ▶ PRD 6.2 built on `phase-6.2` (D-88, 2026-11-03). PR: https://github.com/shanelabountyai/commons/pull/9 (base `phase-6.1b`); CI result below. Next session item: **draft PRD 6.3** (board descriptions, `docs/phase-6-tasks.md` row 6.3) for review; nothing built; stop at the draft. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9, each into its base, and confirm or reverse D-88's three calls (the migration also widens `LimitHit_action_check`; the JPEG strip drops every APP1 and keeps APP13; legacy `alt = null` rows get no edit flow).
+
+**Gate (local, Mac):**
+- vitest 374/374; uploads integration 10/10 (9 red first; D-86's ban and lock gaps reproduced).
+- `engine:eval` 15 files, 19 607 rows, 0 differences (uploads/cases.json 30/30); `fixtures:check` OK; golden 60 OK; `engine:lint` OK (7 files).
+- `abuse:spam` `spam-young-uploads` 2/28/3580 = the row; `abuse:normal` OK.
+- `xss:check` 61/61, `src/render` untouched; `foundation:drift` clean.
+- e2e 4.1.6 + 6.2 red first, then green; axe 0 at 320/768/1280, light and dark.
+- Full Playwright sweep and the harness: CI.
+
+The test DB has migration `20261103120000`. Run `npm run db:migrate` on the dev DB before `npm run dev`/demo.
+
+---
+
 ## ▶ PRD 6.2 approved (D-87, 2026-11-03) on `phase-6.2`, off `phase-6.1b`. Next session item: **build 6.2** on `phase-6.2`, fixture first: `tools/uploadlib.py` + `tools/build_upload_fixtures.py --seed 20261103` → `fixtures/uploads/cases.json` (header and dimension cases, plus the EXIF/XMP strip cases), then the `spam-young-uploads` row in `expected_limits.csv` (the six existing rows byte-identical), GL-15..GL-22, then red integration tests (ban, lock, per-post, window, pixels, 404, alt) before any product code. Open a PR against `phase-6.1b` at the end. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8, each into its base.
 
 **Mac session (2026-11-03, Opus 5.5, Shane's "go").** Read the upload path end to end for the draft. **Found:** `POST /f/uploads` skips `admit` (a banned member can attach; a locked thread still takes attachments), the route would 500 on a `RateLimited`, and the thread lists a removed post's attachments to every member. All are recorded in D-86 and become red tests first. a11y S3 was already closed by 4.1.6; only `aria-describedby` is left. No PR opened for a draft (same as 6.1).
