@@ -27,8 +27,9 @@ nav.tabs a[aria-current='page'] { font-weight: bold; text-decoration: none; bord
 .body { max-width: 48rem; }
 .body pre { overflow-x: auto; padding: 0.5rem; border: 1px solid var(--rule); }
 .body blockquote { border-left: 3px solid var(--rule); margin: 0.5rem 0; padding-left: 0.75rem; }
-ol.thread, ol.thread ol { list-style: none; padding-left: 0; }
-ol.thread ol { margin-left: 1.25rem; border-left: 1px solid var(--rule); padding-left: 0.75rem; }
+ol.thread, ol.thread details > ol { list-style: none; padding-left: 0; }
+/* 6.1 B: one indent rule at every width — depth 6 costs 6 × 1 rem at 360 px and 6 × 2 rem at 1280 px */
+ol.thread details > ol { margin: 0 0 0 clamp(0.5rem, 2vw, 1.25rem); border-left: 1px solid var(--rule); padding-left: clamp(0.5rem, 1.5vw, 0.75rem); }
 li.c { margin: 0.5rem 0; }
 .removed { font-style: italic; color: var(--ink-muted); }
 .votes form { display: inline; }
@@ -51,7 +52,6 @@ main:focus { outline: none; }
 input[type='text'], input:not([type]), input[type='search'], select { max-width: 100%; box-sizing: border-box; }
 table { display: block; max-width: 100%; overflow-x: auto; }
 @media (max-width: 40rem) {
-  ol.thread ol { margin-left: 0.5rem; padding-left: 0.5rem; }
   nav { overflow-wrap: anywhere; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -88,3 +88,11 @@ nav.crumbs { border: 0; margin: 0; padding: var(--sp-2) 0 0; font-size: var(--fs
 nav.crumbs ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0 var(--sp-2); }
 nav.crumbs li + li::before { content: '›'; margin-right: var(--sp-2); color: var(--ink-muted); }
 footer.scope nav { border: 0; margin: 0; padding: 0; }
+
+/* 6.1 B — the thread's type hierarchy from the scale; a heading per comment; the subtree summary is quiet */
+article[aria-label='Post'] h1 { font-size: var(--fs-xl); margin: var(--sp-2) 0; }
+h2#comments { font-size: var(--fs-lg); margin-top: var(--sp-6); }
+.body { font-size: var(--fs-md); }
+li.c { margin: var(--sp-3) 0; }
+li.c > article > h3 { display: inline-block; margin: 0 var(--sp-2) 0 0; font-weight: bold; }
+li.c > details > summary { font-size: var(--fs-sm); color: var(--ink-muted); margin: var(--sp-1) 0; }

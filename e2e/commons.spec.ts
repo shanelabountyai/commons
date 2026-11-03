@@ -517,7 +517,7 @@ test('6.1 B: one h3 per comment, removed and deleted named by status, subtrees i
   await expect(cont).not.toContainText('→');
   await cont.click();
   await expect(page.getByRole('heading', { name: 'Comment in context' })).toBeVisible();
-  expect(await page.locator('ol.thread ol').count()).toBeGreaterThan(0);
+  expect(await page.locator('ol.thread details > ol').count()).toBeGreaterThan(0);
   await expect(page.locator('ol.thread li[style]')).toHaveCount(0);
   await expect(page.locator('ol.thread li.c > article > h3').first()).toBeVisible();
   // the comment pager is the shared Pager (P-0001 has more than one page after the XSS walk)
@@ -534,7 +534,7 @@ test('6.1 B: one h3 per comment, removed and deleted named by status, subtrees i
     }
     if (width === 320) {
       await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
-      const step = await page.locator('ol.thread ol').first().evaluate((e) => parseFloat(getComputedStyle(e).marginLeft) + parseFloat(getComputedStyle(e).paddingLeft));
+      const step = await page.locator('ol.thread details > ol').first().evaluate((e) => parseFloat(getComputedStyle(e).marginLeft) + parseFloat(getComputedStyle(e).paddingLeft));
       expect(step).toBeLessThanOrEqual(16);
     }
   }
