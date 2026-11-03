@@ -4,6 +4,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { evaluate } from '../src/eval';
+import { evalUploads, type UploadCase } from '../src/eval/uploads';
 import { expectedRows, loadFixtures } from '../src/fixtures/load';
 import type { SwarmScenario } from '../src/limits/report-swarm';
 import { parseLimitRules, parseModerationRules, parseRankingRules } from '../src/rules';
@@ -24,6 +25,8 @@ const mod = parseModerationRules(JSON.parse(readFileSync(join(rulesDir, 'moderat
 const swarmsPath = join(fixturesDir, 'moderation', 'scenarios.json');
 const swarms = existsSync(swarmsPath) ? (JSON.parse(readFileSync(swarmsPath, 'utf8')) as { scenarios: SwarmScenario[] }).scenarios : [];
 const report = evaluate(fx, ranking, limits, (name) => expectedRows(name, fixturesDir), undefined, scenarios, swarms, mod);
+const uploadsPath = join(fixturesDir, 'uploads', 'cases.json'); // PRD 6.2 (D-87)
+if (existsSync(uploadsPath)) report.files.push(evalUploads((JSON.parse(readFileSync(uploadsPath, 'utf8')) as { cases: UploadCase[] }).cases, limits.upload.max_pixels));
 
 console.log(`engine:eval — ${report.nodes} nodes, ${report.visiblePosts} visible posts, now ${report.now}, fixtures ${fixturesDir}, rules ${rulesDir}`);
 console.log('vote outcomes: ' + Object.entries(report.outcomes).map(([k, v]) => `${k} ${v}`).join(', '));
