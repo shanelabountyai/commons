@@ -69,6 +69,8 @@ model Board {
   org   Org    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   slug  String
   title String
+  /// PRD 6.3 (D-90): one line of plain text, at most 300 chars; '' = none. Set by owner/admin (org.update).
+  description String @default("")
   posts Post[]
 
   @@unique([orgId, slug])
