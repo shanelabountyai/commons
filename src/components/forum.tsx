@@ -1,7 +1,9 @@
 // Shared server components for the forum pages. All user text reaches the DOM through src/render (non-negotiable 1);
 // the Markdown and Text wrappers live there. The scope note is one sentence in one place.
 export { Markdown, Text } from '@/render/components';
+import { Text } from '@/render/components';
 import { ago as agoText, when as whenText } from '@/forum/time';
+export { whenText };
 
 import Link from 'next/link';
 
@@ -54,3 +56,56 @@ export function Crumbs({ items }: { items: { href?: string; text: React.ReactNod
 export const when = (d: Date) => <time dateTime={d.toISOString()}>{whenText(d)}</time>;
 /** Relative time with a scaled unit; the absolute value sits in the title and dateTime. */
 export const ago = (d: Date | null) => (d ? <time dateTime={d.toISOString()} title={whenText(d)}>{agoText(d, new Date())}</time> : <>not yet</>);
+
+/** 6.1 B (M2): a removed or deleted comment is named by its status, never "Comment by removed". */
+export const removedName = (status: string) => (status === 'deleted' ? 'Deleted comment' : 'Removed comment (by moderator)');
+
+/** One heading per comment, so heading navigation lists every comment; the author link, or the status name with its badge. */
+export function CommentHeading({ status, author, href }: { status: string; author: string; href: string }) {
+  return (
+    <h3 className="meta">
+      {status === 'body' || status === 'visible' ? (
+        <Link href={href}>
+          <Text value={author} />
+        </Link>
+      ) : (
+        <>
+          {removedName(status)} <Badge role={status === 'deleted' ? 'muted' : 'danger'}>{status === 'deleted' ? 'Deleted' : 'Removed'}</Badge>
+        </>
+      )}
+    </h3>
+  );
+}
+
+/**
+ * 6.1 B (M1): rows the tree engine already rendered (flat, with depth) → nested <ol>s. Each subtree sits in a
+ * <details open> whose summary counts the rows rendered below it on this page — "shown", because the depth cut
+ * (D-15) and the comment page can hide descendants. Collapse is the reader's browser state; the DOM keeps every row.
+ */
+export function Tree<R extends { id: string; depth: number }>({ rows, item }: { rows: readonly R[]; item: (r: R) => React.ReactNode }) {
+  const walk = (from: number, depth: number): [React.ReactNode[], number] => {
+    const out: React.ReactNode[] = [];
+    let i = from;
+    while (i < rows.length && rows[i]!.depth === depth) {
+      const r = rows[i]!;
+      const [kids, next] = walk(i + 1, depth + 1);
+      const shown = next - i - 1;
+      out.push(
+        <li key={r.id} id={r.id} className="c" tabIndex={-1}>
+          {item(r)}
+          {kids.length > 0 && (
+            <details open>
+              <summary>
+                {shown} {shown === 1 ? 'reply' : 'replies'} shown
+              </summary>
+              <ol>{kids}</ol>
+            </details>
+          )}
+        </li>,
+      );
+      i = next;
+    }
+    return [out, i];
+  };
+  return <ol className="thread">{walk(0, rows[0]?.depth ?? 0)[0]}</ol>;
+}
