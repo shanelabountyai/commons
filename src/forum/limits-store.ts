@@ -38,6 +38,15 @@ export async function guardAndRecord(tx: Tx, g: GuardInput, rules: LimitRules): 
   return { ...verdict, young };
 }
 
+/** PRD 6.4 (D-93): the profile+post comment window. The history is the member's own Comment rows on the post, any
+ *  status (rule 3: the rows are truth; deleting a comment frees no slot), so nothing is recorded here. Call after
+ *  guardAndRecord in the same transaction: its per-(profile, comment) lock serialises this read too. */
+export async function guardThread(tx: Tx, g: { profileId: string; postId: string; at: number; young: boolean }, rules: LimitRules): Promise<LimitVerdict> {
+  const w = windowFor(rules, 'comment', 'profile+post');
+  const rows = await tx.comment.findMany({ where: { authorId: g.profileId, postId: g.postId, createdAt: { gt: toDate(g.at - w.per_seconds), lte: toDate(g.at) } }, select: { createdAt: true } });
+  return checkLimit(rows.map((r) => toEpoch(r.createdAt)), 'comment', g.young, g.at, rules, 'profile+post');
+}
+
 /** Cron: delete rows older than the longest window. */
 export async function sweepLimitHits(tx: Tx, now: number, rules: LimitRules): Promise<number> {
   const r = await tx.limitHit.deleteMany({ where: { at: { lt: toDate(now - retentionSeconds(rules)) } } });

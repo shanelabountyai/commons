@@ -8,9 +8,9 @@ import { createHash } from 'node:crypto';
 import { MAX_BODY_CHARS } from '@/render';
 import type { Lockable, LimitRules, ModerationRules } from '@/rules';
 import { ForumRefused, nodeInfo, toDate, toEpoch, type NodeRef, type Tx } from './db';
-import { guardAndRecord } from './limits-store';
+import { guardAndRecord, guardThread } from './limits-store';
 import { editNode, type EditInput } from './edit';
-import { createComment, createPost } from './tree-write';
+import { createComment, createPost, replyDepth } from './tree-write';
 import { castVote, type CastResult } from './votes';
 
 export class RateLimited extends Error {
@@ -97,8 +97,12 @@ export async function submitComment(tx: Tx, s: SubmitComment, rules: LimitRules,
   await admit(tx, s.orgId, s.profileId, s.at);
   checkText('body', s.body, MAX_BODY_CHARS);
   await refuseIfLocked(tx, s.orgId, { kind: 'POST', id: s.postId }, 'reply', mod);
+  // PRD 6.4 (D-93): too deep is refused before any window, so it spends no slot; then both comment windows
+  if ((await replyDepth(tx, s.parentId)) > rules.max_depth_written) throw new ForumRefused('INPUT_INVALID', 'Too deep to reply here; reply higher in the thread');
   const g = await guardAndRecord(tx, { orgId: s.orgId, profileId: s.profileId, action: 'comment', at: s.at }, rules);
   if (g.verdict === 'refuse') throw new RateLimited('comment', g.retryAfter);
+  const th = await guardThread(tx, { profileId: s.profileId, postId: s.postId, at: s.at, young: g.young }, rules);
+  if (th.verdict === 'refuse') throw new RateLimited('comment', th.retryAfter);
   const row = await createComment(tx, { orgId: s.orgId, postId: s.postId, parentId: s.parentId, authorId: s.profileId, publicId: s.publicId, body: s.body, createdAt: s.at });
   await tx.comment.update({ where: { id: row.id }, data: { bodyHash: bodyHash(s.body) } });
   return { ...row, duplicate: await duplicateSignal(tx, s.orgId, { kind: 'COMMENT', id: row.id }, s.body, s.at, mod) };

@@ -5,6 +5,7 @@ import { db } from '@/core/db';
 import { deleteOwn, RateLimited, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { toDate } from '@/forum/db';
 import { guardAndRecord, sweepLimitHits } from '@/forum/limits-store';
+import { createComment } from '@/forum/tree-write';
 import { parseLimitRules, parseModerationRules } from '@/rules';
 import { makeOrg } from '../helpers/org';
 
@@ -156,3 +157,28 @@ describe('a locked thread refuses what lock_refuses lists', () => {
   });
 });
 
+
+// PRD 6.4 (D-93): the profile+post comment window (history = the member's Comment rows on the post) and max_depth_written
+describe('thread window and depth cap at the door', () => {
+  const T = T0 + 100 * DAY;
+  const hits = () => db.limitHit.count({ where: { profileId: P.vet!, action: 'comment' } });
+  it('refuses the 11th reply to one post in an hour with RATE_LIMITED, and allows a reply to another post', async () => {
+    const [a, b] = await Promise.all(['A-T1', 'A-T2'].map((publicId, i) => tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId, title: 't', body: 'b', at: T - 7200 + 3600 * i }, rules))));
+    for (let i = 0; i < 10; i++) await tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: a!.id, parentId: null, publicId: `A-T1-C${i}`, body: 'c', at: T + 70 * i }, rules));
+    const before = await hits();
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: a!.id, parentId: null, publicId: 'A-T1-C10', body: 'c', at: T + 700 }, rules))).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'comment', retryAfter: 2900 });
+    expect(await hits()).toBe(before); // the refusal rolled back the profile row's hit
+    expect(await db.comment.count({ where: { postId: a!.id } })).toBe(10);
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: b!.id, parentId: null, publicId: 'A-T2-C0', body: 'c', at: T + 770 }, rules))).resolves.toMatchObject({ depth: 0 });
+  });
+  it('allows a reply at depth 32 and refuses one at depth 33 with INPUT_INVALID, writing no LimitHit', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-D32', title: 't', body: 'b', at: T + DAY - 3 * 3600 }, rules));
+    let parentId: string | null = null; // a 32-deep chain (depths 0..31) through the tree writer, not the door, two hours back so the thread window is clear
+    for (let d = 0; d < 32; d++) parentId = (await tx((t) => createComment(t, { orgId, postId: post.id, parentId, authorId: P.vet!, publicId: `A-D32-${d}`, body: 'c', createdAt: T + DAY - 2 * 3600 + d }))).id;
+    const at32 = await tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: post.id, parentId, publicId: 'A-D32-32', body: 'c', at: T + DAY + 400 }, rules));
+    expect(at32.depth).toBe(32);
+    const before = await hits();
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: post.id, parentId: at32.id, publicId: 'A-D32-33', body: 'c', at: T + DAY + 800 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID', message: expect.stringMatching(/Too deep to reply here/) });
+    expect(await hits()).toBe(before);
+  });
+});

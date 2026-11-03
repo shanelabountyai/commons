@@ -68,7 +68,7 @@ export default async function Thread({ params, searchParams }: { params: Promise
         {!removed && (
           <details>
             <summary>Reply, report{myCommentIds.has(n.publicId) ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
-            {!post.lockedAt && (
+            {!post.lockedAt && r.depth < limits.max_depth_written && ( // PRD 6.4: no reply form where the door would refuse
               <ActionForm action={bound(reply)}>
                 <input type="hidden" name="postId" value={post.id} />
                 <input type="hidden" name="parentId" value={n.dbId} />

@@ -2,7 +2,7 @@
 // src/tree because it must touch Prisma). The path and depth come from src/tree's segment math; the ordinal is the
 // creation order among siblings, taken under a per-parent advisory lock so two simultaneous replies get different
 // segments (task 2.3). The author's fixed +1 (D-12) is written as a Vote row in the same transaction.
-import { segment } from '@/tree';
+import { depthOf, segment } from '@/tree';
 import { ForumRefused, lockKey, toDate, type Tx } from './db';
 
 export type NewPost = { orgId: string; boardId: string; authorId: string; publicId: string; title: string; body: string; createdAt: number };
@@ -16,6 +16,13 @@ export async function createPost(tx: Tx, p: NewPost): Promise<{ id: string }> {
   });
   await tx.vote.create({ data: { orgId: p.orgId, voterId: p.authorId, nodeKind: 'POST', nodeId: post.id, value: 1, castAt: at } });
   return post;
+}
+
+/** PRD 6.4 (D-93): the depth a reply under `parentId` would get (T-2; top level 0). An unknown parent reads as top
+ *  level here and is refused by createComment (TREE_INVALID). */
+export async function replyDepth(tx: Tx, parentId: string | null): Promise<number> {
+  const parent = parentId ? await tx.comment.findUnique({ where: { id: parentId }, select: { path: true } }) : null;
+  return parent ? depthOf(parent.path) + 1 : 0;
 }
 
 /**
