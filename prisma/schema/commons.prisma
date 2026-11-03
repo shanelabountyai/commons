@@ -345,6 +345,8 @@ model Upload {
   mime      String
   bytes     Int
   sha256    String
+  /// PRD 6.2 (D-87): the author's description. null = legacy row ("Undescribed attachment"), '' = decorative (alt=""), else the text.
+  alt       String?
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([postId])

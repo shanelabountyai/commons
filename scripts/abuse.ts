@@ -40,6 +40,7 @@ const scripts: { script: string; action: Action; user: string; attempts: number[
         { script: 'spam-young-comments', action: 'comment', user: 'u193', attempts: Array.from({ length: 60 }, (_, i) => t0 + i) },
         { script: 'spam-young-posts', action: 'post', user: 'u193', attempts: Array.from({ length: 20 }, (_, i) => t0 + 60 * i) },
         { script: 'spam-young-votes', action: 'vote', user: 'u193', attempts: Array.from({ length: 100 }, (_, i) => t0 + i) },
+        { script: 'spam-young-uploads', action: 'upload', user: 'u193', attempts: Array.from({ length: 30 }, (_, i) => t0 + 10 * i) }, // PRD 6.2 (D-87)
       ]
     : [
         { script: 'normal-u050-posts', action: 'post', user: 'u050', attempts: fx.posts.filter((p) => p.author === 'u050').map((p) => p.created_at).sort((a, b) => a - b) },

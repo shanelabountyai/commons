@@ -33,7 +33,7 @@ export async function admit(tx: Tx, orgId: string, profileId: string, at: number
   if (p.bannedUntil && toEpoch(p.bannedUntil) > at) throw new ForumRefused('BANNED_UNTIL', String(toEpoch(p.bannedUntil)));
 }
 
-function checkText(field: string, value: string, max: number): void {
+export function checkText(field: string, value: string, max: number): void {
   if (value.length === 0) throw new ForumRefused('INPUT_INVALID', `${field} is empty`);
   if (value.length > max) throw new ForumRefused('INPUT_INVALID', `${field} is ${value.length} chars; the limit is ${max}`);
   // Postgres text cannot hold NUL; without this the write dies with a 500 instead of a refusal (X-37, found by the
@@ -44,7 +44,7 @@ function checkText(field: string, value: string, max: number): void {
 /** PRD 5.4 B: a lock locks. What it refuses is data (rules/moderation.json lock_refuses); a caller that passes no
  *  moderation rules gets the strictest reading, so a forgotten argument can only refuse more, never less. Checked
  *  before the window, like a ban: a refused write records no hit. Moderator actions do not come through here. */
-async function refuseIfLocked(tx: Tx, orgId: string, node: NodeRef, what: Lockable, mod?: ModerationRules): Promise<void> {
+export async function refuseIfLocked(tx: Tx, orgId: string, node: NodeRef, what: Lockable, mod?: ModerationRules): Promise<void> {
   if (mod && !mod.lock_refuses.includes(what)) return;
   const post =
     node.kind === 'POST'
