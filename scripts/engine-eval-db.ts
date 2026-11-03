@@ -18,6 +18,7 @@ import { createPost } from '@/forum/tree-write';
 import type { SignalScenario } from '@/votes/signals';
 import { toDate } from '@/forum/db';
 import { replay } from '@/limits';
+import { commentLimitRows } from '@/eval';
 import { parseLimitRules, parseModerationRules, parseRankingRules } from '@/rules';
 import { assignPaths, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
 
@@ -171,13 +172,16 @@ const scripts = [
   ['normal-u050-comments', 'comment', 'u050', fx.comments.filter((c) => c.author === 'u050').map((c) => c.created_at).sort((a, b) => a - b)],
   ['normal-u050-votes', 'vote', 'u050', fx.votes.filter((v) => v.voter === 'u050').map((v) => v.cast_at).sort((a, b) => a - b)],
 ] as const;
-compare(
-  'expected_limits.csv',
-  scripts.map(([script, action, user, attempts]) => {
+// PRD 6.4 (D-93): the four comment scripts over the stored comments, depth as the tree writer stored it
+const fxComment = new Map(fx.comments.map((c) => [c.id, c]));
+const storedComments = comments.map((c) => ({ t: toEpoch(c.createdAt), user: fxComment.get(c.publicId)!.author, post: postPublic.get(c.postId)!, depth: c.depth }));
+compare('expected_limits.csv', [
+  ...scripts.map(([script, action, user, attempts]) => {
     const r = replay(attempts, action, { created_at: accounts.get(user)!, contributionsAt: (t) => contributionsAt(user, t) }, limits);
     return { script, action, attempts: attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? '' };
   }),
-);
+  ...commentLimitRows(storedComments, Object.fromEntries(accounts), contributionsAt, limits),
+]);
 
 // database-only checks
 const verify = await votesVerify(db, org.id);
