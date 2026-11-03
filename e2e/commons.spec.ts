@@ -41,8 +41,8 @@ test('boards and a board under Hot, Top and New, ranked by the job', async ({ pa
   await signIn(page);
   await page.goto(`/o/${SLUG}/f`);
   await expectAccessible(page, 'boards', 'Boards');
-  await expect(page.getByRole('link', { name: 'networking' })).toBeVisible();
-  await page.getByRole('link', { name: 'selfhosting' }).click();
+  await expect(page.getByRole('link', { name: 'Networking' })).toBeVisible();
+  await page.getByRole('link', { name: 'Self-hosting' }).click();
   await expectAccessible(page, 'board hot', 'Hot');
   await expect(page.getByText(/ranked (just now|\d+ (min|h|d) ago)/)).toBeVisible(); // 4.1.13: scaled units
   const hotFirst = await page.locator('ol li.post a').first().textContent();
@@ -272,7 +272,7 @@ test('4.1.13: every page has its own title; the thread is usable and axe-clean a
   await signIn(page);
   const titles: [string, RegExp][] = [
     [`/o/${SLUG}/f`, /^Boards/],
-    [`/o/${SLUG}/f/selfhosting`, /^selfhosting/],
+    [`/o/${SLUG}/f/selfhosting`, /^Self-hosting/],
     [`/o/${SLUG}/f/p/P-GW`, /^P-GW title/],
     [`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, /^Comment by /],
     [`/o/${SLUG}/f/u/homelabber059`, /^homelabber059/],
@@ -352,7 +352,7 @@ test('5.1: one click to vote, the pressed state shows, the author sees a fixed +
   await postUp.click();
   await expect(row.getByRole('status')).toContainText('APPLIED');
   await expect(postUp).toHaveAttribute('aria-pressed', 'true');
-  await expectAccessible(page, 'board after a vote', 'sbc');
+  await expectAccessible(page, 'board after a vote', 'Small-board computers');
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto(`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true);
@@ -589,5 +589,42 @@ test('6.2: an attachment is named by its description; decorative is alt=""; a mi
     await page.setViewportSize({ width, height: 800 });
     await page.reload();
     await expectAccessible(page, `thread with attachments at ${width}px`, 'Attachment alt check');
+  }
+});
+
+test('6.3: a board says what belongs on it; only the owner edits it; a hostile description stays text', async ({ page }) => {
+  const SELF = 'Running your own services: containers, reverse proxies, backups, the stack you\'d rather not rent.';
+  // a member sees the description on Boards and under the board h1, and no edit control
+  await member.signIn(db, page);
+  await page.goto(`/o/${SLUG}/f`);
+  await expect(page.locator('li', { has: page.getByRole('link', { name: 'Self-hosting' }) })).toContainText(SELF);
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await expect(page.locator('h1 + p')).toHaveText(SELF);
+  await expect(page.getByText('Edit description')).toHaveCount(0);
+  // the owner edits it and sees it on both pages
+  await signIn(page);
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await page.waitForLoadState('networkidle');
+  await page.getByText('Edit description').click();
+  const next = 'Services you run yourself: containers, proxies, backups.';
+  await page.getByLabel('Board description').fill(next);
+  await page.getByRole('button', { name: 'Save description' }).click();
+  await expect(page.locator('h1 + p')).toHaveText(next);
+  await page.goto(`/o/${SLUG}/f`);
+  await expect(page.locator('li', { has: page.getByRole('link', { name: 'Self-hosting' }) })).toContainText(next);
+  // a stored hostile description renders as text
+  const hostile = '<img src=x onerror=alert(1)>';
+  await db.query(`UPDATE "Board" SET description = $1 WHERE "orgId" = $2 AND slug = 'networking'`, [hostile, orgId]);
+  await page.goto(`/o/${SLUG}/f/networking`);
+  await expect(page.locator('h1 + p')).toHaveText(hostile);
+  await expect(page.locator('h1 + p img')).toHaveCount(0);
+  expect(await page.evaluate(() => document.querySelectorAll('[onerror]').length)).toBe(0);
+  // axe at the three widths, light and dark, on Boards and a board with descriptions present
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`/o/${SLUG}/f`);
+    await expectAccessible(page, `boards with descriptions at ${width}px`, next);
+    await page.goto(`/o/${SLUG}/f/selfhosting`);
+    await expectAccessible(page, `board with description at ${width}px`, next);
   }
 });
