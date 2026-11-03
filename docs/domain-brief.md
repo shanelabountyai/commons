@@ -84,6 +84,10 @@ Vote outcomes `SELF_VOTE` and `GATED_DOWNVOTE` are not refusals: the request is 
 | GL-05..GL-07 | L-2 downvote refused at 23:59:59 and with 2 contributions; allowed at exactly 24 h with 3 |
 | GL-08..GL-12 | L-3/L-4: young comment limit 2/60 s; retryAfter 58; a hit exactly 60 s old has left the window; 59 s has not; floor 1 s |
 | GL-13..GL-14 | Regular comment limit 6/60 s |
+| GL-15..GL-17 | PRD 6.2 (D-87): young upload window 2/3600 s; the third is refused with retryAfter 3580 |
+| GL-18 | Regular upload window 10/3600 s: 9 hits allow, 10 refuse |
+| GL-19..GL-20 | `upload.max_per_post` 4: a post holding 3 takes a fourth, holding 4 refuses a fifth |
+| GL-21..GL-22 | `upload.max_pixels` 25 000 000 as the header claims it (`tools/uploadlib.py`): 5000 × 5000 allowed, 1 × 25 000 001 refused |
 
 ## 2b. Vote events (V-) — the oracle is `tools/votelib.py`
 
