@@ -10,6 +10,16 @@ import { castVote } from './votes';
 
 export type LoadReport = { table: string; wanted: number; existing: number; inserted: number };
 
+/** PRD 6.3 (D-90): seed copy, not fixture data or a rule; change the wording freely. */
+const BOARD_DESCRIPTIONS: Record<string, string> = {
+  selfhosting: "Running your own services: containers, reverse proxies, backups, the stack you'd rather not rent.",
+  networking: 'Routers, switches, VLANs, VPNs, DNS and anything else between the boxes.',
+  hardware: 'Servers, storage, power and cooling: what to buy, what broke, what it draws at idle.',
+  sbc: 'Raspberry Pi and other single-board computers: which board, which OS, which case.',
+  help: 'Stuck on something? Say what you tried, what you expected and what happened.',
+  meta: 'About this forum itself: boards, rules, moderation and bugs.',
+};
+
 export async function loadForum(tx: Tx, orgId: string, fx: Fixtures, rules: LimitRules): Promise<LoadReport[]> {
   const report: LoadReport[] = [];
   // write-once: an org with any post is already loaded
@@ -31,7 +41,8 @@ export async function loadForum(tx: Tx, orgId: string, fx: Fixtures, rules: Limi
   const boards = new Map<string, string>();
   const boardSlugs = [...new Set(fx.posts.map((p) => p.board))].sort();
   for (const slug of boardSlugs) {
-    const b = await tx.board.create({ data: { orgId, slug, title: slug } });
+    const title = fx.boards.find((x) => x.slug === slug)?.title ?? slug; // fixtures/boards.csv, read only (D-90)
+    const b = await tx.board.create({ data: { orgId, slug, title, description: BOARD_DESCRIPTIONS[slug] ?? '' } });
     boards.set(slug, b.id);
   }
   report.push({ table: 'Board', wanted: boardSlugs.length, existing: 0, inserted: boardSlugs.length });

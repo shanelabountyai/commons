@@ -13,6 +13,7 @@ export type NodeStatus = 'visible' | 'deleted' | 'removed';
 export type User = { id: string; handle: string; created_at: number; banned_until: number | null };
 export type Post = { id: string; board: string; author: string; created_at: number; status: NodeStatus };
 export type Comment = { id: string; post_id: string; parent_id: string; author: string; created_at: number; status: NodeStatus };
+export type Board = { slug: string; title: string };
 export type VoteEvent = { row: number; voter: string; node_id: string; value: 1 | -1; cast_at: number; note: string };
 
 const int = (row: CsvRow, field: string, file: string): number => {
@@ -57,7 +58,8 @@ export function loadFixtures(dir = FIXTURES_DIR) {
     if (value !== 1 && value !== -1) throw new InputInvalid('votes.csv.value', `must be 1 or -1, got ${value}`);
     return { row: i + 2, voter: r['voter']!, node_id: r['node_id']!, value, cast_at: int(r, 'cast_at', 'votes.csv'), note: r['note'] ?? '' };
   });
-  return { users, posts, comments, votes };
+  const boards: Board[] = readFixture('boards.csv', dir).map((r) => ({ slug: r['slug']!, title: r['title']! }));
+  return { users, posts, comments, votes, boards };
 }
 export type Fixtures = ReturnType<typeof loadFixtures>;
 
