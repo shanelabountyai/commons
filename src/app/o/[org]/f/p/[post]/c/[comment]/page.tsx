@@ -47,6 +47,7 @@ export default async function Permalink({ params }: { params: Promise<{ org: str
         </ol>
       )}
       {v.rows.length === 0 && <p className="removed">This comment was deleted or removed and has no visible replies.</p>}
+      {v.rows.length > 0 && <h2>The comment and its replies</h2>}
       <Tree
         rows={v.rows}
         item={(r) => (
