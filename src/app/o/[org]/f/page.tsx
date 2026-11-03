@@ -22,6 +22,11 @@ export default async function Boards({ params }: { params: Promise<{ org: string
             <span className="meta">
               {b.posts} {b.posts === 1 ? 'post' : 'posts'}
             </span>
+            {b.description && (
+              <p className="meta">
+                <Text value={b.description} />
+              </p>
+            )}
           </li>
         ))}
       </ul>

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
+import { can } from '@/core/authz/permissions';
 import { db } from '@/core/db';
 import { ForumForm as ActionForm } from '@/components/forum-form';
 import { ago, Badge, Crumbs, Pager, Text } from '@/components/forum';
@@ -10,7 +11,7 @@ import { VoteControl } from '@/components/vote-control';
 import { parseLimitRules } from '@/rules';
 import type { PostSort } from '@/ranking';
 import { parseRankingRules } from '@/rules';
-import { newPost, vote } from '../actions';
+import { describeBoard, newPost, vote } from '../actions';
 
 const ranking = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8')));
 const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
@@ -35,12 +36,32 @@ export default async function Board({ params, searchParams }: { params: Promise<
   const gateNote = await downvoteGateNote(me.profileId, nowEpoch(), limits);
   const newVote = vote.bind(null, ctx.slug);
   const base = `/o/${ctx.slug}/f/${slug}`;
+  const canDescribe = can(ctx.role, 'org.update'); // PRD 6.3: owner and admin (D-90)
   return (
     <main id="main" tabIndex={-1}>
       <Crumbs items={[{ href: `/o/${ctx.slug}/f`, text: 'Boards' }, { text: <Text value={v.board.title} /> }]} />
       <h1>
         <Text value={v.board.title} />
       </h1>
+      {v.board.description ? (
+        <p>
+          <Text value={v.board.description} />
+        </p>
+      ) : (
+        canDescribe && <p className="meta">No description yet.</p>
+      )}
+      {canDescribe && (
+        <details>
+          <summary>Edit description</summary>
+          <ActionForm action={describeBoard.bind(null, ctx.slug)}>
+            <input type="hidden" name="boardId" value={v.board.id} />
+            <label>
+              Board description <input name="description" defaultValue={v.board.description} maxLength={300} />
+            </label>
+            <button type="submit">Save description</button>
+          </ActionForm>
+        </details>
+      )}
       <p className="meta"><a href="#compose">Write a post</a></p>
       <nav className="tabs" aria-label="Sort">
         {POST_SORTS.map((s) => (

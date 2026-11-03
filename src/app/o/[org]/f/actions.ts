@@ -12,7 +12,7 @@ import { orgAction, ref } from '@/core/authz/action';
 import type { OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
-import { deleteOwn as deleteOwnNode, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
+import { checkLine, deleteOwn as deleteOwnNode, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { ForumRefused } from '@/forum/db';
 import { refusalText } from '@/forum/refusals';
 import { actOnContent, actOnThread, actOnUser, reviewSignal, setModerator, submitReport } from '@/forum/moderation';
@@ -48,6 +48,25 @@ export const newPost = orgAction(null, z.object({ boardId: ref('board'), title: 
     refused(e);
   }
   redirect(`${base(ctx.slug)}/p/${publicId}`);
+});
+
+/** PRD 6.3 (D-90): owner and admin say what a board is for. Trimmed; '' clears; one line, ≤ 300 chars. Template audit
+ *  only: the mod log records actions on members and content, and a description is neither. */
+export const describeBoard = orgAction('org.update', z.object({ boardId: ref('board'), description: z.string() }), async (ctx, i) => {
+  const board = await db.board.findFirst({ where: { id: i.boardId, orgId: ctx.orgId } });
+  if (!board) notFound(); // INV-04
+  const to = i.description.trim();
+  try {
+    if (to) checkLine('description', to, 300);
+    await db.$transaction(async (tx) => {
+      await tx.board.update({ where: { id: board.id }, data: { description: to } });
+      await audit(ctx, 'forum.board.describe', { targetType: 'board', targetId: board.id, data: { from: board.description, to } }, tx);
+    });
+  } catch (e) {
+    refused(e);
+  }
+  revalidatePath(base(ctx.slug), 'layout'); // the Boards page and the board page both show it
+  redirect(`${base(ctx.slug)}/${board.slug}`);
 });
 
 export const reply = orgAction(null, z.object({ postId: ref('post'), parentId: ref('comment').optional(), body: z.string().min(1).max(50_000) }), async (ctx, i) => {
