@@ -1,6 +1,6 @@
 # NEXT
 
-## ▶ PRD 6.2 built on `phase-6.2` (D-88, 2026-11-03). PR: https://github.com/shanelabountyai/commons/pull/9 (base `phase-6.1b`); CI result below. Next session item: **draft PRD 6.3** (board descriptions, `docs/phase-6-tasks.md` row 6.3) for review; nothing built; stop at the draft. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9, each into its base, and confirm or reverse D-88's three calls (the migration also widens `LimitHit_action_check`; the JPEG strip drops every APP1 and keeps APP13; legacy `alt = null` rows get no edit flow).
+## ▶ PRD 6.2 built on `phase-6.2` (D-88, 2026-11-03). PR: https://github.com/shanelabountyai/commons/pull/9 (base `phase-6.1b`), **CI green** at the `engine:eval:db` fix (https://github.com/shanelabountyai/commons/actions/runs/41705794019: ci and modules-removed pass; vitest 374/374, Playwright 23/23). The first CI run failed: `engine:eval:db` keeps a third copy of the limit scripts and was missing the upload row. Next session item: **draft PRD 6.3** (board descriptions, `docs/phase-6-tasks.md` row 6.3) for review; nothing built; stop at the draft. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9, each into its base, and confirm or reverse D-88's three calls (the migration also widens `LimitHit_action_check`; the JPEG strip drops every APP1 and keeps APP13; legacy `alt = null` rows get no edit flow).
 
 **Gate (local, Mac):**
 - vitest 374/374; uploads integration 10/10 (9 red first; D-86's ban and lock gaps reproduced).
@@ -8,7 +8,7 @@
 - `abuse:spam` `spam-young-uploads` 2/28/3580 = the row; `abuse:normal` OK.
 - `xss:check` 61/61, `src/render` untouched; `foundation:drift` clean.
 - e2e 4.1.6 + 6.2 red first, then green; axe 0 at 320/768/1280, light and dark.
-- Full Playwright sweep and the harness: CI.
+- CI run 41705794019 is green (the full sweep and the harness ran in CI).
 
 The test DB has migration `20261103120000`. Run `npm run db:migrate` on the dev DB before `npm run dev`/demo.
 
