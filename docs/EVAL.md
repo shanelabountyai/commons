@@ -307,6 +307,24 @@ Commands: `npm test`, `npm run test:e2e` (production build), `npm run xss:check`
 - **Gate:** vitest 382/382 (51 files; +8), harness with `describeBoard` discovered (0 findings); full Playwright 24/24 on the production build (2.8 min), axe 0 on Boards and a board page at 320 / 768 / 1280 px, light and dark; `xss:check` 61/61 (`src/render` untouched); `engine:eval` 15 files / 19,607 rows / 0 differences; `fixtures:check` OK, `fixtures/` unchanged; `engine:lint`, `foundation:drift`, `migrate diff` (empty), eslint, tsc clean.
 - **What it is not:** a description is plain text, so a link in one is not a link. Orgs loaded before the migration show none until an owner writes one or the dev DB is reloaded.
 
+## Phase 6 — §C measurements (PRD 6.4, 2026-11-03)
+
+Commands: `python3 -I tools/reference_rank.py` (the oracle), `npm run engine:eval`, `npm run engine:eval:db`, `npm run abuse:spam`, `npm run abuse:normal`, `npm run ranking:golden`, `npm test`. Bind test (D-92), fixed before any number: today's rules allow the scripted attack, the candidate refuses it, and it refuses 0 community actions; a vacuous normal side does not count. Depth is T-2's (top level 0).
+
+| Hypothesis | Attack: today → with the rule | Community (frozen fixture) | Verdict |
+|---|---|---|---|
+| Reply-chain flood, `profile+post` window 10 / 3600 s, young 3 | `spam-flood-thread` (u050, one post, every 10 s for an hour): 360 allowed → **10 allowed, 350 refused**, first retryAfter 3500 s | `normal-community-thread`: 5,000 comments, **0 refused**; most by one author on one post: 3 in any 60 s or hour, 5 in a day, 15 in total; young members peak at 2 an hour | **Binds** (D-93) |
+| `max_depth_written` 32 | `spam-deep-chain` (60-deep self-reply, one per 400 s): 60 allowed → **33 allowed, 27 refused** `INPUT_INVALID`, no retryAfter | `normal-community-depth`: 5,000 comments, **0 refused**; deepest 11, p99 6, 24 past the render cut of 6 | **Binds** (D-93, D-94) |
+| Link-host extraction | 20 posts, 20 hosts, different wording: **0** duplicate signals | No bodies in the fixture (`body_hash` only) | **Not measurable**: no normal side |
+| Repost title/body hash | Same post every 25 h for 7 posts: **0** signals at `duplicate.window_seconds` 86,400; **6** at 604,800 | 0 repeated (author, `title_hash`) pairs, 0 repeated `body_hash`: unique by construction | **Not measurable**: the normal side is vacuous |
+| Pin cap | None scripted | 0 pins | **Not measurable**: no member path; a moderator's pins are in the public mod log |
+
+- **Oracle first:** four rows added to `fixtures/expected_limits.csv`, the seven existing rows byte-identical (`git diff`: additions only); golden 64 OK with GL-23..GL-26.
+- **Red first:** the rules loader tests 5 of 7 red and the limits suite red on the missing `replayComments`; `actions.test.ts` 2 red (the 11th reply and the depth-33 reply both resolved).
+- **Where it binds:** the PRD's draft read the depth from 1 (max 12, p99 7, 53 past the cut). On T-2 the chain allows 33 levels; kept by Shane because `max_depth_rendered` 6 counts the same way (D-94).
+- **Gate (local, Mac):** vitest 390/390 (51 files; +8); `engine:eval` 15 files / 19,611 rows / 0 differences; `engine:eval:db` OK (`expected_limits` 11/11, 40 s on a quiet machine); `abuse:spam` and `abuse:normal` OK (6 and 5 scripts); golden 64 OK; `fixtures:check` OK; `xss:check` 61/61; `engine:lint` (6 windows), `foundation:drift`, `migrate diff` (no difference, no migration), eslint and tsc clean. Playwright is CI's: the only page change is one condition on the thread page's reply form, which no comment rendered there can meet (the cut is depth 6).
+- **What it is not:** two rules, each pinned by one attack the author scripted and one community replay. Three of five hypotheses stay open until the community fixture has bodies, organic reposts and pins (the carried regeneration decision, D-75, D-81). Nothing here measures a late edit (B7).
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
