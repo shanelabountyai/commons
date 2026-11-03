@@ -95,6 +95,19 @@ check("GL-11", "a hit 59 s old is still counted", limit_check([T0, T0 + 1], "com
 check("GL-12", "retryAfter floor is 1 s", limit_check([T0 - 59, T0 - 59], "comment", True, T0)[1], 1)
 check("GL-13", "regular comment limit is 6: 5 hits allow", limit_check([T0 + i for i in range(5)], "comment", False, T0 + 5)[0], "allow")
 check("GL-14", "regular comment limit is 6: 6 hits refuse", limit_check([T0 + i for i in range(6)], "comment", False, T0 + 6)[0], "refuse")
+check("GL-15", "young upload window: first upload allowed", limit_check([], "upload", True, T0), ("allow", None))
+check("GL-16", "young upload window: second upload 10 s later allowed", limit_check([T0], "upload", True, T0 + 10), ("allow", None))
+check("GL-17", "young upload window: third refused, retryAfter = T0 + 3600 - (T0 + 20) = 3580", limit_check([T0, T0 + 10], "upload", True, T0 + 20), ("refuse", 3580))
+check("GL-18", "regular upload window is 10 per hour: 9 hits allow, 10 refuse",
+      (limit_check([T0 + i for i in range(9)], "upload", False, T0 + 9)[0], limit_check([T0 + i for i in range(10)], "upload", False, T0 + 10)[0]), ("allow", "refuse"))
+
+# PRD 6.2 (D-87): per-post count and the pixel cap, through tools/uploadlib.py
+from uploadlib import parse as upload_parse, per_post_allowed  # noqa: E402
+from build_upload_fixtures import ihdr, png  # noqa: E402
+check("GL-19", "a post holding 3 attachments takes a fourth", per_post_allowed(3), True)
+check("GL-20", "a post holding 4 attachments refuses a fifth", per_post_allowed(4), False)
+check("GL-21", "5000 x 5000 = 25 000 000 px, exactly max_pixels, is allowed", upload_parse("image/png", png(ihdr(5000, 5000)))["verdict"], "allow")
+check("GL-22", "1 x 25 000 001 px, one over max_pixels, is refused", (upload_parse("image/png", png(ihdr(1, 25_000_001)))["verdict"], upload_parse("image/png", png(ihdr(1, 25_000_001)))["reason"]), ("refuse", "too_many_pixels"))
 
 # PRD 5.2 (D-75): one case per signal scenario, from fixtures/signals/scenarios.json through signallib.
 from signallib import detect, load_scenarios  # noqa: E402

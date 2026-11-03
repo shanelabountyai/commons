@@ -13,7 +13,7 @@ const expected = expectedRows('moderation/expected_report_signals.csv');
 describe('report swarms (5.4 B) against fixtures/moderation', () => {
   it('rules carry report_swarm and lock_refuses as data', () => {
     expect(mod.report_swarm).toEqual({ min_reporters: 4, window_seconds: 86_400, max_reporter_age_days: 7 });
-    expect(mod.lock_refuses).toEqual(['reply', 'vote', 'edit']);
+    expect(mod.lock_refuses).toEqual(['reply', 'vote', 'edit', 'upload']);
   });
   for (const sc of scenarios) {
     it(`${sc.id}: ${sc.note}`, () => {

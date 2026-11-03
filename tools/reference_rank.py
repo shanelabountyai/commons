@@ -33,7 +33,7 @@ EXPECTED = ["expected_post_order_hot.csv", "expected_post_order_top_day.csv", "e
             "expected_permalink.csv", "expected_limits.csv", "signals/expected_signals.csv",
             "moderation/expected_report_signals.csv"]
 INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json", "signals/scenarios.json",
-          "moderation/scenarios.json"]
+          "moderation/scenarios.json", "uploads/cases.json"]
 
 
 def read(name):
@@ -140,6 +140,7 @@ def compute(users, posts, comments, votes):
     scripts.append(("spam-young-comments", "comment", "u193", [t0 + i for i in range(60)]))
     scripts.append(("spam-young-posts", "post", "u193", [t0 + 60 * i for i in range(20)]))
     scripts.append(("spam-young-votes", "vote", "u193", [t0 + i for i in range(100)]))
+    scripts.append(("spam-young-uploads", "upload", "u193", [t0 + 10 * i for i in range(30)]))  # PRD 6.2 (D-87)
     # normal user: replay u050's own fixture activity through every window
     normal = "u050"
     acts = {"post": sorted(p["created_at"] for p in posts if p["author"] == normal),

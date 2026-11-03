@@ -3,7 +3,7 @@
   "comments.csv": "6eb6c5961a032c1200513a345516e949d6282be5cfe2aa3bdf6b6ba7ec9882c7",
   "expected_comment_order_best.csv": "7687c911222f40e9f3d920d62df32848ab8887ac2282fa337f6436c63959c330",
   "expected_counts.csv": "c42bf71f3ae441bb97d1cd70ce5b465d9b07fdec30ca38a7334539078a8cb563",
-  "expected_limits.csv": "feec6ecb2dd931ebb1e30ba5fb3009610f6987cb1897704b047f8cf3ec3229cb",
+  "expected_limits.csv": "05df32eb02d9bf5ab545165144593bc1a4d6ae546bdb6f20ba9705dfe3356196",
   "expected_pages.csv": "72550010210401c000febcfab72d5c34ed0c8047588692ad0db6f3084a99f574",
   "expected_permalink.csv": "b0d348457478b80f5a688dc6e2c79f1d883a7179e970f86cf08ba277f5d22394",
   "expected_post_order_hot.csv": "a12bf9f907ca1193baff05fbd65c4e5a74ec14e71c3e5ede6306e95d749097e5",
@@ -18,6 +18,7 @@
   "posts.csv": "7d2c0ca35893de8c934e77ada04004032f3fe49cdee6d8d84cbb81a03926996d",
   "signals/expected_signals.csv": "095ddb4e5143bfc7e8453bd707984ffd6936339a0eb014d14bf82bffe1e2cb8d",
   "signals/scenarios.json": "b71ae6c6826737045d9bac2ab3c6ffdd821ca2cd5b52e08fbb92e8b4582ec5d4",
+  "uploads/cases.json": "a6d78ffc1ab3391aa3e74fd54eef0afff007189990f860892f264c71df91b233",
   "users.csv": "88df727c6b060a68c29620fc490cfe6f911c9c4415b8ece605b279379c0ba436",
   "votes.csv": "1bd0313ba577f75ffe5b15cfb17c4503c6eddf363c68e6cdf848b9341e6d83a0",
   "xss/cases.json": "eb76e5a238ac07d243fdafcd5ac6c35bf19b2c1e8bc7e7ce122806a3b4898f21"

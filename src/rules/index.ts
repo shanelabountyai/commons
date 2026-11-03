@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { RulesInvalid } from '@/shared/errors';
 
-export const ACTIONS = ['post', 'comment', 'vote', 'report'] as const;
+export const ACTIONS = ['post', 'comment', 'vote', 'report', 'upload'] as const;
 export type Action = (typeof ACTIONS)[number];
 
 const positiveInt = z.number().int().positive();
@@ -42,7 +42,8 @@ export const LimitRulesSchema = z
       .refine((ws) => ACTIONS.every((a) => ws.some((w) => w.action === a)), { message: `every action needs a window: ${ACTIONS.join(', ')}` }),
     edit_window_seconds: positiveInt,
     max_depth_rendered: positiveInt,
-    upload: z.object({ max_bytes: positiveInt, types: z.array(z.string().regex(/^image\//)).nonempty() }).strict(),
+    /** PRD 6.2 (D-87): max_pixels is width x height as the header claims it; max_per_post counts a post's attachments. */
+    upload: z.object({ max_bytes: positiveInt, max_pixels: positiveInt, max_per_post: positiveInt, types: z.array(z.string().regex(/^image\//)).nonempty() }).strict(),
     /** D-31 as data (4.1.3): ≥ min_voters distinct gated downvoters on one node inside window_seconds → one signal. */
     signals: z
       .object({
@@ -76,7 +77,7 @@ export function windowFor(rules: LimitRules, action: Action): WindowRule {
 }
 
 // Moderation as data (Phase 4, task 4.1): report reasons, the two state machines, ban durations, the duplicate window.
-export const LOCKABLE = ['reply', 'vote', 'edit'] as const;
+export const LOCKABLE = ['reply', 'vote', 'edit', 'upload'] as const;
 export type Lockable = (typeof LOCKABLE)[number];
 const stateMachine = z.record(z.string().regex(/^[A-Z_]+$/), z.array(z.string().regex(/^[A-Z_]+$/)));
 export const ModerationRulesSchema = z

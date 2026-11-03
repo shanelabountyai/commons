@@ -12,6 +12,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import reference_rank as ref  # noqa: E402
+import uploadlib  # noqa: E402
 
 FIX = os.path.join(HERE, "..", "fixtures")
 
@@ -32,7 +33,17 @@ def main():
         if ref.to_csv(name, rows) != open(os.path.join(FIX, name)).read():
             print(f"REFERENCE DRIFT {name}: recomputed rows differ from the committed file")
             return 1
-    print(f"OK: {len(manifest)} files match MANIFEST.json; {len(out)} expected files reproduce from the inputs")
+    up = json.load(open(os.path.join(FIX, "uploads", "cases.json")))["cases"]
+    for c in up:
+        data = bytes.fromhex(c["hex"])
+        got = uploadlib.parse(c["mime"], data)
+        s = uploadlib.strip(c["mime"], data) if got["verdict"] == "allow" else None
+        got.update(stripped_sha256=hashlib.sha256(s).hexdigest() if s is not None else None, stripped_bytes=len(s) if s is not None else None)
+        for k, v in got.items():
+            if c[k] != v:
+                print(f"UPLOAD DRIFT {c['id']} {k}: committed {c[k]!r}, oracle {v!r}")
+                return 1
+    print(f"OK: {len(manifest)} files match MANIFEST.json; {len(out)} expected files and {len(up)} upload cases reproduce from the inputs")
     return 0
 
 

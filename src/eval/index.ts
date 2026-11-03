@@ -155,10 +155,11 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
   compare('expected_permalink.csv', permaRows);
   // limits scripts
   const t0 = now - 3600;
-  const scripts: { script: string; action: 'post' | 'comment' | 'vote'; user: string; attempts: number[] }[] = [
+  const scripts: { script: string; action: 'post' | 'comment' | 'vote' | 'upload'; user: string; attempts: number[] }[] = [
     { script: 'spam-young-comments', action: 'comment', user: 'u193', attempts: Array.from({ length: 60 }, (_, i) => t0 + i) },
     { script: 'spam-young-posts', action: 'post', user: 'u193', attempts: Array.from({ length: 20 }, (_, i) => t0 + 60 * i) },
     { script: 'spam-young-votes', action: 'vote', user: 'u193', attempts: Array.from({ length: 100 }, (_, i) => t0 + i) },
+    { script: 'spam-young-uploads', action: 'upload', user: 'u193', attempts: Array.from({ length: 30 }, (_, i) => t0 + 10 * i) }, // PRD 6.2 (D-87)
     { script: 'normal-u050-posts', action: 'post', user: 'u050', attempts: fx.posts.filter((p) => p.author === 'u050').map((p) => p.created_at).sort((a, b) => a - b) },
     { script: 'normal-u050-comments', action: 'comment', user: 'u050', attempts: fx.comments.filter((c) => c.author === 'u050').map((c) => c.created_at).sort((a, b) => a - b) },
     { script: 'normal-u050-votes', action: 'vote', user: 'u050', attempts: fx.votes.filter((v) => v.voter === 'u050').map((v) => v.cast_at).sort((a, b) => a - b) },
