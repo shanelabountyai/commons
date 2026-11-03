@@ -1,5 +1,11 @@
 # NEXT
 
+## ▶ PRD 6.3 drafted on `phase-6.3` (D-89, 2026-11-03), off `phase-6.2`; awaiting Shane's review. Nothing built, no gate run (doc only). Next for Shane: review `docs/prd/6.3-board-descriptions.md` and answer its four decisions (copy; use `fixtures/boards.csv` titles instead of slugs; audit only vs mod log; owner/admin vs moderators). Next session item: **build 6.3** once approved, on `phase-6.3`, red integration test and e2e first. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9, each into its base, and confirm or reverse D-88's three calls.
+
+**Found while drafting:** `loadForum` creates every board with `title: slug`; `fixtures/boards.csv`'s titles are never read, so every loaded org shows slugs as headings (PRD decision 2). No PR opened for a draft (same as 6.1, 6.2).
+
+---
+
 ## ▶ PRD 6.2 built on `phase-6.2` (D-88, 2026-11-03). PR: https://github.com/shanelabountyai/commons/pull/9 (base `phase-6.1b`), **CI green** at the `engine:eval:db` fix (https://github.com/shanelabountyai/commons/actions/runs/41705794019: ci and modules-removed pass; vitest 374/374, Playwright 23/23). The first CI run failed: `engine:eval:db` keeps a third copy of the limit scripts and was missing the upload row. Next session item: **draft PRD 6.3** (board descriptions, `docs/phase-6-tasks.md` row 6.3) for review; nothing built; stop at the draft. Model: Opus 5.5 (D-74). Still for Shane: merge #5 → #6 → #7 → #8 → #9, each into its base, and confirm or reverse D-88's three calls (the migration also widens `LimitHit_action_check`; the JPEG strip drops every APP1 and keeps APP13; legacy `alt = null` rows get no edit flow).
 
 **Gate (local, Mac):**
