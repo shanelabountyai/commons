@@ -6,3 +6,7 @@ spam-young-uploads,upload,30,2,28,3580
 normal-u050-posts,post,2,2,0,
 normal-u050-comments,comment,29,29,0,
 normal-u050-votes,vote,55,55,0,
+spam-flood-thread,comment,360,10,350,3500
+normal-community-thread,comment,5000,5000,0,
+spam-deep-chain,comment,60,33,27,
+normal-community-depth,comment,5000,5000,0,

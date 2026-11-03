@@ -7,10 +7,12 @@
     { "action": "comment", "per_seconds": 60,   "max": 6,  "young_max": 2 },
     { "action": "vote",    "per_seconds": 60,   "max": 30, "young_max": 10 },
     { "action": "report",  "per_seconds": 86400, "max": 20, "young_max": 5 },
-    { "action": "upload",  "per_seconds": 3600, "max": 10, "young_max": 2 }
+    { "action": "upload",  "per_seconds": 3600, "max": 10, "young_max": 2 },
+    { "action": "comment", "scope": "profile+post", "per_seconds": 3600, "max": 10, "young_max": 3 }
   ],
   "edit_window_seconds": 900,
   "max_depth_rendered": 6,
+  "max_depth_written": 32,
   "upload": { "max_bytes": 2000000, "max_pixels": 25000000, "max_per_post": 4, "types": ["image/png", "image/jpeg", "image/webp"] },
   "signals": {
     "brigade": { "min_voters": 5, "window_seconds": 600 },

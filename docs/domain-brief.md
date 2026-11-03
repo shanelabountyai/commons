@@ -20,7 +20,7 @@ Vocabulary, formulas and the golden-case index. `docs/decisions.md` outranks thi
 ## 2. Tree rules (T-)
 
 - **T-1** A comment's parent is a post or a comment in the same post. Cross-post parents are refused (`TREE_INVALID`).
-- **T-2** Depth = number of comment ancestors; top-level comments are depth 0. No depth limit on storage; render cuts at `max_depth_rendered` (6).
+- **T-2** Depth = number of comment ancestors; top-level comments are depth 0. Writes stop past `max_depth_written` (32, PRD 6.4, D-93); render cuts at `max_depth_rendered` (6).
 - **T-3** Siblings order by the requested sort (Best/Top/New); ties per D-9.
 - **T-4** Thread pagination pages **top-level** comments only (page size 50); each page carries its full subtrees down to the render cut.
 - **T-5** Permalink to node X renders X's ancestors (bodies collapsed to one line), X, and X's subtree to the render cut.
@@ -88,6 +88,8 @@ Vote outcomes `SELF_VOTE` and `GATED_DOWNVOTE` are not refusals: the request is 
 | GL-18 | Regular upload window 10/3600 s: 9 hits allow, 10 refuse |
 | GL-19..GL-20 | `upload.max_per_post` 4: a post holding 3 takes a fourth, holding 4 refuses a fifth |
 | GL-21..GL-22 | `upload.max_pixels` 25 000 000 as the header claims it (`tools/uploadlib.py`): 5000 × 5000 allowed, 1 × 25 000 001 refused |
+| GL-23..GL-25 | PRD 6.4 (D-93): the `profile+post` comment window 10/3600 s (young 3): 9 hits on one post allow, 10 refuse with retryAfter 3590; young 2 allow, 3 refuse; an 11th comment in the hour on another post is allowed |
+| GL-26 | `max_depth_written` 32 (T-2 depth, top level 0): depth 32 allowed, 33 refused with no retryAfter |
 
 ## 2b. Vote events (V-) — the oracle is `tools/votelib.py`
 

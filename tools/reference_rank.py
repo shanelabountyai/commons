@@ -18,7 +18,7 @@ sys.path.insert(0, HERE)
 from rankinglib import hot, wilson_lower, top_window_includes  # noqa: E402
 from votelib import reduce_votes  # noqa: E402
 from treelib import assign_paths, depth, render, permalink  # noqa: E402
-from limitslib import replay  # noqa: E402
+from limitslib import replay, replay_comments  # noqa: E402
 from signallib import expected_rows as signal_rows, load_scenarios  # noqa: E402
 from modlib import expected_rows as swarm_rows, load_scenarios as load_mod_scenarios  # noqa: E402
 
@@ -152,6 +152,21 @@ def compute(users, posts, comments, votes):
     for name, action, user, attempts in scripts:
         a, r, first = replay(attempts, action, accounts[user], lambda t, u=user: contributions_at(u, t))
         limit_rows.append({"script": name, "action": action, "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
+    # PRD 6.4 (D-93): the thread window and the depth cap. Attempts are (t, user, post, depth); depth per T-2.
+    community = []
+    for pid, cs in by_post.items():
+        paths = assign_paths(cs)
+        community += [(c["created_at"], c["author"], pid, depth(paths[c["id"]])) for c in cs]
+    community.sort()
+    comment_scripts = [
+        ("spam-flood-thread", "u050", [(t0 + 10 * i, "u050", "P-FLOOD", 0) for i in range(360)], ("profile", "profile+post")),
+        ("normal-community-thread", None, community, ("profile+post",)),
+        ("spam-deep-chain", "u050", [(NOW - 60 * 400 + 400 * i, "u050", "P-DEEP", i) for i in range(60)], ("profile", "profile+post")),
+        ("normal-community-depth", None, community, ()),
+    ]
+    for name, _, attempts, scopes in comment_scripts:
+        a, r, first = replay_comments(attempts, accounts, contributions_at, scopes)
+        limit_rows.append({"script": name, "action": "comment", "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
     out["expected_limits.csv"] = limit_rows
     # PRD 5.2 (D-75): the additive signal scenarios, computed by signallib from their own inputs
     out["signals/expected_signals.csv"] = signal_rows(load_scenarios(FIX))

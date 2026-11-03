@@ -101,6 +101,17 @@ check("GL-17", "young upload window: third refused, retryAfter = T0 + 3600 - (T0
 check("GL-18", "regular upload window is 10 per hour: 9 hits allow, 10 refuse",
       (limit_check([T0 + i for i in range(9)], "upload", False, T0 + 9)[0], limit_check([T0 + i for i in range(10)], "upload", False, T0 + 10)[0]), ("allow", "refuse"))
 
+# PRD 6.4 (D-93): the profile+post comment window and max_depth_written (depth per T-2: top level is 0)
+from limitslib import replay_comments, MAX_DEPTH_WRITTEN  # noqa: E402
+check("GL-23", "thread window 10/3600 s: 9 hits on the post allow, 10 refuse with retryAfter 3590",
+      (limit_check([T0 + i for i in range(9)], "comment", False, T0 + 9, "profile+post"), limit_check([T0 + i for i in range(10)], "comment", False, T0 + 10, "profile+post")), (("allow", None), ("refuse", 3590)))
+check("GL-24", "young thread window is 3: 2 hits allow, 3 refuse",
+      (limit_check([T0, T0 + 100], "comment", True, T0 + 200, "profile+post")[0], limit_check([T0, T0 + 100, T0 + 200], "comment", True, T0 + 300, "profile+post")[0]), ("allow", "refuse"))
+check("GL-25", "the window is per post: an 11th comment in the hour on another post is allowed",
+      replay_comments([(T0 + 70 * i, "a", "P1" if i < 10 else "P2", 0) for i in range(11)], {"a": T0 - 30 * 86400}, lambda u, t: 100)[:2], (11, 0))
+check("GL-26", "max_depth_written 32: a reply at depth 32 is allowed, at 33 refused with no retryAfter",
+      (MAX_DEPTH_WRITTEN, replay_comments([(T0, "a", "P", 32), (T0 + 100, "a", "P", 33)], {"a": T0 - 30 * 86400}, lambda u, t: 100)), (32, (1, 1, None)))
+
 # PRD 6.2 (D-87): per-post count and the pixel cap, through tools/uploadlib.py
 from uploadlib import parse as upload_parse, per_post_allowed  # noqa: E402
 from build_upload_fixtures import ihdr, png  # noqa: E402
