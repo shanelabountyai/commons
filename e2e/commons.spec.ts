@@ -630,3 +630,20 @@ test('6.3: a board says what belongs on it; only the owner edits it; a hostile d
     await expectAccessible(page, `board with description at ${width}px`, next);
   }
 });
+
+test('Phase 6 gate: search, a profile and the mod queue are axe-clean at the three widths, light and dark', async ({ page }) => {
+  // the 6.x specs measured Boards, a board, the threads, the permalink and attachments; these three pages were not
+  await signIn(page);
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const [path, see] of [
+      [`/o/${SLUG}/f/search?q=P-GW`, 'Search'],
+      [`/o/${SLUG}/f/u/homelabber059`, 'homelabber059'],
+      [`/o/${SLUG}/f/mod`, 'Moderation queue'],
+    ] as const) {
+      await page.goto(path);
+      expect(await page.evaluate((w) => document.documentElement.scrollWidth <= w, width), `${path} at ${width}px`).toBe(true);
+      await expectAccessible(page, `${path.split('/f/')[1]} at ${width}px`, see);
+    }
+  }
+});
