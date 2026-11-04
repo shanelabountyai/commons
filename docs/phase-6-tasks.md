@@ -14,3 +14,5 @@ Carried from Phase 5 as **owner decisions, not tasks:** `min_contribution_chars`
 Declined for this phase (§C, unchanged): appeals, two-person rule, per-board moderators, case notes (P2); homelab features (structured builds, wiki pins, flair, "solved", cross-posts); digests to the outbox; density toggle and identity tiles; search GIN index (D-52 seam, 500 posts); B7 edit integrity until 6.4 measures late edits; B8 account lifecycle (runbook as a doc only).
 
 Gate for Phase 6: every page axe 0 at 320 / 768 / 1280, light and dark; each readability item closed by a browser spec that failed first; upload limits proven by oracle-written `expected_limits.csv` rows and `engine:eval`; `xss:check` unchanged (the renderer is not touched); `npm test`, harness, e2e green in CI; **stop for review** before anything after.
+
+**Gate run 2026-11-04 (D-95):** passes on `40edfb7` after one a11y fix the gate's own new measurement found (search, profile and mod queue at three widths; the profile's table was not keyboard-reachable). Numbers: `docs/EVAL.md` §Phase 6 — gate. CI on the two gate commits pending at the push.

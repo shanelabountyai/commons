@@ -325,6 +325,23 @@ Commands: `python3 -I tools/reference_rank.py` (the oracle), `npm run engine:eva
 - **Gate (local, Mac):** vitest 390/390 (51 files; +8); `engine:eval` 15 files / 19,611 rows / 0 differences; `engine:eval:db` OK (`expected_limits` 11/11, 40 s on a quiet machine); `abuse:spam` and `abuse:normal` OK (6 and 5 scripts); golden 64 OK; `fixtures:check` OK; `xss:check` 61/61; `engine:lint` (6 windows), `foundation:drift`, `migrate diff` (no difference, no migration), eslint and tsc clean. Playwright 24/24 on the production build (1.1 min). **Found by CI:** the XSS walk posts 48 comments on one thread, and the new window refused the 11th (`Slow down … 3599 s`). The spec already lifted the profile window by deleting `LimitHit` rows; it now also ages its own comments out of the hour. That is a setup change; no expected value changed.
 - **What it is not:** two rules, each pinned by one attack the author scripted and one community replay. Three of five hypotheses stay open until the community fixture has bodies, organic reposts and pins (the carried regeneration decision, D-75, D-81). Nothing here measures a late edit (B7).
 
+## Phase 6 — gate (2026-11-04)
+
+Commands: `npm run engine:lint`, `npm run fixtures:check`, `npm run ranking:golden`, `npm run engine:eval`, `npm run xss:check`, `npm run foundation:drift`, `npm run repo:ignored`, `npm test`, `npx tsc --noEmit`, `npx eslint .`, `npm run test:e2e -- -g "Phase 6 gate"` (production build). Head checked: `40edfb7` on `phase-6.4`, which stacks 6.1 A → 6.1 B → 6.2 → 6.3 → 6.4 (PRs #7–#11) on `phase-5.4b`.
+
+| Gate clause | Evidence | Result |
+|---|---|---|
+| Every page axe 0 at 320 / 768 / 1280, light and dark | Boards, a board (page 2 and with descriptions), the thread, the deep thread, the permalink, a thread with attachments (6.1 A, 6.1 B, 6.2, 6.3 specs); **search, a profile and the mod queue added at this gate** (18 measurements) | **Passes after one fix**: the new test was red on the profile at 320 px light, `scrollable-region-focusable` (serious) on the member's moderation-log table; both forum tables now carry `tabIndex={0}` and a name (D-95) |
+| Each readability item closed by a browser spec that failed first | 6.1 A (`h1 .badge` not found), 6.1 B (0 of 8 `h3`s), 6.3 (no `Self-hosting` link) | Passes |
+| Upload limits proven by oracle-written `expected_limits.csv` rows and `engine:eval` | `spam-young-uploads` 2 / 28 / 3580 (D-88), `uploads/cases.json` 30/30, GL-15..GL-22 | Passes |
+| `xss:check` unchanged | 61/61; `git diff phase-5.4b...HEAD -- src/render src/tree` empty | Passes |
+| `npm test`, harness, e2e green in CI | vitest 390/390 in 51 files locally; CI run 41743879806 green on the 6.4 code head (`57a27b3`) | Passes on `57a27b3`; **the two gate commits need their own CI run** (the push opens it) |
+
+- **Engines and fixtures:** `engine:eval` 15 files / 19,611 rows / 0 differences; `fixtures:check` OK; golden 64 OK (GH-08 / GW-09 pending, not asserted); Phase 6 changed `fixtures/` by additions only (the upload cases, five `expected_limits.csv` rows, the manifest); `engine:lint` (6 windows), `foundation:drift`, `repo:ignored`, tsc and eslint clean.
+- **Not re-run locally:** the full Playwright sweep and `engine:eval:db`, `abuse:spam` / `abuse:normal` (all run at 6.4 on this code, D-94); CI owns the sweep. The only code change since is two table attributes.
+- **A gap in the record, not the code:** 6.2 has no section of its own in this file; its numbers are in D-88 and the 6.2 entry of `NEXT.md`.
+- **What the gate does not say:** none of PRs #5–#11 is merged, so no merged `phase-5` or `main` has been tested with Phase 6 in it. The members page (template-owned) and the sign-in pages were not measured here. axe's 0 is the automated subset; no screen-reader session was run. The carried caveats stand: `min_contribution_chars` (D-75), the vacuous community-report check (D-81), and the three 6.4 hypotheses that are not measurable without a regenerated community fixture.
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
