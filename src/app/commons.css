@@ -50,7 +50,7 @@ body { line-height: 1.5; }
 main:focus { outline: none; }
 .votes button { min-width: 24px; min-height: 24px; margin-right: 4px; }
 input[type='text'], input:not([type]), input[type='search'], select { max-width: 100%; box-sizing: border-box; }
-table { display: block; max-width: 100%; overflow-x: auto; }
+table { display: block; max-width: 100%; overflow-x: auto; } /* the two forum tables carry tabIndex={0} and a name: a scroll region must be reachable by keyboard (axe scrollable-region-focusable, Phase 6 gate) */
 @media (max-width: 40rem) {
   nav { overflow-wrap: anywhere; }
 }

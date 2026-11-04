@@ -101,7 +101,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ org: s
             </ActionForm>
           )}
           <h3>Moderation log for this member</h3>
-          <table>
+          <table tabIndex={0} aria-label="Moderation log for this member">
             <thead>
               <tr>
                 <th>When</th>

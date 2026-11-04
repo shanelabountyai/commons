@@ -258,7 +258,7 @@ export default async function ModQueue({ params, searchParams }: { params: Promi
       <p className="meta">
         Append-only: the database refuses UPDATE and DELETE on these rows. {log.total} entr{log.total === 1 ? 'y' : 'ies'}; <code>seq</code> is the total order (D-56).
       </p>
-      <table>
+      <table tabIndex={0} aria-label="Moderation log">
         <thead>
           <tr>
             <th>seq</th>
