@@ -33,7 +33,8 @@ EXPECTED = ["expected_post_order_hot.csv", "expected_post_order_top_day.csv", "e
             "expected_permalink.csv", "expected_limits.csv", "signals/expected_signals.csv",
             "moderation/expected_report_signals.csv"]
 INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json", "signals/scenarios.json",
-          "moderation/scenarios.json", "uploads/cases.json"]
+          "moderation/scenarios.json", "uploads/cases.json", "community/bodies.csv", "community/reports.csv",
+          "community/reposts.csv"]
 
 
 def read(name):
