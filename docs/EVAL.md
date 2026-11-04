@@ -342,6 +342,27 @@ Commands: `npm run engine:lint`, `npm run fixtures:check`, `npm run ranking:gold
 - **A gap in the record, not the code:** 6.2 has no section of its own in this file; its numbers are in D-88 and the 6.2 entry of `NEXT.md`.
 - **What the gate does not say:** none of PRs #5–#11 is merged, so no merged `phase-5` or `main` has been tested with Phase 6 in it. The members page (template-owned) and the sign-in pages were not measured here. axe's 0 is the automated subset; no screen-reader session was run. The carried caveats stand: `min_contribution_chars` (D-75), the vacuous community-report check (D-81), and the three 6.4 hypotheses that are not measurable without a regenerated community fixture.
 
+## Phase 7 — community text fixture (PRD 7.1, 2026-11-04)
+
+*Normal side = invented distribution (PRD 7.1 §1); a real community's rates are unknown.* These are the generator's realized counts, not measurements of any limit; the measurements are PRD 7.2.
+
+Commands: `python3 -I tools/build_community_text.py --seed 20261104` (twice: identical bytes), `npm run fixtures:check`, `npm run engine:eval`, `npm run engine:eval:db`, `npm test`, `npm run test:e2e` (production build).
+
+| Item | Pre-registered (PRD 7.1 §1) | Realized |
+|---|---|---|
+| Rows in `community/bodies.csv` | one per post and comment | 5,500 (500 posts, 5,000 comments), ASCII only |
+| Post body length | 200–1,500 chars | min 211, median 865, max 1,486 |
+| Short comments (2–20 chars) | 8 % | 400 of 5,000; the other 4,600 are 40–600 (median 344) |
+| Links | 15 % of posts, 5 % of comments, one each | 75 posts, 250 comments; 12 hosts, all `.example` |
+| Organic reposts | 10 (2 % of posts) | 10 pairs, gaps 12.4–69.1 h, each the same author on another board |
+| Reports | 1 per 100 nodes + 1–3 on each removed node | 151: 55 drawn + 96 on the 43 removed nodes (4 of the 55 landed there too); reasons off_topic 35, spam 32, duplicate 31, other 14, malware / harassment / doxxing 13 each |
+| Pins | none (D-98 (4)) | none |
+
+- **Frozen files:** `git diff --stat fixtures/` shows `MANIFEST.json` +3 lines and the new `fixtures/community/`; the 22 frozen files are byte-identical. `fixtures:check` OK (26 files; 14 expected files, 30 upload cases and 3 community files reproduce).
+- **Text-independence:** with the loader writing these titles and bodies, `engine:eval` stays 15 files / 19,611 rows / 0 differences and `engine:eval:db` OK.
+- **Duplicates:** with no window, the oracle's duplicate check finds exactly the 10 reposts (asserted in `verify_fixtures.py`). The live 24 h duplicate signal would catch 2 of them; that is a 7.2 number, recorded here only because the PRD's 1–72 h spacing produced it.
+- **Tests:** `tests/engine/community-text.test.ts` 7/7 (red first: no file). vitest 397/397: 394 in the full run plus 3 that failed under a load average of 30 (a Prisma "Unable to start a transaction in the given time" and the harness's 180 s timeout) and passed alone, 21/21. Playwright 25/25 (2.3 min); the first sweep failed on a spec that matched a post id inside its placeholder title, now looked up from `bodies.csv`.
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
