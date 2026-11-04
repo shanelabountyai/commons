@@ -7,10 +7,14 @@ import { expect, test, type Page } from '@playwright/test';
 import pg from 'pg';
 import { expectAccessible } from './axe';
 import { memberFor, ownerFor } from './commons-helpers';
+import { readFixture } from '../src/fixtures/load';
 
 test.use({ bypassCSP: true }); // axe is injected; the app's CSP (INV-15) rightly refuses that
 test.describe.configure({ mode: 'serial', timeout: 300_000 });
 
+// PRD 7.1 (D-98): posts carry generated titles from fixtures/community, so specs look them up by id
+const TITLES = new Map(readFixture('community/bodies.csv').map((r) => [r['node_id']!, r['title']!]));
+const title = (id: string) => TITLES.get(id)!;
 const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
 const SLUG = `homelab-e2e-${Date.now()}`;
 const owner = ownerFor(SLUG);
@@ -49,7 +53,7 @@ test('boards and a board under Hot, Top and New, ranked by the job', async ({ pa
   await page.getByRole('link', { name: 'Top all time' }).click();
   await expect(page.getByRole('link', { name: 'Top all time' })).toHaveAttribute('aria-current', 'page');
   const topFirst = await page.locator('ol li.post a').first().textContent();
-  expect(topFirst).toContain('P-GH-50'); // 50 votes, the fixture's top-all winner (expected_post_order_top_all.csv)
+  expect(topFirst).toContain(title('P-GH-50')); // 50 votes, the fixture's top-all winner (expected_post_order_top_all.csv)
   expect(hotFirst).not.toBeNull();
   await page.getByRole('link', { name: 'New' }).click();
   await expectAccessible(page, 'board new', 'New');
@@ -58,7 +62,7 @@ test('boards and a board under Hot, Top and New, ranked by the job', async ({ pa
 test('the deep thread: removed and deleted comments in place, continue-thread, permalink with ancestors', async ({ page }) => {
   await signIn(page);
   await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
-  await expectAccessible(page, 'thread P-CHAIN', 'P-CHAIN title');
+  await expectAccessible(page, 'thread P-CHAIN', title('P-CHAIN'));
   await expect(page.getByRole('heading', { level: 3, name: 'Deleted comment' }).first()).toBeVisible(); // C-CHAIN-3, author delete, subtree kept
   await expect(page.getByRole('heading', { level: 3, name: 'Removed comment (by moderator)' }).first()).toBeVisible(); // C-CHAIN-5, moderator removal (M2)
   await expect(page.getByText('11 comments · 2 top-level shown')).toBeVisible(); // two dead leaves hidden (D-13)
@@ -88,7 +92,7 @@ test('reply, vote, edit; a young-looking owner cannot downvote yet; refusals car
   await mine.getByRole('button', { name: 'Save edit' }).click();
   await expect(page.locator('ol.thread')).toContainText('Edited within the window.');
   await expect(page.locator('ol.thread .badge', { hasText: 'Edited' })).toHaveCount(0); // inside 900 s, no mark (D-32)
-  await expectAccessible(page, 'thread after reply', 'P-GW title');
+  await expectAccessible(page, 'thread after reply', title('P-GW'));
 });
 
 test('every XSS fixture body posted through the real form renders inert in a real browser', async ({ page }) => {
@@ -158,7 +162,7 @@ test('every XSS fixture body posted through the real form renders inert in a rea
   expect(rendered).toBeGreaterThanOrEqual(accepted);
   expect(live).toEqual([]);
   expect(fired).toBe(false);
-  await expectAccessible(page, 'thread with hostile bodies', 'P-0001 title');
+  await expectAccessible(page, 'thread with hostile bodies', title('P-0001'));
 });
 
 test('report → queue (with the fixture brigade) → remove → restore → append-only log', async ({ page }) => {
@@ -172,8 +176,8 @@ test('report → queue (with the fixture brigade) → remove → restore → app
   await expectAccessible(page, 'mod queue', 'Moderation queue');
   await expect(page.getByRole('heading', { name: /Reported \(1\): spam/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Suspected brigade: 7 gated downvotes/ })).toBeVisible();
-  const item = page.getByRole('region', { name: /CASE on P-BRIGADE title/ });
-  await item.getByLabel('Reason for P-BRIGADE title').fill('affiliate spam');
+  const item = page.getByRole('region', { name: `CASE on ${title('P-BRIGADE')}` });
+  await item.getByLabel(`Reason for ${title('P-BRIGADE')}`).fill('affiliate spam');
   await item.getByRole('button', { name: 'Remove' }).click();
   await expect(page.getByRole('heading', { name: /Reported \(1\)/ })).toHaveCount(0);
   await expect(page.locator('table tbody tr').first()).toContainText('REMOVE');
@@ -182,7 +186,7 @@ test('report → queue (with the fixture brigade) → remove → restore → app
   await page.locator('article[aria-label="Post"] summary').first().click();
   await page.getByLabel('Moderation reason for this post').fill('appeal upheld');
   await page.getByRole('button', { name: 'Restore' }).click();
-  await expect(page.getByRole('heading', { name: 'P-BRIGADE title' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: title('P-BRIGADE') })).toBeVisible();
   await page.goto(`/o/${SLUG}/f/mod`);
   const rows = page.locator('table tbody tr');
   await expect(rows.nth(0)).toContainText('RESTORE');
@@ -191,9 +195,9 @@ test('report → queue (with the fixture brigade) → remove → restore → app
   expect(log[0].n).toBe(2);
   await expect(db.query(`DELETE FROM "ModerationAction" WHERE "orgId" = $1`, [orgId])).rejects.toThrow(/append-only/);
   // search finds the post by a word in its title; profile page lists it
-  await page.goto(`/o/${SLUG}/f/search?q=P-BRIGADE`);
+  await page.goto(`/o/${SLUG}/f/search?q=${encodeURIComponent(title('P-BRIGADE'))}`);
   await expectAccessible(page, 'search', 'Search');
-  await expect(page.getByRole('link', { name: 'P-BRIGADE title' })).toBeVisible();
+  await expect(page.getByRole('link', { name: title('P-BRIGADE') })).toBeVisible();
 });
 
 // ---- Phase 4.1 defect patch: each assertion below was red before its fix (docs/phase-4.1-tasks.md) ----
@@ -275,11 +279,11 @@ test('4.1.13: every page has its own title; the thread is usable and axe-clean a
   const titles: [string, RegExp][] = [
     [`/o/${SLUG}/f`, /^Boards/],
     [`/o/${SLUG}/f/selfhosting`, /^Self-hosting/],
-    [`/o/${SLUG}/f/p/P-GW`, /^P-GW title/],
+    [`/o/${SLUG}/f/p/P-GW`, new RegExp('^' + title('P-GW').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))],
     [`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, /^Comment by /],
     [`/o/${SLUG}/f/u/homelabber059`, /^homelabber059/],
     [`/o/${SLUG}/f/mod`, /^Moderation queue/],
-    [`/o/${SLUG}/f/search?q=P-GW`, /^Search/],
+    [`/o/${SLUG}/f/search?q=firewall`, /^Search/],
   ];
   for (const [path, re] of titles) {
     await page.goto(path);
@@ -288,7 +292,7 @@ test('4.1.13: every page has its own title; the thread is usable and axe-clean a
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true); // no horizontal scroll (1.4.10)
-  await expectAccessible(page, 'thread at 320px', 'P-CHAIN title');
+  await expectAccessible(page, 'thread at 320px', title('P-CHAIN'));
   await page.getByRole('link', { name: 'Skip to content' }).focus();
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeVisible();
   await page.goto(`/o/${SLUG}/f/selfhosting`);
@@ -303,7 +307,7 @@ test('4.1.13: every page has its own title; the thread is usable and axe-clean a
   expect(box.height).toBeGreaterThanOrEqual(24);
   await up.click();
   await expect(target.getByRole('status')).toBeVisible();
-  await expectAccessible(page, 'thread after a vote', 'P-GW title');
+  await expectAccessible(page, 'thread after a vote', title('P-GW'));
   await expect(page.locator('time').first()).toHaveAttribute('datetime', /^\d{4}-/);
 });
 
@@ -342,10 +346,10 @@ test('5.1: one click to vote, the pressed state shows, the author sees a fixed +
   const own = page.locator('li.c > article', { hasText: 'A comment the member wrote for 5.1.' }).first();
   await expect(own.getByText('+1 (yours, fixed)')).toBeVisible();
   await expect(own.getByRole('button', { name: /^(Upvote|Downvote) comment/ })).toHaveCount(0);
-  await expectAccessible(page, 'thread after 5.1 votes', 'P-GW title');
+  await expectAccessible(page, 'thread after 5.1 votes', title('P-GW'));
   // the board page: a vote control per post, with the same state
   await page.goto(`/o/${SLUG}/f/sbc`);
-  const row = page.locator('li.post', { hasText: 'P-GW title' });
+  const row = page.locator('li.post', { hasText: title('P-GW') });
   for (let n = 2; (await row.count()) === 0; n++) {
     if (n > 10) throw new Error('P-GW not on any sbc page'); // 6.1 A: 25 rows a page; P-GW ranks 135th under Hot
     await page.goto(`/o/${SLUG}/f/sbc?page=${n}`);
@@ -397,12 +401,12 @@ test('5.4 A: the queue filters by kind, warns the author and locks the thread in
   }
   await expectAccessible(page, 'queue filtered to cases', 'Moderation queue');
   // the reporter's record: clearing P-GW gives the member "0 removed / 1 cleared" on the P-CHAIN case; the redirect keeps the filter
-  const gw = page.getByRole('region', { name: 'CASE on P-GW title' });
-  await gw.getByLabel('Reason for P-GW title').fill('on topic enough');
+  const gw = page.getByRole('region', { name: `CASE on ${title('P-GW')}` });
+  await gw.getByLabel(`Reason for ${title('P-GW')}`).fill('on topic enough');
   await gw.getByRole('button', { name: 'Clear' }).click();
   await expect(page).toHaveURL(/\/f\/mod\?kind=CASE$/);
   await expect(page.getByRole('region')).toHaveCount(1);
-  const chain = page.getByRole('region', { name: 'CASE on P-CHAIN title' });
+  const chain = page.getByRole('region', { name: `CASE on ${title('P-CHAIN')}` });
   const reporters = chain.getByRole('list', { name: 'Reporters' });
   await expect(reporters).toContainText(/member-homelab\S* \(joined .*; 0 removed \/ 1 cleared before\): harassment/);
   // the body is a ≤ 240-char excerpt until "Show full text" is opened
@@ -410,12 +414,12 @@ test('5.4 A: the queue filters by kind, warns the author and locks the thread in
   await expect(chain.locator('details').first()).toHaveJSProperty('open', false);
   // warn the author and lock the thread without leaving the queue
   await chain.getByText('Author and thread actions').click();
-  await chain.getByLabel('Reason for the author of P-CHAIN title').fill('first warning: harassment');
+  await chain.getByLabel(`Reason for the author of ${title('P-CHAIN')}`).fill('first warning: harassment');
   await chain.getByRole('button', { name: 'Warn' }).click();
   await expect(page).toHaveURL(/\/f\/mod\?kind=CASE$/);
   await expect(chain.locator('.meta').first()).toContainText('(WARNED;');
   await chain.getByText('Author and thread actions').click();
-  await chain.getByLabel('Reason for the thread of P-CHAIN title').fill('cooling off');
+  await chain.getByLabel(`Reason for the thread of ${title('P-CHAIN')}`).fill('cooling off');
   await chain.getByRole('button', { name: 'Lock thread' }).click();
   await expect(page).toHaveURL(/\/f\/mod\?kind=CASE$/);
   await expect(chain.locator('.meta').first()).toContainText('thread locked');
@@ -427,7 +431,7 @@ test('5.4 A: the queue filters by kind, warns the author and locks the thread in
   await expect(rows.nth(1)).toContainText('WARN');
   const seq = async (i: number) => Number(await rows.nth(i).locator('td').first().textContent());
   expect(await seq(0)).toBeGreaterThan(await seq(1));
-  await expect(rows.nth(0).getByRole('link', { name: 'P-CHAIN title' })).toBeVisible();
+  await expect(rows.nth(0).getByRole('link', { name: title('P-CHAIN') })).toBeVisible();
   // log paging at queue.page_size (50): synthetic rows in the test's own org push the earlier entries onto page 2
   const { rows: [{ id: actor }] } = await db.query(`SELECT p.id FROM "Profile" p JOIN "User" u ON u.id = p."userId" WHERE u.email = $1`, [owner.email]);
   await db.query(`INSERT INTO "ModerationAction" (id, "orgId", "actorId", "subjectId", kind, "fromState", "toState", reason, "createdAt") SELECT gen_random_uuid(), $1, $2, $2, 'WARN', 'ACTIVE', 'WARNED', 'synthetic log row ' || g, now() FROM generate_series(1, 50) g`, [orgId, actor]);
@@ -461,7 +465,7 @@ test('6.1 A: the board pages at 25 with a pager, pinned is a text badge, meta ca
   await page.goto(`/o/${SLUG}/f/selfhosting`);
   await expect(page.locator('ol li.post')).toHaveCount(25);
   const first = page.locator('ol li.post').first();
-  await expect(first).toContainText('P-GH-50');
+  await expect(first).toContainText(title('P-GH-50'));
   await expect(first.locator('.badge', { hasText: 'Pinned' })).toBeVisible();
   await expect(first.locator('.meta time')).toHaveAttribute('datetime', /^\d{4}-/);
   await expect(first.locator('.meta')).toContainText(/(just now|\d+ (min|h|d|mo|y) ago)/);
@@ -472,7 +476,7 @@ test('6.1 A: the board pages at 25 with a pager, pinned is a text badge, meta ca
   await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Boards' })).toBeVisible();
   expect(await page.getByRole('navigation', { name: 'Breadcrumb' }).textContent()).not.toMatch(/›\s*$/);
   // the scope sentence once per page, in the footer; "delete org" out of the forum nav and into the footer (owner)
-  for (const path of [`/o/${SLUG}/f`, `/o/${SLUG}/f/selfhosting`, `/o/${SLUG}/f/p/P-CHAIN`, `/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, `/o/${SLUG}/f/search?q=P-GW`, `/o/${SLUG}/f/u/homelabber059`, `/o/${SLUG}/f/mod`]) {
+  for (const path of [`/o/${SLUG}/f`, `/o/${SLUG}/f/selfhosting`, `/o/${SLUG}/f/p/P-CHAIN`, `/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, `/o/${SLUG}/f/search?q=firewall`, `/o/${SLUG}/f/u/homelabber059`, `/o/${SLUG}/f/mod`]) {
     await page.goto(path);
     await expect(page.getByText(SCOPE), path).toHaveCount(1);
     await expect(page.locator('footer').getByText(SCOPE), path).toHaveCount(1);
@@ -531,7 +535,7 @@ test('6.1 B: one h3 per comment, removed and deleted named by status, subtrees i
   // axe at the three widths, light and dark: the thread, the deep thread and the permalink; indent ≤ 1 rem a level at 320
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 800 });
-    for (const [path, see] of [[`/o/${SLUG}/f/p/P-GW`, 'P-GW title'], [`/o/${SLUG}/f/p/P-CHAIN`, 'P-CHAIN title'], [`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, 'Comment in context']] as const) {
+    for (const [path, see] of [[`/o/${SLUG}/f/p/P-GW`, title('P-GW')], [`/o/${SLUG}/f/p/P-CHAIN`, title('P-CHAIN')], [`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, 'Comment in context']] as const) {
       await page.goto(path);
       expect(await page.evaluate((w) => document.documentElement.scrollWidth <= w, width), `${path} at ${width}px`).toBe(true);
       await expectAccessible(page, `${path.split('/f/')[1]} at ${width}px`, see);
@@ -637,7 +641,7 @@ test('Phase 6 gate: search, a profile and the mod queue are axe-clean at the thr
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 800 });
     for (const [path, see] of [
-      [`/o/${SLUG}/f/search?q=P-GW`, 'Search'],
+      [`/o/${SLUG}/f/search?q=firewall`, 'Search'],
       [`/o/${SLUG}/f/u/homelabber059`, 'homelabber059'],
       [`/o/${SLUG}/f/mod`, 'Moderation queue'],
     ] as const) {

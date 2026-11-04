@@ -59,7 +59,9 @@ export function loadFixtures(dir = FIXTURES_DIR) {
     return { row: i + 2, voter: r['voter']!, node_id: r['node_id']!, value, cast_at: int(r, 'cast_at', 'votes.csv'), note: r['note'] ?? '' };
   });
   const boards: Board[] = readFixture('boards.csv', dir).map((r) => ({ slug: r['slug']!, title: r['title']! }));
-  return { users, posts, comments, votes, boards };
+  // PRD 7.1 (D-98): the additive text fixture, keyed by node id; no expected file depends on it
+  const text = new Map(readFixture('community/bodies.csv', dir).map((r) => [r['node_id']!, { title: r['title']!, body: r['body']! }]));
+  return { users, posts, comments, votes, boards, text };
 }
 export type Fixtures = ReturnType<typeof loadFixtures>;
 
