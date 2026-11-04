@@ -112,6 +112,8 @@ test('every XSS fixture body posted through the real form renders inert in a rea
   const alert = page.locator('p[role="alert"]'); // the form's own; Next's route announcer is also role=alert
   for (const c of bodies) {
     await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]); // one case per attempt; the limit itself is proven by abuse:spam
+    // PRD 6.4 (D-93): the thread window counts the owner's Comment rows on the post, so age them out of the hour, order kept
+    await db.query(`UPDATE "Comment" c SET "createdAt" = c."createdAt" - interval '2 hours' FROM "Post" p WHERE p.id = c."postId" AND p."orgId" = $1 AND p."publicId" = 'P-0001' AND c."createdAt" > now() - interval '1 hour'`, [orgId]);
     const before = await stored();
     await page.getByLabel('New comment').fill(c.input);
     await page.getByRole('button', { name: 'Comment', exact: true }).click();
