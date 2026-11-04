@@ -4,7 +4,7 @@
 
 **Gate:** vitest 390/390; `engine:eval` 15 files / 19,611 rows / 0 differences; `fixtures:check`, golden 64, `xss:check` 61/61, `engine:lint`, drift, `repo:ignored`, tsc, eslint clean; `src/render` and `src/tree` untouched since `phase-5.4b`.
 - **Found by the gate:** "every page at three widths" was wider than the 6.x specs. A new e2e test measures search, a profile and the mod queue at 320/768/1280, light and dark. It was red on the profile at 320 px (`scrollable-region-focusable`: the moderation-log table scrolls and could not be focused). Both forum tables now take `tabIndex={0}` + a name; scoped run 1/1, axe 0 on 18 measurements.
-- **CI:** run 41743879806 is green on the 6.4 code head; the two gate commits (`fc64022`, `40edfb7`) get their own run from this push. Check it before merging #11.
+- **CI:** run 41743879806 is green on the 6.4 code head; run 41886576485 is **green** on `3fc8e76` with the gate commits (ci and modules-removed pass): https://github.com/shanelabountyai/commons/actions/runs/41886576485
 - **Not re-run locally:** the full Playwright sweep, `engine:eval:db`, `abuse:*` (run at 6.4 on the same code; CI owns the sweep). 6.2 has no `docs/EVAL.md` section; its numbers are in D-88.
 - **Tooling note:** a Monitor whose command contains `pkill -f "$PWD.*playwright"` matches its own command line and kills itself; the run continues silently. Do the pkill in a separate Bash call first.
 

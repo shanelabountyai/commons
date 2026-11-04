@@ -335,7 +335,7 @@ Commands: `npm run engine:lint`, `npm run fixtures:check`, `npm run ranking:gold
 | Each readability item closed by a browser spec that failed first | 6.1 A (`h1 .badge` not found), 6.1 B (0 of 8 `h3`s), 6.3 (no `Self-hosting` link) | Passes |
 | Upload limits proven by oracle-written `expected_limits.csv` rows and `engine:eval` | `spam-young-uploads` 2 / 28 / 3580 (D-88), `uploads/cases.json` 30/30, GL-15..GL-22 | Passes |
 | `xss:check` unchanged | 61/61; `git diff phase-5.4b...HEAD -- src/render src/tree` empty | Passes |
-| `npm test`, harness, e2e green in CI | vitest 390/390 in 51 files locally; CI run 41743879806 green on the 6.4 code head (`57a27b3`) | Passes on `57a27b3`; **the two gate commits need their own CI run** (the push opens it) |
+| `npm test`, harness, e2e green in CI | vitest 390/390 in 51 files locally; CI run 41743879806 green on the 6.4 code head (`57a27b3`) | Passes: run 41886576485 green on `3fc8e76` (the gate commits included) |
 
 - **Engines and fixtures:** `engine:eval` 15 files / 19,611 rows / 0 differences; `fixtures:check` OK; golden 64 OK (GH-08 / GW-09 pending, not asserted); Phase 6 changed `fixtures/` by additions only (the upload cases, five `expected_limits.csv` rows, the manifest); `engine:lint` (6 windows), `foundation:drift`, `repo:ignored`, tsc and eslint clean.
 - **Not re-run locally:** the full Playwright sweep and `engine:eval:db`, `abuse:spam` / `abuse:normal` (all run at 6.4 on this code, D-94); CI owns the sweep. The only code change since is two table attributes.
