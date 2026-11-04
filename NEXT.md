@@ -1,5 +1,11 @@
 # NEXT
 
+## ▶ PRD 7.1 drafted on `phase-7.1` off `phase-6.4` (D-97, 2026-11-04); **stopped for review.** Shane confirmed D-88, D-91 and D-95 as built, and chose to regenerate the fixture before closing (D-96). Next for Shane: answer the PRD's four decisions (additive or rewrite; the pre-registered rates; whether the loader uses the bodies; pins), and still merge #4 → … → #11. Next session item: **build 7.1** once approved, generator and oracle first. Model: Opus 5.5 (D-74).
+
+**Found while drafting:** `body_hash` in the community fixture is `sha256(id)`, not a hash of any text, so real bodies can't match it. The PRD keeps the 22 frozen files byte-identical and adds `fixtures/community/` from seed 20261104. The rates are fixed before any measurement, because the normal side is invented. Doc work only: no gate run, and no PR for a draft (same as 6.1–6.4).
+
+---
+
 ## ▶ Phase 6 gate passed on `phase-6.4` at `40edfb7` (D-95, 2026-11-04); **stopped for review.** Nothing after Phase 6 is queued. Next for Shane: (1) merge #5 → #6 → #7 → #8 → #9 → #10 → #11, each into its base; (2) confirm or reverse D-88's three calls, D-91's two, and D-95's fix; (3) the carried fixture-regeneration decision (unlocks `min_contribution_chars`, the community-report check, link hosts, repost and pins together); (4) close the project or name Phase 7. On closure: the four deliverables (`docs/DEMO.md` run once, the exec brief, Ledger posts, cost review). Model: Opus 5.5 (D-74).
 
 **Gate:** vitest 390/390; `engine:eval` 15 files / 19,611 rows / 0 differences; `fixtures:check`, golden 64, `xss:check` 61/61, `engine:lint`, drift, `repo:ignored`, tsc, eslint clean; `src/render` and `src/tree` untouched since `phase-5.4b`.
