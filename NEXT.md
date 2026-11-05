@@ -1,5 +1,11 @@
 # NEXT
 
+## ▶ PRD 7.2 drafted on `phase-7.2` off `phase-7.1` (D-99, 2026-11-04); **stopped for review.** Next for Shane: answer the PRD's four decisions (link window 5 / 24 h, young 2; `min_contribution_chars` record only; repost record only, window stays 86,400; link history from body rows), and still merge #4 → … → #12, each into its base. Next session item: **build 7.2** once approved, oracle and the two `expected_limits.csv` rows first. Model: Opus 5.5 (D-74).
+
+**Draft-time numbers (stdlib read, oracle to reproduce):** link window binds (attack 20 → 5; community 0 of 325 refused, peak 2 a day, young 2); `min_contribution_chars` 40 refuses 6 community downvotes, only 2 refuses 0; report swarm 0 of 151 organic reports, but only 2 are young and the any-age peak (4) sits on the threshold; repost can't be separated (attack 25 h, organic 12–69 h; 3 d+ flags all 10). Doc work only: no gate run, and no PR for a draft (same as 6.x and 7.1).
+
+---
+
 ## ▶ PRD 7.1 built on `phase-7.1` (D-98, 2026-11-04). PR: https://github.com/shanelabountyai/commons/pull/12 (base `phase-6.4`), **CI green** (https://github.com/shanelabountyai/commons/actions/runs/41913188733: ci and modules-removed pass). Shane approved all four PRD recommendations (additive; rates as drafted; loader uses bodies; no pins). Next session item: **draft PRD 7.2** (the four carried measurements through the 6.4 bind test, `docs/phase-7-tasks.md` row 7.2) for review; nothing built; stop at the draft. Model: Opus 5.5 (D-74). Still for Shane: merge #4 → … → #12, each into its base.
 
 **Built:** `fixtures/community/` from seed 20261104: `bodies.csv` 5,500 rows (400 short comments; links on 75 posts and 250 comments, 12 `.example` hosts), `reports.csv` 151 (55 + 96 on the 43 removed nodes), `reposts.csv` 10 pairs (the third file the PRD left unnamed). `tools/community_text_lib.py` oracle; `verify_fixtures.py` reproduces all three and checks the reposts are the only duplicates. `loadForum` writes the text and `bodyHash`. MANIFEST +3; the 22 frozen files byte-identical.
