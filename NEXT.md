@@ -1,6 +1,6 @@
 # NEXT
 
-## ▶ PRD 7.2 drafted on `phase-7.2` off `phase-7.1` (D-99, 2026-11-04); **stopped for review.** Next for Shane: answer the PRD's four decisions (link window 5 / 24 h, young 2; `min_contribution_chars` record only; repost record only, window stays 86,400; link history from body rows), and still merge #4 → … → #12, each into its base. Next session item: **build 7.2** once approved, oracle and the two `expected_limits.csv` rows first. Model: Opus 5.5 (D-74).
+## ▶ PRD 7.2 drafted on `phase-7.2` off `phase-7.1` (D-99) and **approved as drafted** (D-100, 2026-11-04): link window 5 / 24 h, young 2; `min_contribution_chars` record only; repost record only, window stays 86,400; link history from body rows. Still for Shane: merge #4 → … → #12, each into its base. Next session item: **build 7.2**, oracle and the two `expected_limits.csv` rows first, then red tests, `linkHosts` + rule, the door in `submitPost`/`submitComment`, all three script copies in one commit (run `engine:eval:db` before the push), EVAL §7.2; PR against `phase-7.1`. Model: Opus 5.5 (D-74).
 
 **Draft-time numbers (stdlib read, oracle to reproduce):** link window binds (attack 20 → 5; community 0 of 325 refused, peak 2 a day, young 2); `min_contribution_chars` 40 refuses 6 community downvotes, only 2 refuses 0; report swarm 0 of 151 organic reports, but only 2 are young and the any-age peak (4) sits on the threshold; repost can't be separated (attack 25 h, organic 12–69 h; 3 d+ flags all 10). Doc work only: no gate run, and no PR for a draft (same as 6.x and 7.1).
 
