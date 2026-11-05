@@ -90,6 +90,8 @@ Vote outcomes `SELF_VOTE` and `GATED_DOWNVOTE` are not refusals: the request is 
 | GL-21..GL-22 | `upload.max_pixels` 25 000 000 as the header claims it (`tools/uploadlib.py`): 5000 × 5000 allowed, 1 × 25 000 001 refused |
 | GL-23..GL-25 | PRD 6.4 (D-93): the `profile+post` comment window 10/3600 s (young 3): 9 hits on one post allow, 10 refuse with retryAfter 3590; young 2 allow, 3 refuse; an 11th comment in the hour on another post is allowed |
 | GL-26 | `max_depth_written` 32 (T-2 depth, top level 0): depth 32 allowed, 33 refused with no retryAfter |
+| GL-27..GL-29 | PRD 7.2 (D-100): the profile `link` window 5/86400 s (young 2), one slot per markdown link: 4 allow a 5th, 5 refuse a 6th with retryAfter 85900; young 2 refuse a 3rd; a body's own links count, so a 3-link body on a 3-link history is refused whole |
+| GL-30 | Link hosts come from markdown links only (`\]\(https?://([^/\s)]+)`): a bare URL and an autolink are not counted |
 
 ## 2b. Vote events (V-) — the oracle is `tools/votelib.py`
 

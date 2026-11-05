@@ -5,10 +5,11 @@
 // Refusals are typed: ForumRefused for 1 and 3, RateLimited for 2. Nothing is dropped silently.
 // The fixture loader does not come through here: a historical bulk load is not a user action.
 import { createHash } from 'node:crypto';
-import { MAX_BODY_CHARS } from '@/render';
+import { addedLinks, isYoung } from '@/limits';
+import { linkHrefs, MAX_BODY_CHARS } from '@/render';
 import type { Lockable, LimitRules, ModerationRules } from '@/rules';
 import { ForumRefused, nodeInfo, toDate, toEpoch, type NodeRef, type Tx } from './db';
-import { guardAndRecord, guardThread } from './limits-store';
+import { accountAt, guardAndRecord, guardLinks, guardThread } from './limits-store';
 import { editNode, type EditInput } from './edit';
 import { createComment, createPost, replyDepth } from './tree-write';
 import { castVote, type CastResult } from './votes';
@@ -87,6 +88,8 @@ export async function submitPost(tx: Tx, s: SubmitPost, rules: LimitRules, mod?:
   checkText('body', s.body, MAX_BODY_CHARS);
   const g = await guardAndRecord(tx, { orgId: s.orgId, profileId: s.profileId, action: 'post', at: s.at }, rules);
   if (g.verdict === 'refuse') throw new RateLimited('post', g.retryAfter);
+  const lk = await guardLinks(tx, { orgId: s.orgId, profileId: s.profileId, links: linkHrefs(s.body).length, at: s.at, young: g.young }, rules); // PRD 7.3 (D-104)
+  if (lk.verdict === 'refuse') throw new RateLimited('link', lk.retryAfter);
   const row = await createPost(tx, { orgId: s.orgId, boardId: s.boardId, authorId: s.profileId, publicId: s.publicId, title: s.title, body: s.body, createdAt: s.at });
   await tx.post.update({ where: { id: row.id }, data: { bodyHash: bodyHash(s.body) } });
   return { id: row.id, duplicate: await duplicateSignal(tx, s.orgId, { kind: 'POST', id: row.id }, s.body, s.at, mod) };
@@ -103,18 +106,30 @@ export async function submitComment(tx: Tx, s: SubmitComment, rules: LimitRules,
   if (g.verdict === 'refuse') throw new RateLimited('comment', g.retryAfter);
   const th = await guardThread(tx, { profileId: s.profileId, postId: s.postId, at: s.at, young: g.young }, rules);
   if (th.verdict === 'refuse') throw new RateLimited('comment', th.retryAfter);
+  const lk = await guardLinks(tx, { orgId: s.orgId, profileId: s.profileId, links: linkHrefs(s.body).length, at: s.at, young: g.young }, rules); // PRD 7.3 (D-104)
+  if (lk.verdict === 'refuse') throw new RateLimited('link', lk.retryAfter);
   const row = await createComment(tx, { orgId: s.orgId, postId: s.postId, parentId: s.parentId, authorId: s.profileId, publicId: s.publicId, body: s.body, createdAt: s.at });
   await tx.comment.update({ where: { id: row.id }, data: { bodyHash: bodyHash(s.body) } });
   return { ...row, duplicate: await duplicateSignal(tx, s.orgId, { kind: 'COMMENT', id: row.id }, s.body, s.at, mod) };
 }
 
 /** 4.1.1 (D-64): edits come through the same door as creates — membership and ban, then text checks, then the
- * writer; the body is rehashed so the duplicate detector sees edited bodies. Edits have no sliding window (D-32
- * governs the mark, not a rate). */
+ * writer; the body is rehashed so the duplicate detector sees edited bodies. Edits have no window of their own (D-32
+ * governs the mark, not a rate), but PRD 7.3 (D-104): each href the edit adds asks the link window, before the writer,
+ * so a refused edit writes no EditHistory row. A node that is missing or not the editor's asks nothing here; the
+ * writer refuses it by name. */
 export async function submitEdit(tx: Tx, s: EditInput, rules: LimitRules, mod?: ModerationRules): Promise<{ withinWindow: boolean }> {
   await admit(tx, s.orgId, s.editorId, s.at);
   checkText('body', s.body, MAX_BODY_CHARS);
   await refuseIfLocked(tx, s.orgId, s.node, 'edit', mod); // 5.4 B
+  const select = { orgId: true, authorId: true, body: true } as const;
+  const old = s.node.kind === 'POST' ? await tx.post.findUnique({ where: { id: s.node.id }, select }) : await tx.comment.findUnique({ where: { id: s.node.id }, select });
+  if (old && old.orgId === s.orgId && old.authorId === s.editorId) {
+    const links = addedLinks(linkHrefs(old.body), linkHrefs(s.body));
+    const young = links > 0 && isYoung(await accountAt(tx, s.editorId, s.at), s.at, rules);
+    const lk = await guardLinks(tx, { orgId: s.orgId, profileId: s.editorId, links, at: s.at, young }, rules);
+    if (lk.verdict === 'refuse') throw new RateLimited('link', lk.retryAfter);
+  }
   const r = await editNode(tx, s, rules);
   const h = bodyHash(s.body);
   if (s.node.kind === 'POST') await tx.post.update({ where: { id: s.node.id }, data: { bodyHash: h } });

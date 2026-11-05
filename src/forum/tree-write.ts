@@ -5,13 +5,13 @@
 import { depthOf, segment } from '@/tree';
 import { ForumRefused, lockKey, toDate, type Tx } from './db';
 
-export type NewPost = { orgId: string; boardId: string; authorId: string; publicId: string; title: string; body: string; createdAt: number };
-export type NewComment = { orgId: string; postId: string; parentId: string | null; authorId: string; publicId: string; body: string; createdAt: number };
+export type NewPost = { orgId: string; boardId: string; authorId: string; publicId: string; title: string; body: string; createdAt: number; bodyHash?: string };
+export type NewComment = { orgId: string; postId: string; parentId: string | null; authorId: string; publicId: string; body: string; createdAt: number; bodyHash?: string };
 
 export async function createPost(tx: Tx, p: NewPost): Promise<{ id: string }> {
   const at = toDate(p.createdAt);
   const post = await tx.post.create({
-    data: { orgId: p.orgId, boardId: p.boardId, authorId: p.authorId, publicId: p.publicId, title: p.title, body: p.body, createdAt: at, ups: 1 },
+    data: { orgId: p.orgId, boardId: p.boardId, authorId: p.authorId, publicId: p.publicId, title: p.title, body: p.body, bodyHash: p.bodyHash, createdAt: at, ups: 1 },
     select: { id: true },
   });
   await tx.vote.create({ data: { orgId: p.orgId, voterId: p.authorId, nodeKind: 'POST', nodeId: post.id, value: 1, castAt: at } });
@@ -45,7 +45,7 @@ export async function createComment(tx: Tx, c: NewComment): Promise<{ id: string
   const depth = path.length / 6 - 1;
   const at = toDate(c.createdAt);
   const row = await tx.comment.create({
-    data: { orgId: c.orgId, postId: c.postId, parentId: c.parentId, authorId: c.authorId, publicId: c.publicId, path, depth, body: c.body, createdAt: at, ups: 1 },
+    data: { orgId: c.orgId, postId: c.postId, parentId: c.parentId, authorId: c.authorId, publicId: c.publicId, path, depth, body: c.body, bodyHash: c.bodyHash, createdAt: at, ups: 1 },
     select: { id: true, path: true, depth: true },
   });
   await tx.vote.create({ data: { orgId: c.orgId, voterId: c.authorId, nodeKind: 'COMMENT', nodeId: row.id, value: 1, castAt: at } });

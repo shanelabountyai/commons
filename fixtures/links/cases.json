@@ -1,0 +1,96 @@
+{
+ "version": 1,
+ "cases": [
+  {
+   "id": "L-01",
+   "syntax": "inline",
+   "body": "[a](https://h1.example.test)",
+   "anchors": 1,
+   "counted_7_2": 1
+  },
+  {
+   "id": "L-02",
+   "syntax": "autolink",
+   "body": "<https://h2.example.test>",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-03",
+   "syntax": "autolink, upper-case scheme",
+   "body": "<HTTPS://h3.example.test>",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-04",
+   "syntax": "reference",
+   "body": "[a][r]\n\n[r]: https://h4.example.test",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-05",
+   "syntax": "collapsed reference",
+   "body": "[r][]\n\n[r]: https://h5.example.test",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-06",
+   "syntax": "shortcut reference",
+   "body": "[r]\n\n[r]: https://h6.example.test",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-07",
+   "syntax": "space before destination",
+   "body": "[a]( https://h7.example.test)",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-08",
+   "syntax": "angle-bracket destination",
+   "body": "[a](<https://h8.example.test>)",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-09",
+   "syntax": "upper-case scheme",
+   "body": "[a](HTTPS://h9.example.test)",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-10",
+   "syntax": "newline before destination",
+   "body": "[a](\nhttps://h10.example.test)",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-11",
+   "syntax": "mailto",
+   "body": "[a](mailto:x@h11.example.test)",
+   "anchors": 1,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-12",
+   "syntax": "bare URL (linkify off)",
+   "body": "https://h12.example.test",
+   "anchors": 0,
+   "counted_7_2": 0
+  },
+  {
+   "id": "L-13",
+   "syntax": "image (no images, D-40)",
+   "body": "![a](https://h13.example.test/i.png)",
+   "anchors": 0,
+   "counted_7_2": 1
+  }
+ ]
+}

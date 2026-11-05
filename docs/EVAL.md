@@ -342,6 +342,108 @@ Commands: `npm run engine:lint`, `npm run fixtures:check`, `npm run ranking:gold
 - **A gap in the record, not the code:** 6.2 has no section of its own in this file; its numbers are in D-88 and the 6.2 entry of `NEXT.md`.
 - **What the gate does not say:** none of PRs #5–#11 is merged, so no merged `phase-5` or `main` has been tested with Phase 6 in it. The members page (template-owned) and the sign-in pages were not measured here. axe's 0 is the automated subset; no screen-reader session was run. The carried caveats stand: `min_contribution_chars` (D-75), the vacuous community-report check (D-81), and the three 6.4 hypotheses that are not measurable without a regenerated community fixture.
 
+## Phase 7 — community text fixture (PRD 7.1, 2026-11-04)
+
+*Normal side = invented distribution (PRD 7.1 §1); a real community's rates are unknown.* These are the generator's realized counts, not measurements of any limit; the measurements are PRD 7.2.
+
+Commands: `python3 -I tools/build_community_text.py --seed 20261104` (twice: identical bytes), `npm run fixtures:check`, `npm run engine:eval`, `npm run engine:eval:db`, `npm test`, `npm run test:e2e` (production build).
+
+| Item | Pre-registered (PRD 7.1 §1) | Realized |
+|---|---|---|
+| Rows in `community/bodies.csv` | one per post and comment | 5,500 (500 posts, 5,000 comments), ASCII only |
+| Post body length | 200–1,500 chars | min 211, median 865, max 1,486 |
+| Short comments (2–20 chars) | 8 % | 400 of 5,000; the other 4,600 are 40–600 (median 344) |
+| Links | 15 % of posts, 5 % of comments, one each | 75 posts, 250 comments; 12 hosts, all `.example` |
+| Organic reposts | 10 (2 % of posts) | 10 pairs, gaps 12.4–69.1 h, each the same author on another board |
+| Reports | 1 per 100 nodes + 1–3 on each removed node | 151: 55 drawn + 96 on the 43 removed nodes (4 of the 55 landed there too); reasons off_topic 35, spam 32, duplicate 31, other 14, malware / harassment / doxxing 13 each |
+| Pins | none (D-98 (4)) | none |
+
+- **Frozen files:** `git diff --stat fixtures/` shows `MANIFEST.json` +3 lines and the new `fixtures/community/`; the 22 frozen files are byte-identical. `fixtures:check` OK (26 files; 14 expected files, 30 upload cases and 3 community files reproduce).
+- **Text-independence:** with the loader writing these titles and bodies, `engine:eval` stays 15 files / 19,611 rows / 0 differences and `engine:eval:db` OK.
+- **Duplicates:** with no window, the oracle's duplicate check finds exactly the 10 reposts (asserted in `verify_fixtures.py`). The live 24 h duplicate signal would catch 2 of them; that is a 7.2 number, recorded here only because the PRD's 1–72 h spacing produced it.
+- **Tests:** `tests/engine/community-text.test.ts` 7/7 (red first: no file). vitest 397/397: 394 in the full run plus 3 that failed under a load average of 30 (a Prisma "Unable to start a transaction in the given time" and the harness's 180 s timeout) and passed alone, 21/21. Playwright 25/25 (2.3 min); the first sweep failed on a spec that matched a post id inside its placeholder title, now looked up from `bodies.csv`.
+
+## Phase 7 — the four carried measurements (PRD 7.2, 2026-11-04)
+
+*Normal side = invented distribution (PRD 7.1 §1); a real community's rates are unknown.* Every row below carries that line: a candidate that refuses 0 community actions refuses 0 of the generator's, which were fixed before the draft (D-97).
+
+Commands: `python3 -I tools/reference_rank.py` (the two rows), `python3 -I tools/carried_measures.py` (the record-only lines), `npm run engine:eval`, `npm run abuse:spam`, `npm run abuse:normal`, `npm run engine:eval:db`, `npm test`.
+
+| Hypothesis | Candidate | Attack | Community side (invented distribution) | Verdict |
+|---|---|---|---|---|
+| Link hosts (SME #8) | `link` window 5 / 86,400 s, young 2, one slot per markdown link | 20 one-link posts, 20 hosts, 13 min apart, aged account: 20 allowed today; **5 allowed, 15 refused**, first retryAfter 82,500 s | 325 linked bodies replayed per author: **0 refused**. Young peak is 2 a day, on the young limit | **Binds; rule added (D-100 (1))** |
+| | `young_links_per_body` 0 | — | refuses **74** young linked bodies | Does not bind |
+| | same host by ≥ 2 accounts in 24 h | — | fires on **206** nodes over **12** hosts | Does not bind |
+| `min_contribution_chars` (SME #2) | contributions under N chars don't count toward L-2 | day-old account, three 1-char self-replies, then a downvote: allowed today, refused at N ≥ 2 | 1,405 downvotes, 1,393 allowed today. Refused more: N = 2 **0**, 3 **1**, 10 **3**, 20 **6**, 40 **6** | Does not bind at 40; at 2 a "+1" gets past it. Recorded (D-100 (2)) |
+| Report swarm (D-81) | none; the existing rule against organic reports | — | 151 organic reports, **0** signals (oracle and `engine:eval` agree). **2** from reporters under 7 d, young peak 1 per author per window; any-age peak **4**, on the threshold | Passes, not vacuous, thin: the age gate keeps it at 0 |
+| Repost (SME #9) | widen `duplicate.window_seconds` | 7 posts 25 h apart: 0 signals at 86,400 s, 6 at 604,800 s (`abuse:spam`) | 10 organic reposts, gaps 12.4–69.1 h: 86,400 s flags **2**, 259,200 s **10**, 604,800 s **10** | Does not bind; the window stays 86,400 (D-100 (3)) |
+
+- **Fixture:** `--write-expected` added exactly two rows to `expected_limits.csv`; `git diff` shows additions only, plus `MANIFEST.json` rehashed. `fixtures:check` OK; golden 68 cases OK (GL-27..GL-30 new).
+- **Red first:** before the engine change, 5 rules tests failed (the schema refused `link`) and 4 engine test files failed to import `linkHosts` / `checkLinks` / `replayLinks`.
+- **Three copies:** `engine:eval` 15 files / 19,613 rows / 0 differences (`expected_limits` 13/13); `abuse:spam` 7/7 (`spam-link-rotation` through `submitPost`); `abuse:normal` 6/6 (`normal-community-links` 325 through `guardLinks` and Post rows); `engine:eval:db` OK (13/13 from the bodies as stored).
+- **Extraction limit, stated, and it is a bypass:** only markdown links `[text](http(s)://host…)` count (the PRD's rule, GL-30). A bare URL renders as text (`linkify: false`), so it costs nothing. **An autolink `<https://host>` renders as a clickable link** (checked through `renderMarkdown`: `<a href="https://c.example/x" rel="nofollow ugc noopener">`) **and is not counted**, so the rotation attack written with autolinks gets all 20 through. Not built or fixtured here (rule 7: fixture first); open for review (D-101).
+- **Found, not built:** an edit adds links without asking the window (edits have no window, D-32). Read from the code, not run. Open for review (D-101).
+- **Gate:** vitest 404/404 (52 files), `engine:lint` OK (7 windows), `foundation:drift` clean, `xss:check` 61/61, eslint and tsc clean; no file under `prisma/` changed (no migration; CI runs `migrate diff`).
+
+## Phase 7 — the link window's two gaps (PRD 7.3, 2026-11-05)
+
+*Normal side = invented distribution (PRD 7.1 §1); a real community's rates, edits included, are unknown.* **The community fixture has no edits, so the edit half's community check is vacuous:** 0 of 0 community edits refused says nothing.
+
+Commands: `python3 -I tools/build_link_fixtures.py`, `python3 -I tools/reference_rank.py` (the three rows), `npm run engine:eval`, `npm run abuse:spam`, `npm run abuse:normal`, `npm run engine:eval:db`, `npm test`.
+
+**What counts as a link.** The 7.2 counter matched `](http(s)://` only. Each body in `fixtures/links/cases.json`, through `renderMarkdown`:
+
+| Syntax | Example | Anchors rendered | Counted by 7.2 | Counted now (`linkHrefs`) |
+|---|---|---|---|---|
+| inline | `[a](https://h)` | 1 | 1 | 1 |
+| autolink | `<https://h>` | 1 | **0** | 1 |
+| autolink, upper-case scheme | `<HTTPS://h>` | 1 | **0** | 1 |
+| reference | `[a][r]` + `[r]: https://h` | 1 | **0** | 1 |
+| collapsed reference | `[r][]` + definition | 1 | **0** | 1 |
+| shortcut reference | `[r]` + definition | 1 | **0** | 1 |
+| space before destination | `[a]( https://h)` | 1 | **0** | 1 |
+| angle-bracket destination | `[a](<https://h>)` | 1 | **0** | 1 |
+| upper-case scheme | `[a](HTTPS://h)` | 1 | **0** | 1 |
+| newline before destination | `[a](⏎https://h)` | 1 | **0** | 1 |
+| mailto | `[a](mailto:x@h)` | 1 | **0** | 1 |
+| bare URL | `https://h` | 0 (`linkify: false`) | 0 | 0 |
+| image | `![a](https://h/i.png)` | 0 (no images, D-40) | **1** | 0 |
+
+**The attacks** (account u050, aged; the window `{ link, 86400, 5, young 2 }` unchanged):
+
+| Script | Attempts | Before (7.2 code) | After | Community side (invented distribution) |
+|---|---|---|---|---|
+| `spam-link-syntax-rotation`: 20 posts 13 min apart, the ten uncounted syntaxes twice each | 20 | 20 allowed | **5 allowed / 15 refused**, first retryAfter 82,500 s | — |
+| `spam-link-edit-in`: 20 link-free posts, then 20 edits a minute apart, each adding a link | 20 edits | 20 allowed | **5 / 15**, 86,100 s | vacuous: no community edits |
+| `spam-link-edit-swap`: 5 one-link posts, then 15 hourly edits, each moving a link to a new host | 20 | 20 allowed | **5 posts allowed / 15 edits refused**, 82,500 s | vacuous: no community edits |
+| `normal-community-links` (7.2 row) | 325 | 325 / 0 | **325 / 0** | 325 linked bodies; renderer and 7.2 counter agree on all 5,500 |
+
+- **Fixture:** `--write-expected` added exactly three rows to `expected_limits.csv` (additions only; 13 rows byte-identical), plus `links/cases.json` (13 cases) and `MANIFEST.json` rehashed (27 files). `fixtures:check` OK; golden 70 OK (GL-31, GL-32 new).
+- **Red first:** `engine:eval` DIFF `expected_limits.csv` row 15 (rotation 20 allowed, expected 5; edit-in and swap 20 too); the `linkHrefs` pin and GL-31 / GL-32 failed to import; the 7.2 counter disagrees with the renderer on 11 of 13 cases.
+- **Three copies:** `engine:eval` 15 files / 19,616 rows / 0 differences; `abuse:spam` 10/10 (all three through `submitPost` / `submitEdit`; 5 `EditHistory` rows written, all from allowed edits); `abuse:normal` 6/6 (`normal-community-links` 325 / 0 through `guardLinks` and `LimitHit` rows); `engine:eval:db` OK (`expected_limits` 16/16 from the bodies as stored, through the shared pure replay, D-105 (c)).
+- **The door:** a refused edit writes no `EditHistory` row (integration test); rewording around links and removing one ask nothing; removing a link frees no slot (re-adding it is refused); a young member's 3rd edited-in link of the day is refused (retryAfter 86,280 s).
+- **Cost of asking the renderer:** ~15 ms a body through the DOM. A body without `[` or `<` skips it (no anchor is possible), so `engine:eval` runs in 3 s, not 71 s.
+- **Not claimed:** that these are all the link syntaxes. The counter now *is* the renderer's output, so any syntax that renders an anchor counts. A syntax the renderer doesn't turn into a link is text and costs nothing, which is the intent.
+
+## Phase 7 — gate (2026-11-05)
+
+*Normal side = invented distribution (PRD 7.1 §1); a real community's rates are unknown.* Every community number in Phase 7 is the generator's, fixed before any measurement (D-97).
+
+Commands: `npm run engine:lint`, `npm run fixtures:check`, `npm run ranking:golden`, `npm run engine:eval`, `npm run engine:eval:db`, `npm run abuse:spam`, `npm run abuse:normal`, `npm run xss:check`, `npm run foundation:drift`, `npm run repo:ignored`, `npm test`, `npx tsc --noEmit`, `npx eslint .`. Head checked: `0884e9f` on `phase-7.3`, which stacks 7.1 → 7.2 → 7.3 (PRs #12, #14, #15) on `phase-6.4`.
+
+| Gate clause | Evidence | Result |
+|---|---|---|
+| `fixtures:check` reproduces the community text | OK: 27 files match `MANIFEST.json`; 14 expected files, 30 upload cases, 13 link cases and **3 community files** reproduce from the inputs | Passes |
+| `engine:eval` stays at 0 differences | 15 files / 19,616 rows / 0 differences; `engine:eval:db` OK (stored rows reproduce every expected file) | Passes |
+| Every 7.2 number carries the invented-distribution line | §7.1, §7.2, §7.3 and this section each open with it; §7.3 adds that the edit half's community check is vacuous (no edits in the fixture) | Passes |
+| CI green | #12 run 41913188733, #14 run 41971627891, #15 run 42055790715 (Playwright and `migrate diff` included); the gate commits' run is linked in `NEXT.md` | Passes |
+
+- **Phase 7 changed `fixtures/` by additions only:** `community/` (3 files), `links/cases.json`, five `expected_limits.csv` rows (0 lines removed), `MANIFEST.json` (one hash changed, four added). The 22 frozen Phase 1 files are byte-identical.
+- **Scripts:** `abuse:spam` 10/10 and `abuse:normal` 6/6 through the live `LimitHit` store; golden 70 OK; `xss:check` 61/61. `src/render` changed once (`linkHrefs` reads the rendered DOM; `renderMarkdown`'s output unchanged, which the 61 cases confirm); `src/tree` is untouched.
+- **Rest of the gate:** vitest 423/423 in 52 files (93 s); `engine:lint` OK (7 windows); `foundation:drift` clean against v1.4.0; `repo:ignored`, tsc and eslint clean.
+- **Not re-run locally:** Playwright (no UI file changed in 7.2 or 7.3; CI ran it on all three PRs) and `migrate diff` (one hand-written CHECK migration, schema.prisma unchanged; CI runs it).
+- **What the gate does not say:** none of PRs #4–#15 is merged, so no merged branch has been tested with Phases 5–7 in it. The link window is proven against the attacks in `fixtures/links/` and the three scripts, not against every way to put a link in text: the counter is the renderer's own output, so a syntax that renders an anchor counts, and one that does not is plain text. The community has no edits, so "refuses 0 community edits" is not claimed. `min_contribution_chars` is recorded and not ruled (D-100 (2)), and the repost window stays at 86,400 s because no candidate separated organic from attack (D-100 (3)).
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.

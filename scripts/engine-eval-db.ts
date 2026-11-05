@@ -18,7 +18,7 @@ import { createPost } from '@/forum/tree-write';
 import type { SignalScenario } from '@/votes/signals';
 import { toDate } from '@/forum/db';
 import { replay } from '@/limits';
-import { commentLimitRows } from '@/eval';
+import { commentLimitRows, linkLimitRows } from '@/eval';
 import { parseLimitRules, parseModerationRules, parseRankingRules } from '@/rules';
 import { assignPaths, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
 
@@ -70,8 +70,8 @@ function compare(file: string, actual: Row[], tolerance?: { field: string; eps: 
 }
 
 // stored rows
-const posts = await db.post.findMany({ where: { orgId: org.id }, select: { id: true, publicId: true, createdAt: true, status: true, ups: true, downs: true, commentCount: true } });
-const comments = await db.comment.findMany({ where: { orgId: org.id }, select: { id: true, publicId: true, postId: true, parentId: true, path: true, depth: true, createdAt: true, status: true, ups: true, downs: true } });
+const posts = await db.post.findMany({ where: { orgId: org.id }, select: { id: true, publicId: true, createdAt: true, status: true, ups: true, downs: true, commentCount: true, body: true } });
+const comments = await db.comment.findMany({ where: { orgId: org.id }, select: { id: true, publicId: true, postId: true, parentId: true, path: true, depth: true, createdAt: true, status: true, ups: true, downs: true, body: true } });
 const snaps = await db.rankSnapshot.findMany({ where: { orgId: org.id } });
 const snapOf = new Map(snaps.map((s) => [`${s.nodeKind}:${s.nodeId}`, s]));
 const postPublic = new Map(posts.map((p) => [p.id, p.publicId]));
@@ -174,6 +174,7 @@ const scripts = [
 ] as const;
 // PRD 6.4 (D-93): the four comment scripts over the stored comments, depth as the tree writer stored it
 const fxComment = new Map(fx.comments.map((c) => [c.id, c]));
+const fxPost = new Map(fx.posts.map((p) => [p.id, p]));
 const storedComments = comments.map((c) => ({ t: toEpoch(c.createdAt), user: fxComment.get(c.publicId)!.author, post: postPublic.get(c.postId)!, depth: c.depth }));
 compare('expected_limits.csv', [
   ...scripts.map(([script, action, user, attempts]) => {
@@ -181,6 +182,14 @@ compare('expected_limits.csv', [
     return { script, action, attempts: attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? '' };
   }),
   ...commentLimitRows(storedComments, Object.fromEntries(accounts), contributionsAt, limits),
+  // PRD 7.2 (D-100) / 7.3 (D-104): the link scripts over the bodies as stored (the loader writes community/bodies.csv, D-98)
+  ...linkLimitRows(
+    [...posts, ...comments].map((n) => ({ t: toEpoch(n.createdAt), user: (fxPost.get(n.publicId) ?? fxComment.get(n.publicId))!.author, id: n.publicId, body: n.body })),
+    fx.links,
+    Object.fromEntries(accounts),
+    contributionsAt,
+    limits,
+  ),
 ]);
 
 // database-only checks
