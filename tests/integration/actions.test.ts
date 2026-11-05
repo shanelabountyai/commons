@@ -182,3 +182,19 @@ describe('thread window and depth cap at the door', () => {
     expect(await hits()).toBe(before);
   });
 });
+
+// PRD 7.2 (D-100): the profile link window; the history is the links in the member's own Post and Comment bodies
+describe('link window at the door', () => {
+  const T = T0 + 200 * DAY;
+  it('refuses the 6th link of the day with RATE_LIMITED (action link), across posts and comments; a body with no link is unaffected', async () => {
+    const post = (publicId: string, body: string, at: number) => tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId, title: 't', body, at }, rules));
+    for (let i = 0; i < 5; i++) await post(`A-L${i}`, `deal ${i}: [here](https://h${i}.example/nas)`, T + 780 * i);
+    const hits = await db.limitHit.count({ where: { profileId: P.vet!, action: 'post' } });
+    await expect(post('A-L5', 'deal 5: [here](https://h5.example/nas)', T + 3900)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link', retryAfter: 82_500 });
+    expect(await db.limitHit.count({ where: { profileId: P.vet!, action: 'post' } })).toBe(hits); // rolled back, post slot included
+    expect(await db.post.count({ where: { publicId: 'A-L5' } })).toBe(0);
+    const plain = await post('A-L6', 'no link, bare https://h6.example is not counted', T + 4680);
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: plain.id, parentId: null, publicId: 'A-L6-C0', body: '[x](https://h7.example)', at: T + 4700 }, rules))).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link' });
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: plain.id, parentId: null, publicId: 'A-L6-C1', body: '[x](https://h7.example)', at: T + DAY + 1 }, rules))).resolves.toMatchObject({ depth: 0 });
+  });
+});
