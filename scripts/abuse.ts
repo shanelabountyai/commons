@@ -7,9 +7,9 @@ import { db } from '@/core/db';
 import { expectedRows, loadFixtures, NOW } from '@/fixtures/load';
 import { toDate } from '@/forum/db';
 import { RateLimited, submitComment, submitPost } from '@/forum/actions';
-import { guardAndRecord, guardThread } from '@/forum/limits-store';
-import { createComment, replyDepth } from '@/forum/tree-write';
-import { isYoung } from '@/limits';
+import { guardAndRecord, guardLinks, guardThread } from '@/forum/limits-store';
+import { createComment, createPost, replyDepth } from '@/forum/tree-write';
+import { isYoung, linkHosts } from '@/limits';
 import type { Action } from '@/rules';
 import { parseLimitRules, parseModerationRules } from '@/rules';
 
@@ -113,6 +113,20 @@ if (suite === 'spam') {
   let parent: string | null = null;
   for (let i = 0; i < 60; i++) parent = (await door(dt, deep.id, parent, `DEEP-${i}`, NOW - 60 * 400 + 400 * i)) ?? parent;
   report('spam-deep-chain', dt, 60);
+  // PRD 7.2 (D-100): 20 one-link posts, 20 hosts, 13 min apart, through submitPost, a month clear of everything above
+  const lt = tally();
+  const tl = NOW + 30 * 86_400;
+  for (let i = 0; i < 20; i++) {
+    try {
+      await db.$transaction((tx) => submitPost(tx, { orgId: org.id, profileId: u050, boardId: board.id, publicId: `ROT-${i}`, title: `NAS deal ${i}`, body: `Deal ${i}, wording ${'abcdefghijklmnopqrst'[i]}: [see it](https://rot-${i}.example.test/nas)`, at: tl + 780 * i }, rules));
+      lt.allowed++;
+    } catch (e) {
+      if (!(e instanceof RateLimited)) throw e;
+      lt.refused++;
+      lt.first ??= e.retryAfter;
+    }
+  }
+  report('spam-link-rotation', lt, 20);
   // PRD 6.4 §3: attack-only measures, printed and recorded in docs/EVAL.md; no expected row, no rule (D-93 (3))
   const modRules = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
   const posted = async (publicId: string, body: string, at: number, m = modRules) => (await db.$transaction((tx) => submitPost(tx, { orgId: org.id, profileId: u050, boardId: board.id, publicId, title: 'Great NAS deal', body, at }, rules, m))).duplicate;
@@ -157,11 +171,31 @@ if (suite === 'spam') {
     });
   }
   report('normal-community-thread', thread, fx.comments.length);
+  // PRD 7.2 (D-100): every community body holding a markdown link, in time order, through the live link history (the
+  // author's Post rows; the thread pass above wrote comment bodies 'c', so they hold none). Written whatever the verdict.
+  const links = tally();
+  const linked = [...fx.posts, ...fx.comments]
+    .map((n) => ({ ...n, body: fx.text.get(n.id)!.body }))
+    .filter((n) => linkHosts(n.body).length > 0)
+    .sort((a, b) => a.created_at - b.created_at || (a.author < b.author ? -1 : a.author > b.author ? 1 : 0) || (a.id < b.id ? -1 : 1));
+  for (const n of linked) {
+    await db.$transaction(async (tx) => {
+      const young = isYoung({ created_at: created.get(n.author)!, contributions: contributions(n.author, n.created_at) }, n.created_at, rules);
+      const v = await guardLinks(tx, { profileId: ids.get(n.author)!, body: n.body, at: n.created_at, young }, rules);
+      if (v.verdict === 'allow') links.allowed++;
+      else {
+        links.refused++;
+        links.first ??= v.retryAfter;
+      }
+      await createPost(tx, { orgId: org.id, boardId: board.id, authorId: ids.get(n.author)!, publicId: `LINK-${n.id}`, title: 'l', body: n.body, createdAt: n.created_at });
+    });
+  }
+  report('normal-community-links', links, linked.length);
   report('normal-community-depth', depth, fx.comments.length);
 }
 
 const rows = await db.limitHit.count({ where: { orgId: org.id } });
 await db.org.delete({ where: { id: org.id } });
 await db.$disconnect();
-console.log(`abuse:${suite}: ${failed ? 'FAIL' : 'OK'} — ${scripts.length + 2} scripts through the live LimitHit store (${rows} rows written, org dropped)`);
+console.log(`abuse:${suite}: ${failed ? 'FAIL' : 'OK'} — ${scripts.length + 3} scripts through the live LimitHit store (${rows} rows written, org dropped)`);
 if (failed) process.exit(1);
