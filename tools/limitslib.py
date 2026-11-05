@@ -108,3 +108,10 @@ def replay_links(attempts, accounts, contributions_at):
             if first_retry is None:
                 first_retry = retry
     return allowed, refused, first_retry
+
+
+def added_links(before, after):
+    """PRD 7.3 (D-104): how many slots an edit asks. `before` and `after` are the hrefs of the old and new body; the
+    multiset difference after - before, so keeping, removing or reordering links asks nothing and a swap asks one."""
+    from collections import Counter
+    return sum((Counter(after) - Counter(before)).values())

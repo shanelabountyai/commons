@@ -182,9 +182,10 @@ compare('expected_limits.csv', [
     return { script, action, attempts: attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? '' };
   }),
   ...commentLimitRows(storedComments, Object.fromEntries(accounts), contributionsAt, limits),
-  // PRD 7.2 (D-100): the two link scripts over the bodies as stored (the loader writes community/bodies.csv, D-98)
+  // PRD 7.2 (D-100) / 7.3 (D-104): the link scripts over the bodies as stored (the loader writes community/bodies.csv, D-98)
   ...linkLimitRows(
     [...posts, ...comments].map((n) => ({ t: toEpoch(n.createdAt), user: (fxPost.get(n.publicId) ?? fxComment.get(n.publicId))!.author, id: n.publicId, body: n.body })),
+    fx.links,
     Object.fromEntries(accounts),
     contributionsAt,
     limits,

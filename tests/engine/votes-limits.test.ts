@@ -1,7 +1,7 @@
 // GL-01..GL-14 (brief §4) and the V- rules in TypeScript (tasks 1.7, 1.8).
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { checkLimit, checkLinks, downvoteAllowed, isYoung, linkHosts, replay, replayComments, replayLinks } from '@/limits';
+import { addedLinks, checkLimit, checkLinks, downvoteAllowed, isYoung, replay, replayComments, replayLinks } from '@/limits';
 import { parseLimitRules } from '@/rules';
 import { reduceVotes, type VoteEventIn } from '@/votes';
 
@@ -73,10 +73,12 @@ describe('sliding window (L-3, L-4)', () => {
 describe('link window', () => {
   const aged = { a: T0 - 30 * DAY };
   const many = () => 100;
-  it('GL-30 linkHosts finds markdown links only; a bare URL and an autolink are the extraction\'s stated limit', () => {
-    expect(linkHosts('see [x](https://a.example/p) and https://b.example and <https://c.example>')).toEqual(['a.example']);
-    expect(linkHosts('[a](http://one.test) [b](https://two.test/x?y) [c](ftp://no.test)')).toEqual(['one.test', 'two.test']);
-    expect(linkHosts('no links here')).toEqual([]);
+  it('GL-31 an edit asks for the hrefs it adds (multiset): rewording 0, removing 0, a second copy of an href 1', () => {
+    expect([addedLinks(['a', 'b'], ['b', 'a']), addedLinks(['a', 'b'], ['a']), addedLinks(['a'], ['a', 'a'])]).toEqual([0, 0, 1]);
+  });
+  it('GL-32 a swap asks one slot: 5 one-link posts, then moving one link to a new host is refused at 82,500', () => {
+    const swap = [...[0, 1, 2, 3, 4].map((i) => ({ t: T0 + 780 * i, user: 'a', links: 1 })), { t: T0 + 3900, user: 'a', links: addedLinks(['h0'], ['h5']) }];
+    expect(replayLinks(swap, aged, many, rules)).toEqual({ allowed: 5, refused: 1, firstRetryAfter: 82_500 });
   });
   it('GL-27 the 6th link in 24 h is refused with retryAfter from the oldest', () => {
     expect(checkLinks([0, 1, 2, 3].map((i) => T0 + i), 1, false, T0 + 400, rules)).toEqual({ verdict: 'allow' });

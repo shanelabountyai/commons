@@ -123,6 +123,15 @@ check("GL-29", "a body's own links count: 3 links on a 3-link history allow 2, t
       replay_links([(T0 + i, "a", 1) for i in range(3)] + [(T0 + 10, "a", 3)], {"a": T0 - 30 * 86400}, lambda u, t: 100), (3, 1, 86390))
 check("GL-30", "hosts come from markdown links only: a bare URL and an autolink are not counted",
       link_hosts("see [x](https://a.example/p) and https://b.example and <https://c.example>"), ["a.example"])
+# GL-30 is the oracle's extraction for the community side (it agrees with the renderer on all 5,500 bodies, D-103);
+# from PRD 7.3 the product counts what the renderer emits (linkHrefs), autolinks included.
+
+# PRD 7.3 (D-104): an edit asks one slot per href it adds (multiset difference)
+from limitslib import added_links  # noqa: E402
+check("GL-31", "an edit asks for the hrefs it adds: rewording asks 0, removing asks 0, adding a duplicate href asks 1",
+      (added_links(["a", "b"], ["b", "a"]), added_links(["a", "b"], ["a"]), added_links(["a"], ["a", "a"])), (0, 0, 1))
+check("GL-32", "a swap asks one slot: 5 one-link posts, then an edit moving one link to a new host is refused at 82500",
+      replay_links([(T0 + 780 * i, "a", 1) for i in range(5)] + [(T0 + 3900, "a", added_links(["h0"], ["h5"]))], {"a": T0 - 30 * 86400}, lambda u, t: 100), (5, 1, 82500))
 
 # PRD 6.2 (D-87): per-post count and the pixel cap, through tools/uploadlib.py
 from uploadlib import parse as upload_parse, per_post_allowed  # noqa: E402

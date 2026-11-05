@@ -33,7 +33,7 @@ EXPECTED = ["expected_post_order_hot.csv", "expected_post_order_top_day.csv", "e
             "expected_counts.csv", "expected_vote_outcomes.csv", "expected_tree.csv", "expected_pages.csv",
             "expected_permalink.csv", "expected_limits.csv", "signals/expected_signals.csv",
             "moderation/expected_report_signals.csv"]
-INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json", "signals/scenarios.json",
+INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json", "links/cases.json", "signals/scenarios.json",
           "moderation/scenarios.json", "uploads/cases.json", "community/bodies.csv", "community/reports.csv",
           "community/reposts.csv"]
 
@@ -174,6 +174,16 @@ def compute(users, posts, comments, votes):
     linked = sorted((n["created_at"], n["author"], len(community_text_lib.hosts(n["body"])), n["id"])
                     for n in community_text_lib.nodes() if community_text_lib.hosts(n["body"]))
     for name, attempts in (("spam-link-rotation", attack), ("normal-community-links", [a[:3] for a in linked])):
+        a, r, first = replay_links(attempts, accounts, contributions_at)
+        limit_rows.append({"script": name, "action": "link", "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
+    # PRD 7.3 (D-104): the three bypasses. Each body or edit adds one link by construction, so no parser is needed here.
+    # Rotation: the ten uncounted syntaxes (links/cases.json) twice each, at the 7.2 timing. Edit-in: 20 link-free posts
+    # 13 min apart (they ask nothing), then 20 edits a minute apart, each adding a link. Swap: 5 one-link posts, then
+    # 15 hourly edits, each replacing the link with a new host (one added href each).
+    t7 = t0 + 780 * 20
+    for name, attempts in (("spam-link-syntax-rotation", attack),
+                           ("spam-link-edit-in", [(t7 + 60 * j, "u050", 1) for j in range(20)]),
+                           ("spam-link-edit-swap", attack[:5] + [(t0 + 780 * 5 + 3600 * j, "u050", 1) for j in range(15)])):
         a, r, first = replay_links(attempts, accounts, contributions_at)
         limit_rows.append({"script": name, "action": "link", "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
     out["expected_limits.csv"] = limit_rows

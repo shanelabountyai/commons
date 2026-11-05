@@ -6,10 +6,12 @@ import { readFileSync } from 'node:fs';
 import { db } from '@/core/db';
 import { expectedRows, loadFixtures, NOW } from '@/fixtures/load';
 import { toDate } from '@/forum/db';
-import { RateLimited, submitComment, submitPost } from '@/forum/actions';
+import { RateLimited, submitComment, submitEdit, submitPost } from '@/forum/actions';
 import { guardAndRecord, guardLinks, guardThread } from '@/forum/limits-store';
 import { createComment, createPost, replyDepth } from '@/forum/tree-write';
-import { isYoung, linkHosts } from '@/limits';
+import { isYoung } from '@/limits';
+import { linkHrefs } from '@/render';
+import { linkAttacks } from '@/eval';
 import type { Action } from '@/rules';
 import { parseLimitRules, parseModerationRules } from '@/rules';
 
@@ -18,7 +20,9 @@ const suite = (suiteArg >= 0 ? process.argv[suiteArg + 1] : 'spam') as 'spam' | 
 const rules = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
 const fx = loadFixtures();
 const expected = expectedRows('expected_limits.csv');
-const SLUG = `abuse-${suite}`;
+// PRD 7.3: the spam suite edits through submitEdit, and EditHistory is append-only, so its org cannot be dropped (the
+// trigger refuses the cascade). It gets a fresh org per run instead, as scripts/demo.ts does; vitest's TRUNCATE clears it.
+const SLUG = suite === 'spam' ? `abuse-spam-${Date.now()}` : `abuse-${suite}`;
 
 await db.org.deleteMany({ where: { slug: SLUG } });
 await db.user.deleteMany({ where: { email: { endsWith: `-${SLUG}@example.com` } } }); // users outlive the org they are dropped with; a rerun would collide
@@ -127,6 +131,25 @@ if (suite === 'spam') {
     }
   }
   report('spam-link-rotation', lt, 20);
+  // PRD 7.3 (D-104): the three bypasses, the steps shared with engine:eval, each ten days clear of the last. Posts go
+  // through submitPost, edits through submitEdit (the real edit path); setup posts are not attempts.
+  for (const [k, [script, steps]] of linkAttacks(fx.links).entries()) {
+    const t = tally();
+    const ids = new Map<string, string>();
+    const shift = (40 + 10 * k) * 86_400;
+    for (const st of steps) {
+      try {
+        if (st.before === undefined) ids.set(st.publicId, (await db.$transaction((tx) => submitPost(tx, { orgId: org.id, profileId: u050, boardId: board.id, publicId: st.publicId, title: `NAS deal ${st.publicId}`, body: st.body, at: st.t + shift }, rules))).id);
+        else await db.$transaction((tx) => submitEdit(tx, { orgId: org.id, editorId: u050, node: { kind: 'POST', id: ids.get(st.publicId)! }, body: st.body, at: st.t + shift }, rules));
+        if (!st.setup) t.allowed++;
+      } catch (e) {
+        if (!(e instanceof RateLimited) || st.setup) throw e;
+        t.refused++;
+        t.first ??= e.retryAfter;
+      }
+    }
+    report(script, t, steps.filter((x) => !x.setup).length);
+  }
   // PRD 6.4 §3: attack-only measures, printed and recorded in docs/EVAL.md; no expected row, no rule (D-93 (3))
   const modRules = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
   const posted = async (publicId: string, body: string, at: number, m = modRules) => (await db.$transaction((tx) => submitPost(tx, { orgId: org.id, profileId: u050, boardId: board.id, publicId, title: 'Great NAS deal', body, at }, rules, m))).duplicate;
@@ -171,17 +194,17 @@ if (suite === 'spam') {
     });
   }
   report('normal-community-thread', thread, fx.comments.length);
-  // PRD 7.2 (D-100): every community body holding a markdown link, in time order, through the live link history (the
-  // author's Post rows; the thread pass above wrote comment bodies 'c', so they hold none). Written whatever the verdict.
+  // PRD 7.2 (D-100) / 7.3 (D-104): every community body whose render holds a link, in time order, through the live
+  // link history (the author's LimitHit rows, action link). Written whatever the verdict.
   const links = tally();
   const linked = [...fx.posts, ...fx.comments]
     .map((n) => ({ ...n, body: fx.text.get(n.id)!.body }))
-    .filter((n) => linkHosts(n.body).length > 0)
+    .filter((n) => linkHrefs(n.body).length > 0)
     .sort((a, b) => a.created_at - b.created_at || (a.author < b.author ? -1 : a.author > b.author ? 1 : 0) || (a.id < b.id ? -1 : 1));
   for (const n of linked) {
     await db.$transaction(async (tx) => {
       const young = isYoung({ created_at: created.get(n.author)!, contributions: contributions(n.author, n.created_at) }, n.created_at, rules);
-      const v = await guardLinks(tx, { profileId: ids.get(n.author)!, body: n.body, at: n.created_at, young }, rules);
+      const v = await guardLinks(tx, { orgId: org.id, profileId: ids.get(n.author)!, links: linkHrefs(n.body).length, at: n.created_at, young }, rules);
       if (v.verdict === 'allow') links.allowed++;
       else {
         links.refused++;
@@ -195,7 +218,8 @@ if (suite === 'spam') {
 }
 
 const rows = await db.limitHit.count({ where: { orgId: org.id } });
-await db.org.delete({ where: { id: org.id } });
+const edits = await db.editHistory.count({ where: { orgId: org.id } });
+if (edits === 0) await db.org.delete({ where: { id: org.id } });
 await db.$disconnect();
-console.log(`abuse:${suite}: ${failed ? 'FAIL' : 'OK'} — ${scripts.length + 3} scripts through the live LimitHit store (${rows} rows written, org dropped)`);
+console.log(`abuse:${suite}: ${failed ? 'FAIL' : 'OK'} — ${scripts.length + (suite === 'spam' ? 6 : 3)} scripts through the live LimitHit store (${rows} rows written, ${edits ? `org ${SLUG} kept: ${edits} append-only EditHistory rows` : 'org dropped'})`);
 if (failed) process.exit(1);
