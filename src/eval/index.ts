@@ -2,7 +2,7 @@
 // Pure given the loaded fixtures; scripts/engine-eval.ts does the printing and the exit code. Mirrors the row
 // shapes tools/reference_rank.py writes; a difference is a defect in one side, never a reason to edit the file.
 import type { CsvRow } from '@/fixtures/csv';
-import { NOW, type Fixtures } from '@/fixtures/load';
+import { NOW, type Fixtures, type LinkCase } from '@/fixtures/load';
 import { isYoung, linkHosts, replay, replayComments, replayLinks, type Account, type CommentAttempt, type LinkAttempt } from '@/limits';
 import { hot, net, orderPosts, orderSiblings, wilsonLower, type Counts, type PostSort } from '@/ranking';
 import type { Action, LimitRules, ModerationRules, RankingRules } from '@/rules';
@@ -176,7 +176,7 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
   });
   limitRows.push(...commentLimitRows(communityComments, Object.fromEntries(accounts), contributionsAt, limits, now));
   const bodies = [...fx.posts, ...fx.comments].map((n) => ({ t: n.created_at, user: n.author, id: n.id, body: fx.text.get(n.id)?.body ?? '' }));
-  limitRows.push(...linkLimitRows(bodies, Object.fromEntries(accounts), contributionsAt, limits, now));
+  limitRows.push(...linkLimitRows(bodies, fx.links, Object.fromEntries(accounts), contributionsAt, limits, now));
   compare('expected_limits.csv', limitRows);
 
   // 5.2 (D-75): the additive scenario set, and the community's own votes through the same detector
@@ -236,8 +236,9 @@ export function commentLimitRows(community: readonly CommentAttempt[], createdAt
 /**
  * PRD 7.2 (D-100): the two link scripts, shared by engine:eval (bodies from community/bodies.csv) and engine:eval:db
  * (bodies as stored). `community` is every node with its body; the ones holding a markdown link are the attempts.
+ * PRD 7.3 (D-104): plus the three bypass scripts, counted from their bodies.
  */
-export function linkLimitRows(community: readonly { t: number; user: string; id: string; body: string }[], createdAt: Readonly<Record<string, number>>, contributionsAt: (user: string, t: number) => number, limits: LimitRules, now = NOW) {
+export function linkLimitRows(community: readonly { t: number; user: string; id: string; body: string }[], cases: readonly LinkCase[], createdAt: Readonly<Record<string, number>>, contributionsAt: (user: string, t: number) => number, limits: LimitRules, now = NOW) {
   const t0 = now - 3600;
   const linked = community
     .map((n) => ({ t: n.t, user: n.user, id: n.id, links: linkHosts(n.body).length }))
@@ -246,9 +247,44 @@ export function linkLimitRows(community: readonly { t: number; user: string; id:
   const scripts: [string, LinkAttempt[]][] = [
     ['spam-link-rotation', Array.from({ length: 20 }, (_, i) => ({ t: t0 + 780 * i, user: 'u050', links: 1 }))],
     ['normal-community-links', linked],
+    ...linkAttackScripts(cases, now),
   ];
   return scripts.map(([script, attempts]) => {
     const r = replayLinks(attempts, createdAt, contributionsAt, limits);
     return { script, action: 'link' as const, attempts: attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? ('' as const) };
   });
+}
+
+/** PRD 7.3 (D-104): the steps of the three bypass scripts, shared by the pure copies and abuse:spam. Rotation: the ten
+ *  syntaxes the 7.2 counter missed (`links/cases.json`), twice each, at the 7.2 timing. Edit-in: 20 link-free posts
+ *  13 min apart (setup, not attempts), then 20 edits a minute apart, each adding a link. Swap: 5 one-link posts, then
+ *  15 hourly edits, each moving one post's link to a new host. `before` is the body an edit replaces; a post has none. */
+export type LinkStep = { t: number; publicId: string; body: string; before?: string; setup?: true };
+export function linkAttacks(cases: readonly LinkCase[], now = NOW): [string, LinkStep[]][] {
+  const t0 = now - 3600;
+  const gaps = cases.filter((c) => c.anchors === 1 && c.counted_7_2 === 0);
+  const plain = (i: number) => `Deal ${i}, link to follow`;
+  const swapBody = (k: number) => `Today's deal: <https://swap-${k}.example.test/nas>`;
+  return [
+    ['spam-link-syntax-rotation', Array.from({ length: 20 }, (_, i) => ({ t: t0 + 780 * i, publicId: `SYN-${i}`, body: `Deal ${i}: ${gaps[i % gaps.length]!.body.replace('.example.test', `-${i}.example.test`)}` }))],
+    [
+      'spam-link-edit-in',
+      [
+        ...Array.from({ length: 20 }, (_, i) => ({ t: t0 + 780 * i, publicId: `EDIT-${i}`, body: plain(i), setup: true as const })),
+        ...Array.from({ length: 20 }, (_, j) => ({ t: t0 + 780 * 20 + 60 * j, publicId: `EDIT-${j}`, before: plain(j), body: `${plain(j)}: <https://edit-${j}.example.test/nas>` })),
+      ],
+    ],
+    [
+      'spam-link-edit-swap',
+      [
+        ...Array.from({ length: 5 }, (_, i) => ({ t: t0 + 780 * i, publicId: `SWAP-${i}`, body: swapBody(i) })),
+        // edit j rewrites post j % 5, whose current body is swapBody(j) (its post, or the edit five before)
+        ...Array.from({ length: 15 }, (_, j) => ({ t: t0 + 780 * 5 + 3600 * j, publicId: `SWAP-${j % 5}`, before: swapBody(j), body: swapBody(5 + j) })),
+      ],
+    ],
+  ];
+}
+
+function linkAttackScripts(cases: readonly LinkCase[], now: number): [string, LinkAttempt[]][] {
+  return linkAttacks(cases, now).map(([script, steps]) => [script, steps.filter((s) => !s.setup).map((s) => ({ t: s.t, user: 'u050', links: s.before === undefined ? linkHosts(s.body).length : 0 }))]);
 }

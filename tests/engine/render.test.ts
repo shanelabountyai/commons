@@ -1,7 +1,8 @@
 // The renderer (task 3.3) in vitest: the fixture set, the allowed subset, the link policy, and the nesting flatten.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { flattenNesting, renderMarkdown, renderText } from '@/render';
+import { loadFixtures } from '@/fixtures/load';
+import { flattenNesting, linkHrefs, renderMarkdown, renderText } from '@/render';
 
 type Case = { id: string; class: 'markdown' | 'text'; input: string; forbidden: string[]; must_contain: string[] };
 const spec = JSON.parse(readFileSync('fixtures/xss/cases.json', 'utf8')) as { live_patterns: Record<string, string>; cases: Case[] };
@@ -30,5 +31,25 @@ describe('src/render against fixtures/xss', () => {
   });
   it('renderText encodes the five characters and drops controls', () => {
     expect(renderText('<a href="x">&\'\u0000')).toBe('&lt;a href=&quot;x&quot;&gt;&amp;&#39;');
+  });
+});
+
+// PRD 7.3 (D-104): the link counter is the renderer. If they ever drift apart, this fails.
+describe('linkHrefs is pinned to renderMarkdown', () => {
+  const fx = loadFixtures();
+  const anchors = (body: string) => (renderMarkdown(body).match(/<a href=/g) ?? []).length;
+  for (const c of fx.links) {
+    it(`${c.id} ${c.syntax}: ${c.anchors} anchor(s)`, () => {
+      expect(anchors(c.body)).toBe(c.anchors);
+      expect(linkHrefs(c.body)).toHaveLength(c.anchors);
+    });
+  }
+  it('all 5,500 community bodies: as many hrefs as anchors (325 linked bodies)', () => {
+    const bodies = [...fx.text.values()].map((t) => t.body);
+    expect(bodies.filter((b) => linkHrefs(b).length !== anchors(b))).toEqual([]);
+    expect(bodies.filter((b) => linkHrefs(b).length > 0)).toHaveLength(325);
+  });
+  it('returns the hrefs as rendered: mailto kept, an unsafe scheme dropped', () => {
+    expect(linkHrefs('[m](mailto:a@x.example) <https://y.example> [f](ftp://z.example)')).toEqual(['mailto:a@x.example', 'https://y.example']);
   });
 });
