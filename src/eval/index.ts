@@ -8,7 +8,7 @@ import { hot, net, orderPosts, orderSiblings, wilsonLower, type Counts, type Pos
 import type { Action, LimitRules, ModerationRules, RankingRules } from '@/rules';
 import { assignPaths, depthOf, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
 import { reduceVotes, type Outcome } from '@/votes';
-import { detectReportSwarms, type SwarmScenario } from '@/limits/report-swarm';
+import { detectReportSwarms, type SwarmScenario, type SwarmSignal } from '@/limits/report-swarm';
 import { detectSignals, type Signal, type SignalScenario } from '@/votes/signals';
 
 export type Diff = { file: string; row: number; field: string; expected: string; actual: string };
@@ -23,6 +23,8 @@ export type EvalReport = {
   threads: { post_id: string; comments_total: number; top_level_shown: number; pages: number }[];
   /** 5.2: every signal the whole community's votes raise (the false-positive check; the oracle finds only P-BRIGADE's). */
   communitySignals: Signal[];
+  /** PRD 7.2 (D-100): every REPORT_SWARM the organic reports raise (the oracle, tools/carried_measures.py, finds none). */
+  communitySwarms: SwarmSignal[];
 };
 
 const POST_SORTS: PostSort[] = ['hot', 'top_day', 'top_week', 'top_all', 'new'];
@@ -194,6 +196,7 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
     events: fx.votes.map((v) => ({ row: v.row, voter: v.voter, node_id: v.node_id, value: v.value, cast_at: v.cast_at })),
   };
   const communitySignals = detectSignals(community, limits);
+  const communitySwarms = mod ? detectReportSwarms({ id: 'community', note: 'the organic reports', accounts: fx.users, nodes: [...nodes].map(([id, author]) => ({ id, author })), reports: fx.reports }, mod) : [];
 
   const tally: Record<Outcome, number> = { APPLIED: 0, TOGGLED_OFF: 0, SWITCHED: 0, SELF_VOTE: 0, GATED_DOWNVOTE: 0, UNKNOWN_NODE: 0 };
   for (const o of outcomes.values()) tally[o]++;
@@ -207,6 +210,7 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
     limits: limitRows.map((r) => ({ script: r.script, attempts: r.attempts, allowed: r.allowed, refused: r.refused, firstRetryAfter: r.first_retry_after === '' ? null : Number(r.first_retry_after) })),
     threads,
     communitySignals,
+    communitySwarms,
   };
 }
 

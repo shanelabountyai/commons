@@ -61,7 +61,9 @@ export function loadFixtures(dir = FIXTURES_DIR) {
   const boards: Board[] = readFixture('boards.csv', dir).map((r) => ({ slug: r['slug']!, title: r['title']! }));
   // PRD 7.1 (D-98): the additive text fixture, keyed by node id; no expected file depends on it
   const text = new Map(readFixture('community/bodies.csv', dir).map((r) => [r['node_id']!, { title: r['title']!, body: r['body']! }]));
-  return { users, posts, comments, votes, boards, text };
+  // PRD 7.2 (D-100): the organic reports, for the community report-swarm check
+  const reports = readFixture('community/reports.csv', dir).map((r, i) => ({ row: i + 2, reporter: r['reporter']!, node_id: r['node_id']!, reported_at: int(r, 'reported_at', 'community/reports.csv') }));
+  return { users, posts, comments, votes, boards, text, reports };
 }
 export type Fixtures = ReturnType<typeof loadFixtures>;
 

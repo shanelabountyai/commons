@@ -33,15 +33,18 @@ console.log('vote outcomes: ' + Object.entries(report.outcomes).map(([k, v]) => 
 for (const t of report.threads) console.log(`thread ${t.post_id.padEnd(8)} ${t.comments_total} comments, ${t.top_level_shown} top-level shown, ${t.pages} pages`);
 for (const l of report.limits) console.log(`limits ${l.script.padEnd(22)} ${String(l.attempts).padStart(3)} attempts, ${String(l.allowed).padStart(3)} allowed, ${String(l.refused).padStart(3)} refused, first retryAfter ${l.firstRetryAfter ?? '-'}`);
 console.log(`signals over the community's votes: ${report.communitySignals.map((x) => `${x.kind} ${x.node} ${x.voters}`).join('; ') || 'none'}`);
-let failed = false;
+console.log(`report swarms over the community's ${fx.reports.length} reports: ${report.communitySwarms.map((x) => `${x.author} ${x.reporters}`).join('; ') || 'none'}`);
+// PRD 7.2 (D-100): the oracle (tools/carried_measures.py) finds no swarm in the organic reports; any here is a disagreement
+let failed = report.communitySwarms.length > 0;
+if (failed) console.log(`DIFF community report swarms: expected none (tools/carried_measures.py), actual ${report.communitySwarms.length}`);
 for (const f of report.files) {
   const ok = !f.firstDiff && f.matched === f.rows;
   console.log(`${ok ? 'ok  ' : 'DIFF'} ${f.file.padEnd(36)} ${f.matched}/${f.rows} rows` + (f.firstDiff ? `  first: row ${f.firstDiff.row} ${f.firstDiff.field}: expected ${f.firstDiff.expected}, actual ${f.firstDiff.actual}` : ''));
   failed ||= !ok;
 }
 if (failed) {
-  const d = report.files.find((f) => f.firstDiff)!.firstDiff!;
-  console.error(`engine:eval: FAIL — ${d.file} row ${d.row} ${d.field}: expected ${d.expected}, actual ${d.actual}`);
+  const d = report.files.find((f) => f.firstDiff)?.firstDiff;
+  console.error(d ? `engine:eval: FAIL — ${d.file} row ${d.row} ${d.field}: expected ${d.expected}, actual ${d.actual}` : `engine:eval: FAIL — community report swarms: expected none, actual ${report.communitySwarms.length}`);
   process.exit(1);
 }
 console.log(`engine:eval: OK — ${report.files.length} files, ${report.files.reduce((n, f) => n + f.rows, 0)} rows, 0 differences`);
