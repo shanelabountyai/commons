@@ -425,6 +425,25 @@ Commands: `python3 -I tools/build_link_fixtures.py`, `python3 -I tools/reference
 - **Cost of asking the renderer:** ~15 ms a body through the DOM. A body without `[` or `<` skips it (no anchor is possible), so `engine:eval` runs in 3 s, not 71 s.
 - **Not claimed:** that these are all the link syntaxes. The counter now *is* the renderer's output, so any syntax that renders an anchor counts. A syntax the renderer doesn't turn into a link is text and costs nothing, which is the intent.
 
+## Phase 7 — gate (2026-11-05)
+
+*Normal side = invented distribution (PRD 7.1 §1); a real community's rates are unknown.* Every community number in Phase 7 is the generator's, fixed before any measurement (D-97).
+
+Commands: `npm run engine:lint`, `npm run fixtures:check`, `npm run ranking:golden`, `npm run engine:eval`, `npm run engine:eval:db`, `npm run abuse:spam`, `npm run abuse:normal`, `npm run xss:check`, `npm run foundation:drift`, `npm run repo:ignored`, `npm test`, `npx tsc --noEmit`, `npx eslint .`. Head checked: `0884e9f` on `phase-7.3`, which stacks 7.1 → 7.2 → 7.3 (PRs #12, #14, #15) on `phase-6.4`.
+
+| Gate clause | Evidence | Result |
+|---|---|---|
+| `fixtures:check` reproduces the community text | OK: 27 files match `MANIFEST.json`; 14 expected files, 30 upload cases, 13 link cases and **3 community files** reproduce from the inputs | Passes |
+| `engine:eval` stays at 0 differences | 15 files / 19,616 rows / 0 differences; `engine:eval:db` OK (stored rows reproduce every expected file) | Passes |
+| Every 7.2 number carries the invented-distribution line | §7.1, §7.2, §7.3 and this section each open with it; §7.3 adds that the edit half's community check is vacuous (no edits in the fixture) | Passes |
+| CI green | #12 run 41913188733, #14 run 41971627891, #15 run 42055790715 (Playwright and `migrate diff` included); the gate commits' run is linked in `NEXT.md` | Passes |
+
+- **Phase 7 changed `fixtures/` by additions only:** `community/` (3 files), `links/cases.json`, five `expected_limits.csv` rows (0 lines removed), `MANIFEST.json` (one hash changed, four added). The 22 frozen Phase 1 files are byte-identical.
+- **Scripts:** `abuse:spam` 10/10 and `abuse:normal` 6/6 through the live `LimitHit` store; golden 70 OK; `xss:check` 61/61. `src/render` changed once (`linkHrefs` reads the rendered DOM; `renderMarkdown`'s output unchanged, which the 61 cases confirm); `src/tree` is untouched.
+- **Rest of the gate:** vitest 423/423 in 52 files (93 s); `engine:lint` OK (7 windows); `foundation:drift` clean against v1.4.0; `repo:ignored`, tsc and eslint clean.
+- **Not re-run locally:** Playwright (no UI file changed in 7.2 or 7.3; CI ran it on all three PRs) and `migrate diff` (one hand-written CHECK migration, schema.prisma unchanged; CI runs it).
+- **What the gate does not say:** none of PRs #4–#15 is merged, so no merged branch has been tested with Phases 5–7 in it. The link window is proven against the attacks in `fixtures/links/` and the three scripts, not against every way to put a link in text: the counter is the renderer's own output, so a syntax that renders an anchor counts, and one that does not is plain text. The community has no edits, so "refuses 0 community edits" is not claimed. `min_contribution_chars` is recorded and not ruled (D-100 (2)), and the repost window stays at 86,400 s because no candidate separated organic from attack (D-100 (3)).
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
