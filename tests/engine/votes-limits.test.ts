@@ -1,7 +1,7 @@
 // GL-01..GL-14 (brief §4) and the V- rules in TypeScript (tasks 1.7, 1.8).
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { checkLimit, downvoteAllowed, isYoung, replay, replayComments } from '@/limits';
+import { addedLinks, checkLimit, checkLinks, downvoteAllowed, isYoung, replay, replayComments, replayLinks } from '@/limits';
 import { parseLimitRules } from '@/rules';
 import { reduceVotes, type VoteEventIn } from '@/votes';
 
@@ -66,6 +66,36 @@ describe('sliding window (L-3, L-4)', () => {
   it('replay: 100 young votes at 1/s allows 20 (two windows), first retryAfter 50', () => {
     const r = replay(Array.from({ length: 100 }, (_, i) => T0 + i), 'vote', { created_at: T0 - 3600, contributionsAt: () => 0 }, rules);
     expect(r).toEqual({ allowed: 20, refused: 80, firstRetryAfter: 50 });
+  });
+});
+
+// PRD 7.2 (D-100): the profile link window, one slot per markdown link, the body's own links counting
+describe('link window', () => {
+  const aged = { a: T0 - 30 * DAY };
+  const many = () => 100;
+  it('GL-31 an edit asks for the hrefs it adds (multiset): rewording 0, removing 0, a second copy of an href 1', () => {
+    expect([addedLinks(['a', 'b'], ['b', 'a']), addedLinks(['a', 'b'], ['a']), addedLinks(['a'], ['a', 'a'])]).toEqual([0, 0, 1]);
+  });
+  it('GL-32 a swap asks one slot: 5 one-link posts, then moving one link to a new host is refused at 82,500', () => {
+    const swap = [...[0, 1, 2, 3, 4].map((i) => ({ t: T0 + 780 * i, user: 'a', links: 1 })), { t: T0 + 3900, user: 'a', links: addedLinks(['h0'], ['h5']) }];
+    expect(replayLinks(swap, aged, many, rules)).toEqual({ allowed: 5, refused: 1, firstRetryAfter: 82_500 });
+  });
+  it('GL-27 the 6th link in 24 h is refused with retryAfter from the oldest', () => {
+    expect(checkLinks([0, 1, 2, 3].map((i) => T0 + i), 1, false, T0 + 400, rules)).toEqual({ verdict: 'allow' });
+    expect(checkLinks([0, 100, 200, 300, 400].map((i) => T0 + i), 1, false, T0 + 500, rules)).toEqual({ verdict: 'refuse', retryAfter: 85_900 });
+  });
+  it('GL-28 the 3rd link in 24 h is refused for a young member', () => {
+    expect(checkLinks([T0], 1, true, T0 + 3600, rules).verdict).toBe('allow');
+    expect(checkLinks([T0, T0 + 3600], 1, true, T0 + 7200, rules).verdict).toBe('refuse');
+  });
+  it('GL-29 a body needs one slot per link: a 3-link body on a 3-link history is refused whole', () => {
+    expect(checkLinks([T0, T0 + 1], 3, false, T0 + 10, rules)).toEqual({ verdict: 'allow' });
+    expect(checkLinks([T0, T0 + 1, T0 + 2], 3, false, T0 + 10, rules)).toEqual({ verdict: 'refuse', retryAfter: 86_390 });
+    const r = replayLinks([0, 1, 2].map((i) => ({ t: T0 + i, user: 'a', links: 1 })).concat({ t: T0 + 10, user: 'a', links: 3 }), aged, many, rules);
+    expect(r).toEqual({ allowed: 3, refused: 1, firstRetryAfter: 86_390 });
+  });
+  it('the attack: 20 one-link posts 13 min apart from an aged account allow 5, refuse 15, retryAfter 82500', () => {
+    expect(replayLinks(Array.from({ length: 20 }, (_, i) => ({ t: T0 + 780 * i, user: 'a', links: 1 })), aged, many, rules)).toEqual({ allowed: 5, refused: 15, firstRetryAfter: 82_500 });
   });
 });
 

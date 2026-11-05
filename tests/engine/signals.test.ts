@@ -36,4 +36,13 @@ describe('false positives on the community (5.2 acceptance)', () => {
     const report = evaluate(loadFixtures(), parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8'))), rules, (n) => expectedRows(n));
     expect(report.communitySignals.map((s) => [s.kind, s.node, s.voters])).toEqual([['BRIGADE', 'P-BRIGADE', 7]]);
   });
+  it('PRD 7.2 (D-100): the 151 organic reports raise no REPORT_SWARM (the oracle agrees: tools/carried_measures.py)', async () => {
+    const { evaluate } = await import('@/eval');
+    const { loadFixtures } = await import('@/fixtures/load');
+    const { parseModerationRules, parseRankingRules } = await import('@/rules');
+    const fx = loadFixtures();
+    const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
+    const report = evaluate(fx, parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8'))), rules, (n) => expectedRows(n), undefined, [], [], mod);
+    expect([fx.reports.length, report.communitySwarms]).toEqual([151, []]);
+  });
 });

@@ -87,3 +87,50 @@ export function replayComments(
   }
   return out;
 }
+
+/** PRD 7.3 (D-104): the slots an edit asks: the multiset difference after − before of the two bodies' hrefs, so
+ *  keeping, removing or reordering links asks nothing and moving a link to a new host asks one. */
+export function addedLinks(before: readonly string[], after: readonly string[]): number {
+  const left = new Map<string, number>();
+  for (const h of before) left.set(h, (left.get(h) ?? 0) + 1);
+  let added = 0;
+  for (const h of after) {
+    const n = left.get(h) ?? 0;
+    if (n > 0) left.set(h, n - 1);
+    else added++;
+  }
+  return added;
+}
+
+/** A body with `links` links asks the profile `link` window once per link, its own earlier links counting at `now`;
+ *  the first refusal refuses the whole body. `history` is the member's link timestamps (one entry per link). */
+export function checkLinks(history: readonly number[], links: number, young: boolean, now: number, rules: LimitRules): LimitVerdict {
+  const h = [...history];
+  for (let i = 0; i < links; i++) {
+    const v = checkLimit(h, 'link', young, now, rules);
+    if (v.verdict === 'refuse') return v;
+    h.push(now);
+  }
+  return { verdict: 'allow' };
+}
+
+export type LinkAttempt = { t: number; user: string; links: number };
+
+/** Bodies sorted ascending; an allowed body adds `links` hits at t, a refused one records nothing. Counted in bodies. */
+export function replayLinks(attempts: readonly LinkAttempt[], createdAt: Readonly<Record<string, number>>, contributionsAt: (user: string, t: number) => number, rules: LimitRules): Replay {
+  const hist = new Map<string, number[]>();
+  const out: Replay = { allowed: 0, refused: 0, firstRetryAfter: null };
+  for (const a of attempts) {
+    const young = isYoung({ created_at: createdAt[a.user]!, contributions: contributionsAt(a.user, a.t) }, a.t, rules);
+    const h = hist.get(a.user) ?? [];
+    const v = checkLinks(h, a.links, young, a.t, rules);
+    if (v.verdict === 'allow') {
+      hist.set(a.user, [...h, ...Array<number>(a.links).fill(a.t)]);
+      out.allowed++;
+    } else {
+      out.refused++;
+      out.firstRetryAfter ??= v.retryAfter;
+    }
+  }
+  return out;
+}

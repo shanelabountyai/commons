@@ -14,6 +14,7 @@ sys.path.insert(0, HERE)
 import reference_rank as ref  # noqa: E402
 import uploadlib  # noqa: E402
 import build_community_text  # noqa: E402
+import build_link_fixtures  # noqa: E402
 import community_text_lib as ctl  # noqa: E402
 
 FIX = os.path.join(HERE, "..", "fixtures")
@@ -55,7 +56,10 @@ def main():
     if dups != want:
         print(f"COMMUNITY DUPLICATES {len(dups)} found, reposts.csv names {len(want)}: the reposts must be the only duplicates")
         return 1
-    print(f"OK: {len(manifest)} files match MANIFEST.json; {len(out)} expected files, {len(up)} upload cases and {len(community)} community files reproduce from the inputs")
+    if json.load(open(os.path.join(FIX, "links", "cases.json")))["cases"] != build_link_fixtures.cases:
+        print("LINK DRIFT links/cases.json: build_link_fixtures.py no longer reproduces the committed cases")
+        return 1
+    print(f"OK: {len(manifest)} files match MANIFEST.json; {len(out)} expected files, {len(up)} upload cases, {len(build_link_fixtures.cases)} link cases and {len(community)} community files reproduce from the inputs")
     return 0
 
 

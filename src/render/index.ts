@@ -61,7 +61,7 @@ function linkPolicy(root: ParentNode): void {
   }
 }
 
-export function renderMarkdown(body: string): string {
+function renderDom(body: string): HTMLElement {
   const src = body.length > MAX_BODY_CHARS ? body.slice(0, MAX_BODY_CHARS) : body;
   const html = md.render(flattenNesting(src));
   const clean = DOMPurify.sanitize(html, {
@@ -74,7 +74,21 @@ export function renderMarkdown(body: string): string {
     RETURN_DOM: true,
   }) as unknown as HTMLElement;
   linkPolicy(clean);
-  return clean.innerHTML;
+  return clean;
+}
+
+export function renderMarkdown(body: string): string {
+  return renderDom(body).innerHTML;
+}
+
+/** PRD 7.3 (D-104): the href of every anchor renderMarkdown emits for `body`, in order — the link window's count.
+ *  Read off the same rendered DOM, so the counter cannot guess differently from the renderer: every syntax that
+ *  renders a link counts (`mailto:` included), an image (no images, D-40) or an href the policy drops does not. */
+export function linkHrefs(body: string): string[] {
+  // Every anchor needs a `[` (inline and reference links) or a `<` (autolinks): linkify and raw HTML are off. The DOM
+  // costs ~12 ms a body, so a body with neither skips it; the pin test checks this against all 5,500 community bodies.
+  if (!/[[<]/.test(body)) return [];
+  return Array.from(renderDom(body).querySelectorAll('a[href]'), (a) => a.getAttribute('href')!);
 }
 
 const ENTITIES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };

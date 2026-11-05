@@ -182,3 +182,56 @@ describe('thread window and depth cap at the door', () => {
     expect(await hits()).toBe(before);
   });
 });
+
+// PRD 7.2 (D-100): the profile link window; the history is the links in the member's own Post and Comment bodies
+describe('link window at the door', () => {
+  const T = T0 + 200 * DAY;
+  it('refuses the 6th link of the day with RATE_LIMITED (action link), across posts and comments; a body with no link is unaffected', async () => {
+    const post = (publicId: string, body: string, at: number) => tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId, title: 't', body, at }, rules));
+    for (let i = 0; i < 5; i++) await post(`A-L${i}`, `deal ${i}: [here](https://h${i}.example/nas)`, T + 780 * i);
+    const hits = await db.limitHit.count({ where: { profileId: P.vet!, action: 'post' } });
+    await expect(post('A-L5', 'deal 5: [here](https://h5.example/nas)', T + 3900)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link', retryAfter: 82_500 });
+    expect(await db.limitHit.count({ where: { profileId: P.vet!, action: 'post' } })).toBe(hits); // rolled back, post slot included
+    expect(await db.post.count({ where: { publicId: 'A-L5' } })).toBe(0);
+    const plain = await post('A-L6', 'no link, bare https://h6.example is not counted', T + 4680);
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: plain.id, parentId: null, publicId: 'A-L6-C0', body: '[x](https://h7.example)', at: T + 4700 }, rules))).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link' });
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: plain.id, parentId: null, publicId: 'A-L6-C1', body: '[x](https://h7.example)', at: T + DAY + 1 }, rules))).resolves.toMatchObject({ depth: 0 });
+  });
+});
+
+// PRD 7.3 (D-104): a link is every anchor the renderer emits; an edit asks the window for each href it adds; the
+// history is the member's LimitHit rows with action 'link', so removing a link frees no slot
+describe('link window: every syntax, and edits', () => {
+  const T = T0 + 300 * DAY;
+  const post = (who: string, publicId: string, body: string, at: number) => tx((t) => submitPost(t, { orgId, profileId: P[who]!, boardId, publicId, title: 't', body, at }, rules));
+  const edit = (who: string, id: string, body: string, at: number) => tx((t) => submitEdit(t, { orgId, editorId: P[who]!, node: { kind: 'POST', id }, body, at }, rules));
+  const history = (id: string) => db.editHistory.count({ where: { nodeId: id } });
+
+  it('refuses the 6th autolink of the day at submitPost', async () => {
+    for (let i = 0; i < 5; i++) await post('vet', `B-A${i}`, `deal ${i}: <https://a${i}.example/nas>`, T + 780 * i);
+    await expect(post('vet', 'B-A5', 'deal 5: <https://a5.example/nas>', T + 3900)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link', retryAfter: 82_500 });
+    expect(await db.limitHit.count({ where: { profileId: P.vet!, action: 'link', at: { gte: toDate(T) } } })).toBe(5);
+  });
+
+  it('an edit adding the 6th link is refused and writes no EditHistory row; rewording around the links asks nothing; removing one frees no slot', async () => {
+    const U = T + 10 * DAY;
+    const five = [0, 1, 2, 3, 4].map((i) => `[l${i}](https://e${i}.example)`).join(' ');
+    const p = await post('vet', 'B-E0', `five: ${five}`, U);
+    await expect(edit('vet', p.id, `five: ${five} [l5](https://e5.example)`, U + 60)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link', retryAfter: DAY - 60 });
+    expect(await history(p.id)).toBe(0);
+    await expect(edit('vet', p.id, `reworded, same five: ${five}`, U + 120)).resolves.toBeDefined();
+    const four = [0, 1, 2, 3].map((i) => `[l${i}](https://e${i}.example)`).join(' ');
+    await expect(edit('vet', p.id, `four now: ${four}`, U + 180)).resolves.toBeDefined();
+    await expect(edit('vet', p.id, `back to five: ${five}`, U + 240)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link' });
+    expect(await history(p.id)).toBe(2);
+  });
+
+  it("a young member's 3rd edited-in link is refused", async () => {
+    const V = T + 20 * DAY;
+    await profile('newbie', V - 3600);
+    const p = await post('newbie', 'B-Y0', 'link to follow', V);
+    await edit('newbie', p.id, 'one <https://y1.example>', V + 60);
+    await edit('newbie', p.id, 'one <https://y1.example> two <https://y2.example>', V + 120);
+    await expect(edit('newbie', p.id, 'one <https://y1.example> two <https://y2.example> three <https://y3.example>', V + 180)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link', retryAfter: DAY - 120 });
+  });
+});
