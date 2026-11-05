@@ -82,3 +82,29 @@ def replay_comments(attempts, accounts, contributions_at, scopes=("profile", "pr
             if first_retry is None:
                 first_retry = retry
     return allowed, refused, first_retry
+
+
+def replay_links(attempts, accounts, contributions_at):
+    """PRD 7.2 (D-100). attempts: sorted (t, user, k) bodies holding k >= 1 markdown links. The body asks the profile
+    `link` window once per link, its own earlier links counting at t; the first refusal refuses the whole body and
+    records nothing. An allowed body adds k hits at t. Returns (allowed, refused, first_retry_after), counted in bodies."""
+    hist = {}
+    allowed = refused = 0
+    first_retry = None
+    for t, user, k in attempts:
+        young = is_young(accounts[user], contributions_at(user, t), t)
+        h = list(hist.get(user, []))
+        verdict, retry = "allow", None
+        for _ in range(k):
+            verdict, retry = check(h, "link", young, t)
+            if verdict == "refuse":
+                break
+            h.append(t)
+        if verdict == "allow":
+            hist[user] = h
+            allowed += 1
+        else:
+            refused += 1
+            if first_retry is None:
+                first_retry = retry
+    return allowed, refused, first_retry

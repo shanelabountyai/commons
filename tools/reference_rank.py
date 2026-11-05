@@ -18,7 +18,8 @@ sys.path.insert(0, HERE)
 from rankinglib import hot, wilson_lower, top_window_includes  # noqa: E402
 from votelib import reduce_votes  # noqa: E402
 from treelib import assign_paths, depth, render, permalink  # noqa: E402
-from limitslib import replay, replay_comments  # noqa: E402
+from limitslib import replay, replay_comments, replay_links  # noqa: E402
+import community_text_lib  # noqa: E402
 from signallib import expected_rows as signal_rows, load_scenarios  # noqa: E402
 from modlib import expected_rows as swarm_rows, load_scenarios as load_mod_scenarios  # noqa: E402
 
@@ -168,6 +169,13 @@ def compute(users, posts, comments, votes):
     for name, _, attempts, scopes in comment_scripts:
         a, r, first = replay_comments(attempts, accounts, contributions_at, scopes)
         limit_rows.append({"script": name, "action": "comment", "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
+    # PRD 7.2 (D-100): the link window. Attempts are (t, user, links); hosts from markdown links (community_text_lib)
+    attack = [(t0 + 780 * i, "u050", 1) for i in range(20)]  # 20 posts, 20 hosts, one every 13 min
+    linked = sorted((n["created_at"], n["author"], len(community_text_lib.hosts(n["body"])), n["id"])
+                    for n in community_text_lib.nodes() if community_text_lib.hosts(n["body"]))
+    for name, attempts in (("spam-link-rotation", attack), ("normal-community-links", [a[:3] for a in linked])):
+        a, r, first = replay_links(attempts, accounts, contributions_at)
+        limit_rows.append({"script": name, "action": "link", "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
     out["expected_limits.csv"] = limit_rows
     # PRD 5.2 (D-75): the additive signal scenarios, computed by signallib from their own inputs
     out["signals/expected_signals.csv"] = signal_rows(load_scenarios(FIX))
