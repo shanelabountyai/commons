@@ -3,7 +3,8 @@
 // shapes tools/reference_rank.py writes; a difference is a defect in one side, never a reason to edit the file.
 import type { CsvRow } from '@/fixtures/csv';
 import { NOW, type Fixtures, type LinkCase } from '@/fixtures/load';
-import { isYoung, linkHosts, replay, replayComments, replayLinks, type Account, type CommentAttempt, type LinkAttempt } from '@/limits';
+import { addedLinks, isYoung, replay, replayComments, replayLinks, type Account, type CommentAttempt, type LinkAttempt } from '@/limits';
+import { linkHrefs } from '@/render';
 import { hot, net, orderPosts, orderSiblings, wilsonLower, type Counts, type PostSort } from '@/ranking';
 import type { Action, LimitRules, ModerationRules, RankingRules } from '@/rules';
 import { assignPaths, depthOf, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
@@ -235,13 +236,13 @@ export function commentLimitRows(community: readonly CommentAttempt[], createdAt
 
 /**
  * PRD 7.2 (D-100): the two link scripts, shared by engine:eval (bodies from community/bodies.csv) and engine:eval:db
- * (bodies as stored). `community` is every node with its body; the ones holding a markdown link are the attempts.
+ * (bodies as stored). `community` is every node with its body; the ones whose render holds a link are the attempts.
  * PRD 7.3 (D-104): plus the three bypass scripts, counted from their bodies.
  */
 export function linkLimitRows(community: readonly { t: number; user: string; id: string; body: string }[], cases: readonly LinkCase[], createdAt: Readonly<Record<string, number>>, contributionsAt: (user: string, t: number) => number, limits: LimitRules, now = NOW) {
   const t0 = now - 3600;
   const linked = community
-    .map((n) => ({ t: n.t, user: n.user, id: n.id, links: linkHosts(n.body).length }))
+    .map((n) => ({ t: n.t, user: n.user, id: n.id, links: linkHrefs(n.body).length }))
     .filter((n) => n.links > 0)
     .sort((a, b) => a.t - b.t || (a.user < b.user ? -1 : a.user > b.user ? 1 : 0) || a.links - b.links || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const scripts: [string, LinkAttempt[]][] = [
@@ -286,5 +287,5 @@ export function linkAttacks(cases: readonly LinkCase[], now = NOW): [string, Lin
 }
 
 function linkAttackScripts(cases: readonly LinkCase[], now: number): [string, LinkAttempt[]][] {
-  return linkAttacks(cases, now).map(([script, steps]) => [script, steps.filter((s) => !s.setup).map((s) => ({ t: s.t, user: 'u050', links: s.before === undefined ? linkHosts(s.body).length : 0 }))]);
+  return linkAttacks(cases, now).map(([script, steps]) => [script, steps.filter((s) => !s.setup).map((s) => ({ t: s.t, user: 'u050', links: addedLinks(s.before === undefined ? [] : linkHrefs(s.before), linkHrefs(s.body)) }))]);
 }
