@@ -385,6 +385,46 @@ Commands: `python3 -I tools/reference_rank.py` (the two rows), `python3 -I tools
 - **Found, not built:** an edit adds links without asking the window (edits have no window, D-32). Read from the code, not run. Open for review (D-101).
 - **Gate:** vitest 404/404 (52 files), `engine:lint` OK (7 windows), `foundation:drift` clean, `xss:check` 61/61, eslint and tsc clean; no file under `prisma/` changed (no migration; CI runs `migrate diff`).
 
+## Phase 7 — the link window's two gaps (PRD 7.3, 2026-11-05)
+
+*Normal side = invented distribution (PRD 7.1 §1); a real community's rates, edits included, are unknown.* **The community fixture has no edits, so the edit half's community check is vacuous:** 0 of 0 community edits refused says nothing.
+
+Commands: `python3 -I tools/build_link_fixtures.py`, `python3 -I tools/reference_rank.py` (the three rows), `npm run engine:eval`, `npm run abuse:spam`, `npm run abuse:normal`, `npm run engine:eval:db`, `npm test`.
+
+**What counts as a link.** The 7.2 counter matched `](http(s)://` only. Each body in `fixtures/links/cases.json`, through `renderMarkdown`:
+
+| Syntax | Example | Anchors rendered | Counted by 7.2 | Counted now (`linkHrefs`) |
+|---|---|---|---|---|
+| inline | `[a](https://h)` | 1 | 1 | 1 |
+| autolink | `<https://h>` | 1 | **0** | 1 |
+| autolink, upper-case scheme | `<HTTPS://h>` | 1 | **0** | 1 |
+| reference | `[a][r]` + `[r]: https://h` | 1 | **0** | 1 |
+| collapsed reference | `[r][]` + definition | 1 | **0** | 1 |
+| shortcut reference | `[r]` + definition | 1 | **0** | 1 |
+| space before destination | `[a]( https://h)` | 1 | **0** | 1 |
+| angle-bracket destination | `[a](<https://h>)` | 1 | **0** | 1 |
+| upper-case scheme | `[a](HTTPS://h)` | 1 | **0** | 1 |
+| newline before destination | `[a](⏎https://h)` | 1 | **0** | 1 |
+| mailto | `[a](mailto:x@h)` | 1 | **0** | 1 |
+| bare URL | `https://h` | 0 (`linkify: false`) | 0 | 0 |
+| image | `![a](https://h/i.png)` | 0 (no images, D-40) | **1** | 0 |
+
+**The attacks** (account u050, aged; the window `{ link, 86400, 5, young 2 }` unchanged):
+
+| Script | Attempts | Before (7.2 code) | After | Community side (invented distribution) |
+|---|---|---|---|---|
+| `spam-link-syntax-rotation`: 20 posts 13 min apart, the ten uncounted syntaxes twice each | 20 | 20 allowed | **5 allowed / 15 refused**, first retryAfter 82,500 s | — |
+| `spam-link-edit-in`: 20 link-free posts, then 20 edits a minute apart, each adding a link | 20 edits | 20 allowed | **5 / 15**, 86,100 s | vacuous: no community edits |
+| `spam-link-edit-swap`: 5 one-link posts, then 15 hourly edits, each moving a link to a new host | 20 | 20 allowed | **5 posts allowed / 15 edits refused**, 82,500 s | vacuous: no community edits |
+| `normal-community-links` (7.2 row) | 325 | 325 / 0 | **325 / 0** | 325 linked bodies; renderer and 7.2 counter agree on all 5,500 |
+
+- **Fixture:** `--write-expected` added exactly three rows to `expected_limits.csv` (additions only; 13 rows byte-identical), plus `links/cases.json` (13 cases) and `MANIFEST.json` rehashed (27 files). `fixtures:check` OK; golden 70 OK (GL-31, GL-32 new).
+- **Red first:** `engine:eval` DIFF `expected_limits.csv` row 15 (rotation 20 allowed, expected 5; edit-in and swap 20 too); the `linkHrefs` pin and GL-31 / GL-32 failed to import; the 7.2 counter disagrees with the renderer on 11 of 13 cases.
+- **Three copies:** `engine:eval` 15 files / 19,616 rows / 0 differences; `abuse:spam` 10/10 (all three through `submitPost` / `submitEdit`; 5 `EditHistory` rows written, all from allowed edits); `abuse:normal` 6/6 (`normal-community-links` 325 / 0 through `guardLinks` and `LimitHit` rows); `engine:eval:db` OK (`expected_limits` 16/16 from the bodies as stored, through the shared pure replay, D-105 (c)).
+- **The door:** a refused edit writes no `EditHistory` row (integration test); rewording around links and removing one ask nothing; removing a link frees no slot (re-adding it is refused); a young member's 3rd edited-in link of the day is refused (retryAfter 86,280 s).
+- **Cost of asking the renderer:** ~15 ms a body through the DOM. A body without `[` or `<` skips it (no anchor is possible), so `engine:eval` runs in 3 s, not 71 s.
+- **Not claimed:** that these are all the link syntaxes. The counter now *is* the renderer's output, so any syntax that renders an anchor counts. A syntax the renderer doesn't turn into a link is text and costs nothing, which is the intent.
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
