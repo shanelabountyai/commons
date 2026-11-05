@@ -363,6 +363,28 @@ Commands: `python3 -I tools/build_community_text.py --seed 20261104` (twice: ide
 - **Duplicates:** with no window, the oracle's duplicate check finds exactly the 10 reposts (asserted in `verify_fixtures.py`). The live 24 h duplicate signal would catch 2 of them; that is a 7.2 number, recorded here only because the PRD's 1–72 h spacing produced it.
 - **Tests:** `tests/engine/community-text.test.ts` 7/7 (red first: no file). vitest 397/397: 394 in the full run plus 3 that failed under a load average of 30 (a Prisma "Unable to start a transaction in the given time" and the harness's 180 s timeout) and passed alone, 21/21. Playwright 25/25 (2.3 min); the first sweep failed on a spec that matched a post id inside its placeholder title, now looked up from `bodies.csv`.
 
+## Phase 7 — the four carried measurements (PRD 7.2, 2026-11-04)
+
+*Normal side = invented distribution (PRD 7.1 §1); a real community's rates are unknown.* Every row below carries that line: a candidate that refuses 0 community actions refuses 0 of the generator's, which were fixed before the draft (D-97).
+
+Commands: `python3 -I tools/reference_rank.py` (the two rows), `python3 -I tools/carried_measures.py` (the record-only lines), `npm run engine:eval`, `npm run abuse:spam`, `npm run abuse:normal`, `npm run engine:eval:db`, `npm test`.
+
+| Hypothesis | Candidate | Attack | Community side (invented distribution) | Verdict |
+|---|---|---|---|---|
+| Link hosts (SME #8) | `link` window 5 / 86,400 s, young 2, one slot per markdown link | 20 one-link posts, 20 hosts, 13 min apart, aged account: 20 allowed today; **5 allowed, 15 refused**, first retryAfter 82,500 s | 325 linked bodies replayed per author: **0 refused**. Young peak is 2 a day, on the young limit | **Binds; rule added (D-100 (1))** |
+| | `young_links_per_body` 0 | — | refuses **74** young linked bodies | Does not bind |
+| | same host by ≥ 2 accounts in 24 h | — | fires on **206** nodes over **12** hosts | Does not bind |
+| `min_contribution_chars` (SME #2) | contributions under N chars don't count toward L-2 | day-old account, three 1-char self-replies, then a downvote: allowed today, refused at N ≥ 2 | 1,405 downvotes, 1,393 allowed today. Refused more: N = 2 **0**, 3 **1**, 10 **3**, 20 **6**, 40 **6** | Does not bind at 40; at 2 a "+1" gets past it. Recorded (D-100 (2)) |
+| Report swarm (D-81) | none; the existing rule against organic reports | — | 151 organic reports, **0** signals (oracle and `engine:eval` agree). **2** from reporters under 7 d, young peak 1 per author per window; any-age peak **4**, on the threshold | Passes, not vacuous, thin: the age gate keeps it at 0 |
+| Repost (SME #9) | widen `duplicate.window_seconds` | 7 posts 25 h apart: 0 signals at 86,400 s, 6 at 604,800 s (`abuse:spam`) | 10 organic reposts, gaps 12.4–69.1 h: 86,400 s flags **2**, 259,200 s **10**, 604,800 s **10** | Does not bind; the window stays 86,400 (D-100 (3)) |
+
+- **Fixture:** `--write-expected` added exactly two rows to `expected_limits.csv`; `git diff` shows additions only, plus `MANIFEST.json` rehashed. `fixtures:check` OK; golden 68 cases OK (GL-27..GL-30 new).
+- **Red first:** before the engine change, 5 rules tests failed (the schema refused `link`) and 4 engine test files failed to import `linkHosts` / `checkLinks` / `replayLinks`.
+- **Three copies:** `engine:eval` 15 files / 19,613 rows / 0 differences (`expected_limits` 13/13); `abuse:spam` 7/7 (`spam-link-rotation` through `submitPost`); `abuse:normal` 6/6 (`normal-community-links` 325 through `guardLinks` and Post rows); `engine:eval:db` OK (13/13 from the bodies as stored).
+- **Extraction limit, stated, and it is a bypass:** only markdown links `[text](http(s)://host…)` count (the PRD's rule, GL-30). A bare URL renders as text (`linkify: false`), so it costs nothing. **An autolink `<https://host>` renders as a clickable link** (checked through `renderMarkdown`: `<a href="https://c.example/x" rel="nofollow ugc noopener">`) **and is not counted**, so the rotation attack written with autolinks gets all 20 through. Not built or fixtured here (rule 7: fixture first); open for review (D-101).
+- **Found, not built:** an edit adds links without asking the window (edits have no window, D-32). Read from the code, not run. Open for review (D-101).
+- **Gate:** vitest 404/404 (52 files), `engine:lint` OK (7 windows), `foundation:drift` clean, `xss:check` 61/61, eslint and tsc clean; no file under `prisma/` changed (no migration; CI runs `migrate diff`).
+
 ## What these numbers are not
 
 They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
