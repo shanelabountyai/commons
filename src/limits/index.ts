@@ -88,10 +88,18 @@ export function replayComments(
   return out;
 }
 
-/** PRD 7.2 (D-100): the hosts of a body's markdown links, `[text](http(s)://host…)`. A bare URL or an autolink is not
- *  counted: that is the extraction's stated limit, the same rule as the oracle's. */
-export function linkHosts(body: string): string[] {
-  return [...body.matchAll(/\]\(https?:\/\/([^/\s)]+)/g)].map((m) => m[1]!);
+/** PRD 7.3 (D-104): the slots an edit asks: the multiset difference after − before of the two bodies' hrefs, so
+ *  keeping, removing or reordering links asks nothing and moving a link to a new host asks one. */
+export function addedLinks(before: readonly string[], after: readonly string[]): number {
+  const left = new Map<string, number>();
+  for (const h of before) left.set(h, (left.get(h) ?? 0) + 1);
+  let added = 0;
+  for (const h of after) {
+    const n = left.get(h) ?? 0;
+    if (n > 0) left.set(h, n - 1);
+    else added++;
+  }
+  return added;
 }
 
 /** A body with `links` links asks the profile `link` window once per link, its own earlier links counting at `now`;

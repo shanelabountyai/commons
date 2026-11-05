@@ -44,10 +44,12 @@ describe('linkHrefs is pinned to renderMarkdown', () => {
       expect(linkHrefs(c.body)).toHaveLength(c.anchors);
     });
   }
-  it('all 5,500 community bodies: as many hrefs as anchors (325 linked bodies)', () => {
-    const bodies = [...fx.text.values()].map((t) => t.body);
-    expect(bodies.filter((b) => linkHrefs(b).length !== anchors(b))).toEqual([]);
-    expect(bodies.filter((b) => linkHrefs(b).length > 0)).toHaveLength(325);
+  // Rendering all 5,500 costs ~85 s (DOMPurify ~15 ms a body); a body with no `[` or `<` cannot render an anchor
+  // (linkify and raw HTML are off), so the pin renders the 325 that hold one. D-103 measured all 5,500 agreeing.
+  it('the 325 community bodies holding [ or <: as many hrefs as anchors, each with a link', () => {
+    const bodies = [...fx.text.values()].map((t) => t.body).filter((b) => /[[<]/.test(b));
+    expect(bodies).toHaveLength(325);
+    expect(bodies.filter((b) => linkHrefs(b).length !== anchors(b) || anchors(b) === 0)).toEqual([]);
   });
   it('returns the hrefs as rendered: mailto kept, an unsafe scheme dropped', () => {
     expect(linkHrefs('[m](mailto:a@x.example) <https://y.example> [f](ftp://z.example)')).toEqual(['mailto:a@x.example', 'https://y.example']);
