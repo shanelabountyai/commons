@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { MAX_BODY_CHARS } from '@/render';
 import type { Lockable, LimitRules, ModerationRules } from '@/rules';
 import { ForumRefused, nodeInfo, toDate, toEpoch, type NodeRef, type Tx } from './db';
-import { guardAndRecord, guardThread } from './limits-store';
+import { guardAndRecord, guardLinks, guardThread } from './limits-store';
 import { editNode, type EditInput } from './edit';
 import { createComment, createPost, replyDepth } from './tree-write';
 import { castVote, type CastResult } from './votes';
@@ -87,6 +87,8 @@ export async function submitPost(tx: Tx, s: SubmitPost, rules: LimitRules, mod?:
   checkText('body', s.body, MAX_BODY_CHARS);
   const g = await guardAndRecord(tx, { orgId: s.orgId, profileId: s.profileId, action: 'post', at: s.at }, rules);
   if (g.verdict === 'refuse') throw new RateLimited('post', g.retryAfter);
+  const lk = await guardLinks(tx, { profileId: s.profileId, body: s.body, at: s.at, young: g.young }, rules); // PRD 7.2 (D-100)
+  if (lk.verdict === 'refuse') throw new RateLimited('link', lk.retryAfter);
   const row = await createPost(tx, { orgId: s.orgId, boardId: s.boardId, authorId: s.profileId, publicId: s.publicId, title: s.title, body: s.body, createdAt: s.at });
   await tx.post.update({ where: { id: row.id }, data: { bodyHash: bodyHash(s.body) } });
   return { id: row.id, duplicate: await duplicateSignal(tx, s.orgId, { kind: 'POST', id: row.id }, s.body, s.at, mod) };
@@ -103,6 +105,8 @@ export async function submitComment(tx: Tx, s: SubmitComment, rules: LimitRules,
   if (g.verdict === 'refuse') throw new RateLimited('comment', g.retryAfter);
   const th = await guardThread(tx, { profileId: s.profileId, postId: s.postId, at: s.at, young: g.young }, rules);
   if (th.verdict === 'refuse') throw new RateLimited('comment', th.retryAfter);
+  const lk = await guardLinks(tx, { profileId: s.profileId, body: s.body, at: s.at, young: g.young }, rules); // PRD 7.2 (D-100)
+  if (lk.verdict === 'refuse') throw new RateLimited('link', lk.retryAfter);
   const row = await createComment(tx, { orgId: s.orgId, postId: s.postId, parentId: s.parentId, authorId: s.profileId, publicId: s.publicId, body: s.body, createdAt: s.at });
   await tx.comment.update({ where: { id: row.id }, data: { bodyHash: bodyHash(s.body) } });
   return { ...row, duplicate: await duplicateSignal(tx, s.orgId, { kind: 'COMMENT', id: row.id }, s.body, s.at, mod) };
