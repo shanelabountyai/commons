@@ -12,3 +12,6 @@ spam-deep-chain,comment,60,33,27,
 normal-community-depth,comment,5000,5000,0,
 spam-link-rotation,link,20,5,15,82500
 normal-community-links,link,325,325,0,
+spam-link-syntax-rotation,link,20,5,15,82500
+spam-link-edit-in,link,20,5,15,86100
+spam-link-edit-swap,link,20,5,15,82500
