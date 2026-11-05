@@ -3,9 +3,9 @@
 // shapes tools/reference_rank.py writes; a difference is a defect in one side, never a reason to edit the file.
 import type { CsvRow } from '@/fixtures/csv';
 import { NOW, type Fixtures } from '@/fixtures/load';
-import { isYoung, replay, replayComments, type Account, type CommentAttempt } from '@/limits';
+import { isYoung, linkHosts, replay, replayComments, replayLinks, type Account, type CommentAttempt, type LinkAttempt } from '@/limits';
 import { hot, net, orderPosts, orderSiblings, wilsonLower, type Counts, type PostSort } from '@/ranking';
-import type { LimitRules, ModerationRules, RankingRules } from '@/rules';
+import type { Action, LimitRules, ModerationRules, RankingRules } from '@/rules';
 import { assignPaths, depthOf, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
 import { reduceVotes, type Outcome } from '@/votes';
 import { detectReportSwarms, type SwarmScenario } from '@/limits/report-swarm';
@@ -155,7 +155,7 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
   compare('expected_permalink.csv', permaRows);
   // limits scripts
   const t0 = now - 3600;
-  const scripts: { script: string; action: 'post' | 'comment' | 'vote' | 'upload'; user: string; attempts: number[] }[] = [
+  const scripts: { script: string; action: Action; user: string; attempts: number[] }[] = [
     { script: 'spam-young-comments', action: 'comment', user: 'u193', attempts: Array.from({ length: 60 }, (_, i) => t0 + i) },
     { script: 'spam-young-posts', action: 'post', user: 'u193', attempts: Array.from({ length: 20 }, (_, i) => t0 + 60 * i) },
     { script: 'spam-young-votes', action: 'vote', user: 'u193', attempts: Array.from({ length: 100 }, (_, i) => t0 + i) },
@@ -173,6 +173,8 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
     return cs.map((c) => ({ t: c.created_at, user: c.author, post: pid, depth: depthOf(paths.get(c.id)!) }));
   });
   limitRows.push(...commentLimitRows(communityComments, Object.fromEntries(accounts), contributionsAt, limits, now));
+  const bodies = [...fx.posts, ...fx.comments].map((n) => ({ t: n.created_at, user: n.author, id: n.id, body: fx.text.get(n.id)?.body ?? '' }));
+  limitRows.push(...linkLimitRows(bodies, Object.fromEntries(accounts), contributionsAt, limits, now));
   compare('expected_limits.csv', limitRows);
 
   // 5.2 (D-75): the additive scenario set, and the community's own votes through the same detector
@@ -224,5 +226,25 @@ export function commentLimitRows(community: readonly CommentAttempt[], createdAt
   return scripts.map(([script, attempts, scopes]) => {
     const r = replayComments(attempts, createdAt, contributionsAt, limits, scopes);
     return { script, action: 'comment' as const, attempts: attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? ('' as const) };
+  });
+}
+
+/**
+ * PRD 7.2 (D-100): the two link scripts, shared by engine:eval (bodies from community/bodies.csv) and engine:eval:db
+ * (bodies as stored). `community` is every node with its body; the ones holding a markdown link are the attempts.
+ */
+export function linkLimitRows(community: readonly { t: number; user: string; id: string; body: string }[], createdAt: Readonly<Record<string, number>>, contributionsAt: (user: string, t: number) => number, limits: LimitRules, now = NOW) {
+  const t0 = now - 3600;
+  const linked = community
+    .map((n) => ({ t: n.t, user: n.user, id: n.id, links: linkHosts(n.body).length }))
+    .filter((n) => n.links > 0)
+    .sort((a, b) => a.t - b.t || (a.user < b.user ? -1 : a.user > b.user ? 1 : 0) || a.links - b.links || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const scripts: [string, LinkAttempt[]][] = [
+    ['spam-link-rotation', Array.from({ length: 20 }, (_, i) => ({ t: t0 + 780 * i, user: 'u050', links: 1 }))],
+    ['normal-community-links', linked],
+  ];
+  return scripts.map(([script, attempts]) => {
+    const r = replayLinks(attempts, createdAt, contributionsAt, limits);
+    return { script, action: 'link' as const, attempts: attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? ('' as const) };
   });
 }

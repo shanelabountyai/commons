@@ -87,3 +87,42 @@ export function replayComments(
   }
   return out;
 }
+
+/** PRD 7.2 (D-100): the hosts of a body's markdown links, `[text](http(s)://host…)`. A bare URL or an autolink is not
+ *  counted: that is the extraction's stated limit, the same rule as the oracle's. */
+export function linkHosts(body: string): string[] {
+  return [...body.matchAll(/\]\(https?:\/\/([^/\s)]+)/g)].map((m) => m[1]!);
+}
+
+/** A body with `links` links asks the profile `link` window once per link, its own earlier links counting at `now`;
+ *  the first refusal refuses the whole body. `history` is the member's link timestamps (one entry per link). */
+export function checkLinks(history: readonly number[], links: number, young: boolean, now: number, rules: LimitRules): LimitVerdict {
+  const h = [...history];
+  for (let i = 0; i < links; i++) {
+    const v = checkLimit(h, 'link', young, now, rules);
+    if (v.verdict === 'refuse') return v;
+    h.push(now);
+  }
+  return { verdict: 'allow' };
+}
+
+export type LinkAttempt = { t: number; user: string; links: number };
+
+/** Bodies sorted ascending; an allowed body adds `links` hits at t, a refused one records nothing. Counted in bodies. */
+export function replayLinks(attempts: readonly LinkAttempt[], createdAt: Readonly<Record<string, number>>, contributionsAt: (user: string, t: number) => number, rules: LimitRules): Replay {
+  const hist = new Map<string, number[]>();
+  const out: Replay = { allowed: 0, refused: 0, firstRetryAfter: null };
+  for (const a of attempts) {
+    const young = isYoung({ created_at: createdAt[a.user]!, contributions: contributionsAt(a.user, a.t) }, a.t, rules);
+    const h = hist.get(a.user) ?? [];
+    const v = checkLinks(h, a.links, young, a.t, rules);
+    if (v.verdict === 'allow') {
+      hist.set(a.user, [...h, ...Array<number>(a.links).fill(a.t)]);
+      out.allowed++;
+    } else {
+      out.refused++;
+      out.firstRetryAfter ??= v.retryAfter;
+    }
+  }
+  return out;
+}

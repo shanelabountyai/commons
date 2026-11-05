@@ -4,7 +4,8 @@
 import { z } from 'zod';
 import { RulesInvalid } from '@/shared/errors';
 
-export const ACTIONS = ['post', 'comment', 'vote', 'report', 'upload'] as const;
+/** `link` (PRD 7.2, D-100) counts markdown links in the member's own bodies, one slot per link. */
+export const ACTIONS = ['post', 'comment', 'vote', 'report', 'upload', 'link'] as const;
 export type Action = (typeof ACTIONS)[number];
 /** Whose history a window counts: the member's, or the member's on one post (PRD 6.4, D-93). */
 export const SCOPES = ['profile', 'profile+post'] as const;
