@@ -133,5 +133,12 @@ try {
 console.log(`DELETE FROM "ModerationAction": ${refusedDelete}; rows still ${await db.moderationAction.count({ where: { orgId: org.id } })}`);
 const qEnd = await tx((x) => queue(x, org.id, 50));
 console.log(`queue after review: ${await label(qEnd)}`);
-console.log(`\nOpen http://localhost:7500/o/${SLUG}/f as an owner of the org to see all of this in the pages.`);
+// The browser half: /demo signs in only isDemo users, and only scripts/seed-demo.ts makes those (INV-27), so the
+// seeded demo owner joins this org as its owner rather than this script minting a demo account of its own.
+const demoOwner = await db.user.findFirst({ where: { isDemo: true, email: 'owner@acme.demo.test' } });
+if (demoOwner) {
+  await db.membership.create({ data: { orgId: org.id, userId: demoOwner.id, role: 'owner' } });
+  await db.profile.create({ data: { orgId: org.id, userId: demoOwner.id, handle: 'demo-owner', joinedAt: toDate(now - 24 * 365 * 3600) } });
+  console.log(`\nWith DEMO_MODE=1 and npm run dev: sign in at http://localhost:7500/demo as owner@acme.demo.test, then open http://localhost:7500/o/${SLUG}/f`);
+} else console.log(`\nNo demo owner to sign in as: run npm run seed:demo, then this script again (a new org).`);
 await db.$disconnect();

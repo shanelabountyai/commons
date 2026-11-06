@@ -436,7 +436,7 @@ Commands: `npm run engine:lint`, `npm run fixtures:check`, `npm run ranking:gold
 | `fixtures:check` reproduces the community text | OK: 27 files match `MANIFEST.json`; 14 expected files, 30 upload cases, 13 link cases and **3 community files** reproduce from the inputs | Passes |
 | `engine:eval` stays at 0 differences | 15 files / 19,616 rows / 0 differences; `engine:eval:db` OK (stored rows reproduce every expected file) | Passes |
 | Every 7.2 number carries the invented-distribution line | §7.1, §7.2, §7.3 and this section each open with it; §7.3 adds that the edit half's community check is vacuous (no edits in the fixture) | Passes |
-| CI green | #12 run 41913188733, #14 run 41971627891, #15 run 42055790715 (Playwright and `migrate diff` included); the gate commits' run is linked in `NEXT.md` | Passes |
+| CI green | #12 run 41913188733, #14 run 41971627891, #15 run 42055790715 (Playwright and `migrate diff` included) and run 42057567691 on the checked head `0884e9f`; the gate commit is docs-only, which `ci.yml` skips by design (`paths-ignore`) | Passes |
 
 - **Phase 7 changed `fixtures/` by additions only:** `community/` (3 files), `links/cases.json`, five `expected_limits.csv` rows (0 lines removed), `MANIFEST.json` (one hash changed, four added). The 22 frozen Phase 1 files are byte-identical.
 - **Scripts:** `abuse:spam` 10/10 and `abuse:normal` 6/6 through the live `LimitHit` store; golden 70 OK; `xss:check` 61/61. `src/render` changed once (`linkHrefs` reads the rendered DOM; `renderMarkdown`'s output unchanged, which the 61 cases confirm); `src/tree` is untouched.
@@ -446,4 +446,4 @@ Commands: `npm run engine:lint`, `npm run fixtures:check`, `npm run ranking:gold
 
 ## What these numbers are not
 
-They are not a benchmark of the forum, a measure of spam resistance beyond the 59 vectors and 3 scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
+They are not a benchmark of the forum, a measure of spam resistance beyond the 61 XSS vectors and 10 attack scripts the author wrote, or evidence that Hot or Best are good orderings for a homelab community. The fixtures contain the attacks their author imagined (one brigade, one spam wave, a few self-votes); the constants are reddit's historical ones, untuned. Phase 4's browser run is one owner in one Chromium walking the pages the author wrote; axe's 0 is the automated subset of WCAG, not a usability review. Nothing here was measured on a deployed instance, because there is none.
