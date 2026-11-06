@@ -14,6 +14,8 @@
   "expected_tree.csv": "a36f24bc18ffb187c6a502a705f55bbc0a87b6092d68ae56e792f97191b5679f",
   "expected_vote_outcomes.csv": "adbafe08dc8b7166e3fd6f49bef40613c351caca0c2f95b1bd347e5e4ece5063",
   "posts.csv": "7d2c0ca35893de8c934e77ada04004032f3fe49cdee6d8d84cbb81a03926996d",
+  "signals/expected_signals.csv": "095ddb4e5143bfc7e8453bd707984ffd6936339a0eb014d14bf82bffe1e2cb8d",
+  "signals/scenarios.json": "b71ae6c6826737045d9bac2ab3c6ffdd821ca2cd5b52e08fbb92e8b4582ec5d4",
   "users.csv": "88df727c6b060a68c29620fc490cfe6f911c9c4415b8ece605b279379c0ba436",
   "votes.csv": "1bd0313ba577f75ffe5b15cfb17c4503c6eddf363c68e6cdf848b9341e6d83a0",
   "xss/cases.json": "eb76e5a238ac07d243fdafcd5ac6c35bf19b2c1e8bc7e7ce122806a3b4898f21"

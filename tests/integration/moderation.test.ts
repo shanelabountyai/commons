@@ -18,11 +18,13 @@ let boardId: string;
 const P: Record<string, string> = {};
 const tx = <T>(f: (t: Parameters<Parameters<typeof db.$transaction>[0]>[0]) => Promise<T>) => db.$transaction(f);
 
-async function profile(handle: string, joinedAt: number, extra: { isModerator?: boolean } = {}) {
+/** A member joined at `joinedAt`; `contributions` seeded posts (default: 6 historical ones, mature). An explicit count places them just after joining (5.2 tests). */
+async function profile(handle: string, joinedAt: number, extra: { isModerator?: boolean } = {}, contributions?: number) {
   const user = await db.user.create({ data: { email: `${handle}-${orgId.slice(0, 8)}@example.com` } });
   await db.membership.create({ data: { orgId, userId: user.id, role: 'member' } });
   const p = await db.profile.create({ data: { orgId, userId: user.id, handle, joinedAt: toDate(joinedAt), ...extra } });
-  for (let i = 0; i < 6; i++) await db.post.create({ data: { orgId, boardId, authorId: p.id, publicId: `${handle}-h${i}`, title: 'h', body: 'h', createdAt: toDate(T0 - (40 - i) * DAY) } });
+  const n = contributions ?? 6;
+  for (let i = 0; i < n; i++) await db.post.create({ data: { orgId, boardId, authorId: p.id, publicId: `${handle}-h${i}`, title: 'h', body: 'h', createdAt: toDate(contributions === undefined ? T0 - (40 - i) * DAY : joinedAt + 60 * (i + 1)) } });
   return (P[handle] = p.id);
 }
 const modCtx = (handle: string): ModeratorCtx => ({ orgId, profileId: P[handle]!, role: 'member', isModerator: handle === 'mod' });
@@ -182,5 +184,38 @@ describe('who moderates the moderators (4.1.11, D-48, D-14)', () => {
     await tx((t) => setModerator(t, ownerCtx, mod2, false, 'banned', T0 + 806));
     expect(await db.moderationAction.findFirst({ where: { subjectId: mod2, kind: 'REVOKE_MOD' } })).toMatchObject({ fromState: 'MODERATOR', toState: 'MEMBER' });
     await expect(tx((t) => setModerator(t, ownerCtx, mod2, false, 'twice', T0 + 807))).rejects.toMatchObject({ code: 'INPUT_INVALID' }); // already a member
+  });
+});
+
+describe('5.2 signals through the real vote path (D-75)', () => {
+  it('six young accounts upvoting within 10 min open one RING item; counts are exactly the votes; review is logged', async () => {
+    const host = await profile('ring-host', T0 - 400 * DAY);
+    const post = await tx((t) => submitPost(t, { orgId, profileId: host, boardId, publicId: 'M-RING', title: 'ring target', body: 'a post six fresh accounts will upvote', at: T0 + 1000 }, limits, mod));
+    const ringers: string[] = [];
+    for (let i = 0; i < 6; i++) ringers.push(await profile(`ringer${i}`, T0 + 1000 - 2 * 3600, {}, 0));
+    for (let i = 0; i < 6; i++) await tx((t) => submitVote(t, { orgId, profileId: ringers[i]!, node: { kind: 'POST', id: post.id }, value: 1, at: T0 + 1010 + i * 30 }, limits));
+    const rows = await db.brigadeSignal.findMany({ where: { orgId, nodeId: post.id } });
+    expect(rows.map((r) => [r.kind, r.voterCount])).toEqual([['RING', 6]]);
+    expect((await db.post.findUniqueOrThrow({ where: { id: post.id } })).ups).toBe(7); // author's +1 and six applied upvotes: the signal changed nothing
+    const item = (await queue(db, orgId, 50)).find((q) => q.kind === 'BRIGADE' && q.node.id === post.id);
+    expect(item && item.kind === 'BRIGADE' ? [item.signal, item.voterCount] : null).toEqual(['RING', 6]);
+    await tx((t) => reviewSignal(t, modCtx('mod'), { kind: 'BRIGADE', id: item!.id }, 'six two-hour-old accounts, same ten minutes', T0 + 1300));
+    expect(await db.moderationAction.findFirst({ where: { orgId, kind: 'REVIEW_SIGNAL', nodeId: post.id } })).toMatchObject({ reason: expect.stringContaining('RING') });
+  });
+
+  it('five gate-passing accounts under 7 days downvoting within 10 min open one AGED_BRIGADE; old accounts do not', async () => {
+    const host = await profile('aged-host', T0 - 400 * DAY);
+    const host2 = await profile('aged-host2', T0 - 400 * DAY);
+    const post = await tx((t) => submitPost(t, { orgId, profileId: host, boardId, publicId: 'M-AGED', title: 'aged target', body: 'a post five week-old accounts will downvote', at: T0 + 2000 }, limits, mod));
+    const old = await tx((t) => submitPost(t, { orgId, profileId: host2, boardId, publicId: 'M-AGED-OK', title: 'organic', body: 'a post five old accounts will downvote', at: T0 + 2001 }, limits, mod));
+    for (let i = 0; i < 5; i++) {
+      const aged = await profile(`aged${i}`, T0 + 2000 - 4 * DAY, {}, 3);
+      await tx((t) => submitVote(t, { orgId, profileId: aged, node: { kind: 'POST', id: post.id }, value: -1, at: T0 + 2010 + i * 60 }, limits));
+      const vet = await profile(`vet${i}`, T0 - 90 * DAY, {}, 8);
+      await tx((t) => submitVote(t, { orgId, profileId: vet, node: { kind: 'POST', id: old.id }, value: -1, at: T0 + 2010 + i * 60 }, limits));
+    }
+    expect((await db.brigadeSignal.findMany({ where: { orgId, nodeId: post.id } })).map((r) => [r.kind, r.voterCount])).toEqual([['AGED_BRIGADE', 5]]);
+    expect(await db.brigadeSignal.count({ where: { orgId, nodeId: old.id } })).toBe(0);
+    expect((await db.post.findUniqueOrThrow({ where: { id: post.id } })).downs).toBe(5); // counted: a signal is for a human (D-31)
   });
 });

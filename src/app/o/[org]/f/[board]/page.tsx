@@ -5,12 +5,15 @@ import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ForumForm as ActionForm } from '@/components/forum-form';
 import { ago, ScopeNote, Text } from '@/components/forum';
-import { boardPosts, ensureProfile, nowEpoch, POST_SORTS, SORT_LABEL } from '@/forum/view';
+import { boardPosts, downvoteGateNote, ensureProfile, myVotes, nowEpoch, POST_SORTS, SORT_LABEL } from '@/forum/view';
+import { VoteControl } from '@/components/vote-control';
+import { parseLimitRules } from '@/rules';
 import type { PostSort } from '@/ranking';
 import { parseRankingRules } from '@/rules';
-import { newPost } from '../actions';
+import { newPost, vote } from '../actions';
 
 const ranking = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8')));
+const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
 
 /** 4.1.13 (WCAG 2.4.2): the page is titled after the board; guard first, scoped lookup (FR-06, INV-03). */
 export async function generateMetadata({ params }: { params: Promise<{ org: string; board: string }> }) {
@@ -21,12 +24,16 @@ export async function generateMetadata({ params }: { params: Promise<{ org: stri
 
 export default async function Board({ params, searchParams }: { params: Promise<{ org: string; board: string }>; searchParams: Promise<{ sort?: string }> }) {
   const ctx = await requireOrg((await params).org);
-  await ensureProfile(ctx);
+  const me = await ensureProfile(ctx);
   const { board: slug } = await params;
   const sortParam = (await searchParams).sort;
   const sort: PostSort = (POST_SORTS as string[]).includes(sortParam ?? '') ? (sortParam as PostSort) : 'hot';
   const v = await boardPosts(ctx.orgId, slug, sort, nowEpoch(), ranking);
   if (!v) notFound();
+  // 5.1: the viewer's votes on the listed posts and whether their ▼ would count now
+  const mine = await myVotes(ctx.orgId, me.profileId, v.posts.map((p) => ({ kind: 'POST' as const, id: p.id })));
+  const gateNote = await downvoteGateNote(me.profileId, nowEpoch(), limits);
+  const newVote = vote.bind(null, ctx.slug);
   const base = `/o/${ctx.slug}/f/${slug}`;
   return (
     <main id="main" tabIndex={-1}>
@@ -51,6 +58,7 @@ export default async function Board({ params, searchParams }: { params: Promise<
       <ol>
         {v.posts.map((p) => (
           <li key={p.id} className="post">
+            <VoteControl action={newVote} postId={p.id} label={`post ${p.title}`} mine={mine.get(p.id) ?? 0} isAuthor={p.authorId === me.profileId} gateNote={gateNote} />
             <Link href={`/o/${ctx.slug}/f/p/${p.publicId}`} className={p.pinnedAt ? 'pin' : undefined}>
               <Text value={p.title} />
             </Link>

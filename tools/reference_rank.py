@@ -19,6 +19,7 @@ from rankinglib import hot, wilson_lower, top_window_includes  # noqa: E402
 from votelib import reduce_votes  # noqa: E402
 from treelib import assign_paths, depth, render, permalink  # noqa: E402
 from limitslib import replay  # noqa: E402
+from signallib import expected_rows as signal_rows, load_scenarios  # noqa: E402
 
 FIX = os.path.join(HERE, "..", "fixtures")
 T0 = 1_793_232_000
@@ -28,8 +29,8 @@ NAMED_THREADS = ["P-THICK", "P-CHAIN", "P-GW"]
 EXPECTED = ["expected_post_order_hot.csv", "expected_post_order_top_day.csv", "expected_post_order_top_week.csv",
             "expected_post_order_top_all.csv", "expected_post_order_new.csv", "expected_comment_order_best.csv",
             "expected_counts.csv", "expected_vote_outcomes.csv", "expected_tree.csv", "expected_pages.csv",
-            "expected_permalink.csv", "expected_limits.csv"]
-INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json"]
+            "expected_permalink.csv", "expected_limits.csv", "signals/expected_signals.csv"]
+INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json", "signals/scenarios.json"]
 
 
 def read(name):
@@ -148,6 +149,8 @@ def compute(users, posts, comments, votes):
         a, r, first = replay(attempts, action, accounts[user], lambda t, u=user: contributions_at(u, t))
         limit_rows.append({"script": name, "action": action, "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
     out["expected_limits.csv"] = limit_rows
+    # PRD 5.2 (D-75): the additive signal scenarios, computed by signallib from their own inputs
+    out["signals/expected_signals.csv"] = signal_rows(load_scenarios(FIX))
     return out, counts
 
 
@@ -167,10 +170,12 @@ def table(out):
     lines.append(f"tree rows     : {len(tr)} rendered; continue-thread links: {sum(r['continue_thread'] for r in tr)}; removed: {sum(1 for r in tr if r['rendered_as']=='removed')}; deleted: {sum(1 for r in tr if r['rendered_as']=='deleted')}")
     for r in out["expected_limits.csv"]:
         lines.append(f"limits {r['script']:28s}: {r['attempts']:3d} attempts, {r['allowed']:3d} allowed, {r['refused']:3d} refused, first retryAfter {r['first_retry_after']}")
+    for r in out["signals/expected_signals.csv"]:
+        lines.append(f"signal {r['scenario']:18s}: {r['kind']:12s} on {r['node']} voters {r['voters']}")
     return "\n".join(lines)
 
 
-FIELDS = {"expected_post_order_hot.csv": ["rank", "post_id", "score"], "expected_post_order_top_day.csv": ["rank", "post_id", "score"],
+FIELDS = {"signals/expected_signals.csv": ["scenario", "kind", "node", "voters", "window_start"], "expected_post_order_hot.csv": ["rank", "post_id", "score"], "expected_post_order_top_day.csv": ["rank", "post_id", "score"],
           "expected_post_order_top_week.csv": ["rank", "post_id", "score"], "expected_post_order_top_all.csv": ["rank", "post_id", "score"],
           "expected_post_order_new.csv": ["rank", "post_id", "score"]}
 

@@ -3,7 +3,7 @@
 Expected values were derived from the closed-form formulas in docs/domain-brief.md §3 and are
 frozen here. Never edit an expected value to make a test pass (D-10).
 """
-import os, sys
+import math, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # -I drops the script dir
 from rankinglib import hot, wilson_lower, top_window_includes
 from treelib import seg, assign_paths, depth, ancestors, render
@@ -96,10 +96,33 @@ check("GL-12", "retryAfter floor is 1 s", limit_check([T0 - 59, T0 - 59], "comme
 check("GL-13", "regular comment limit is 6: 5 hits allow", limit_check([T0 + i for i in range(5)], "comment", False, T0 + 5)[0], "allow")
 check("GL-14", "regular comment limit is 6: 6 hits refuse", limit_check([T0 + i for i in range(6)], "comment", False, T0 + 6)[0], "refuse")
 
+# PRD 5.2 (D-75): one case per signal scenario, from fixtures/signals/scenarios.json through signallib.
+from signallib import detect, load_scenarios  # noqa: E402
+_sc = {x["id"]: x for x in (load_scenarios(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")) or [])}
+_sig = lambda sid: sorted((s["kind"], s["voters"]) for s in detect(_sc[sid]))  # noqa: E731
+check("GS-01", "8 young accounts upvote within 300 s -> one RING, 8 voters", _sig("S-RING"), [("RING", 8)])
+check("GS-02", "the same 8 young upvotes over 3 h -> no signal", _sig("S-RING-SLOW"), [])
+check("GS-03", "4 young + 10 mature upvotes -> no signal (only young accounts count)", _sig("S-RING-MIXED"), [])
+check("GS-04", "exactly 6 young upvotes, last at +599 s -> RING; last at +600 s -> none", (_sig("S-RING-EDGE-IN"), _sig("S-RING-EDGE-OUT")), ([("RING", 6)], []))
+check("GS-05", "7 gate-passing accounts under 7 d downvote within 600 s -> one AGED_BRIGADE, 7", _sig("S-AGED"), [("AGED_BRIGADE", 7)])
+check("GS-06", "7 accounts 30+ d old downvote within 600 s -> no signal", _sig("S-AGED-ORGANIC"), [])
+check("GS-07", "7 gated downvotes (D-31) -> one BRIGADE, 7 (unchanged by 5.2)", _sig("S-GATED"), [("BRIGADE", 7)])
+check("GS-08", "ring + aged brigade on one node -> one of each, not merged", _sig("S-BOTH"), [("AGED_BRIGADE", 5), ("RING", 6)])
+
+# Pending (PRD 5.3, D-63): proposed, computed and printed, NOT asserted or counted until a D- entry adopts them.
+pending = [
+    ("GH-08", "at gravity 90000 the 50-vote vs 5-vote crossover is log10(50/5) x 90000 = 90000 s",
+     round(math.log10(50 / 5) * 90_000, 7), 90_000.0),
+    ("GW-09", "Best without the author's +1: 1/1 -> wilson(0,0)=0; 2/2 -> wilson(1,1); 1/2 -> wilson(0,1)",
+     (wilson_lower(0, 0), round(wilson_lower(1, 1), 4), round(wilson_lower(0, 1), 4)), (0.0, 0.2065, 0.0)),
+]
+
 failed = [c for c in cases if not c[4]]
 for cid, desc, got, want, ok in cases:
     print(f"{'ok  ' if ok else 'FAIL'} {cid} {desc}: got {got!r} want {want!r}")
 if failed:
     print(f"FAILED {failed[0][0]}")
     sys.exit(1)
+for cid, desc, got, want in pending:
+    print(f"pend {cid} {desc}: got {got!r} (proposed {want!r}; not asserted)")
 print(f"{len(cases)} cases OK")

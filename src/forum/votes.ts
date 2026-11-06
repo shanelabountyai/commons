@@ -3,6 +3,7 @@
 // gate from src/limits decides eligibility; this file only fetches its inputs. votesVerify recomputes the caches
 // two ways (non-negotiable 3).
 import { downvoteAllowed } from '@/limits';
+import { qualifies, windowAt, type SignalKind } from '@/votes/signals';
 import type { LimitRules } from '@/rules';
 import type { Outcome } from '@/votes';
 import { contributionsAt, ForumRefused, lockKey, nodeInfo, toDate, toEpoch, type NodeRef, type Tx } from './db';
@@ -28,7 +29,7 @@ export async function castVote(tx: Tx, input: CastInput, rules: LimitRules): Pro
     const account = { created_at: toEpoch(voter.joinedAt), contributions: await contributionsAt(tx, input.voterId, at) };
     if (!downvoteAllowed(account, input.castAt, rules)) {
       await record('GATED_DOWNVOTE'); // V-2
-      return { outcome: 'GATED_DOWNVOTE', signal: await brigadeCheck(tx, input, at, rules) };
+      return { outcome: 'GATED_DOWNVOTE', signal: await signalCheck(tx, 'BRIGADE', input, at, rules) };
     }
   }
   await lockKey(tx, `vote:${input.node.kind}:${input.node.id}`); // counts and the current row move together
@@ -57,26 +58,43 @@ export async function castVote(tx: Tx, input: CastInput, rules: LimitRules): Pro
   if (input.node.kind === 'POST') await tx.post.update({ where: { id: input.node.id }, data });
   else await tx.comment.update({ where: { id: input.node.id }, data });
   await record(outcome);
-  return { outcome, signal: false };
+  // 5.2 (D-75): an applied upvote may complete a RING, an applied downvote an AGED_BRIGADE; signals never change counts
+  let signal = false;
+  if (outcome === 'APPLIED') signal = await signalCheck(tx, input.value === 1 ? 'RING' : 'AGED_BRIGADE', input, at, rules);
+  return { outcome, signal };
 }
 
-/** D-31: on a gated downvote, ≥ rules.signals.brigade.min_voters gated downvoters on this node inside the window → one signal per window (constants in rules/limits.json, 4.1.3). */
-async function brigadeCheck(tx: Tx, input: CastInput, at: Date, rules: LimitRules): Promise<boolean> {
-  const since = toDate(input.castAt - rules.signals.brigade.window_seconds);
-  const gated = await tx.voteEvent.findMany({
-    where: { nodeKind: input.node.kind, nodeId: input.node.id, outcome: 'GATED_DOWNVOTE', castAt: { gt: since, lte: at } },
-    select: { voterId: true, castAt: true },
+/** D-31 and 5.2: one window rule for every signal kind (src/votes/signals.ts). Checked when a qualifying event is
+ * cast; ≥ min_voters distinct qualifying voters on this node in the window → one signal per window, a later event
+ * in the same window updates its count. Returns true when a new signal row opens. */
+async function signalCheck(tx: Tx, kind: SignalKind, input: CastInput, at: Date, rules: LimitRules): Promise<boolean> {
+  const accountAt = async (voterId: string, joinedAt: Date, castAt: Date) => ({ created_at: toEpoch(joinedAt), contributions: await contributionsAt(tx, voterId, castAt) });
+  const me = await tx.profile.findUniqueOrThrow({ where: { id: input.voterId }, select: { joinedAt: true } });
+  const outcome = kind === 'BRIGADE' ? 'GATED_DOWNVOTE' : 'APPLIED';
+  // cheap exits before any count query (most votes are from old accounts): AGED needs age < max days; RING with age ≥ the
+  // young window still needs the contribution count
+  const age = input.castAt - toEpoch(me.joinedAt);
+  if (kind === 'AGED_BRIGADE' && age >= rules.signals.aged_brigade.max_account_age_days * 86_400) return false;
+  if (!qualifies(kind, outcome, input.value, await accountAt(input.voterId, me.joinedAt, at), input.castAt, rules)) return false;
+  const window = kind === 'BRIGADE' ? rules.signals.brigade : kind === 'RING' ? rules.signals.ring : rules.signals.aged_brigade;
+  const since = toDate(input.castAt - window.window_seconds);
+  const events = await tx.voteEvent.findMany({
+    where: { nodeKind: input.node.kind, nodeId: input.node.id, outcome, ...(kind === 'BRIGADE' ? {} : { value: input.value }), castAt: { gt: since, lte: at } },
+    select: { voterId: true, castAt: true, value: true, voter: { select: { joinedAt: true } } },
     orderBy: { castAt: 'asc' },
   });
-  const voters = new Set(gated.map((g) => g.voterId));
-  if (voters.size < rules.signals.brigade.min_voters) return false;
-  const windowStart = gated[0]!.castAt;
-  const existing = await tx.brigadeSignal.findFirst({ where: { nodeKind: input.node.kind, nodeId: input.node.id, windowStart: { gt: since } } });
+  const qualifying: { voter: string; at: number }[] = [];
+  for (const e of events) {
+    if (kind === 'BRIGADE' || qualifies(kind, outcome, e.value as 1 | -1, await accountAt(e.voterId, e.voter.joinedAt, e.castAt), toEpoch(e.castAt), rules)) qualifying.push({ voter: e.voterId, at: toEpoch(e.castAt) });
+  }
+  const w = windowAt(kind, qualifying, input.castAt, rules);
+  if (!w) return false;
+  const existing = await tx.brigadeSignal.findFirst({ where: { kind, nodeKind: input.node.kind, nodeId: input.node.id, windowStart: { gt: since } } });
   if (existing) {
-    await tx.brigadeSignal.update({ where: { id: existing.id }, data: { voterCount: voters.size } });
+    await tx.brigadeSignal.update({ where: { id: existing.id }, data: { voterCount: w.voters } });
     return false;
   }
-  await tx.brigadeSignal.create({ data: { orgId: input.orgId, nodeKind: input.node.kind, nodeId: input.node.id, windowStart, voterCount: voters.size } });
+  await tx.brigadeSignal.create({ data: { orgId: input.orgId, kind, nodeKind: input.node.kind, nodeId: input.node.id, windowStart: toDate(w.windowStart), voterCount: w.voters } });
   return true;
 }
 

@@ -90,14 +90,14 @@ const VOTE_NOTICE: Record<string, string> = {
 
 export const vote = orgAction(null, nodeSchema.extend({ value: z.enum(['1', '-1']) }), async (ctx, i) => {
   const me = await ensureProfile(ctx);
-  const { node, postPublicId } = await resolveNode(ctx.orgId, i);
+  const { node } = await resolveNode(ctx.orgId, i);
   let outcome = '';
   try {
     outcome = (await db.$transaction((tx) => submitVote(tx, { orgId: ctx.orgId, profileId: me.profileId, node, value: i.value === '1' ? 1 : -1, at: nowEpoch() }, limits))).outcome;
   } catch (e) {
     refused(e);
   }
-  revalidatePath(`${base(ctx.slug)}/p/${postPublicId}`);
+  revalidatePath(base(ctx.slug), 'layout'); // 5.1: the board, the thread and the permalink all show the viewer's vote
   // no redirect (4.1.7): the counts refresh in the same response, the <details> panel stays open, the outcome is announced
   return { notice: VOTE_NOTICE[outcome] ?? `${outcome}. (${outcome})` };
 });

@@ -2,7 +2,7 @@
 
 Learning project: a synthetic homelab community forum. Boards, posts, and comments nested arbitrarily deep; Hot/Top/New/Best ranking; one account, one vote; rate limits and young-account gates as data; reports, a mod queue and an append-only mod log. It's the first project in the portfolio designed against hostile users. **Synthetic data only. No scraped content, no real users. Passing the abuse fixtures shows the defenses stop the attacks the author thought of, nothing more.** Keep the scope-honesty banner from `prd-commons.md` verbatim in README.md.
 
-Read first: `prd-commons.md` (what), `docs/decisions.md` (authoritative; outranks the PRD), `docs/domain-brief.md` (vocabulary, tree rules T-, ranking formulas R-, golden-case index), `docs/adr-001-tree-storage.md`, `docs/portfolio-overlap.md` (what to port). Current work: `docs/phase-4.1-tasks.md` (then `docs/phase-5-tasks.md`). Session state: `NEXT.md`.
+Read first: `prd-commons.md` (what), `docs/decisions.md` (authoritative; outranks the PRD), `docs/domain-brief.md` (vocabulary, tree rules T-, ranking formulas R-, golden-case index), `docs/adr-001-tree-storage.md`, `docs/portfolio-overlap.md` (what to port). Current work: `docs/phase-5-tasks.md` (PRDs in `docs/prd/`). Session state: `NEXT.md`.
 
 ## Non-negotiables
 1. **All user content is untrusted at every render.** Output-encode everywhere; markdown through an allowlisted subset only; links `rel="nofollow ugc noopener"`; no `dangerouslySetInnerHTML` outside the one sanitizer module. The XSS fixture set is written **before** the renderer (Phase 3).
@@ -24,7 +24,7 @@ Read first: `prd-commons.md` (what), `docs/decisions.md` (authoritative; outrank
 - Small commits, one concern each, naming specific files (never `git add -A`). Branch + PR; **never merge.** Note seams for non-goals but don't build them.
 - **Ask before adding dependencies.** Ask-before-add list: any markdown parser or sanitizer (Phase 3 will need one; propose it with the reason), any CSV parser, any rate-limit library, any date library, any tree/graph library, any charting library.
 - **Cloud session:** the sandbox may not download Prisma engines or Playwright browsers. Try Quorum's workarounds first (D-16). Record what couldn't run in NEXT.md; **CI decides.**
-- **Model is pinned to Claude Fable 5.1 (`claude-fable-5-1`)** in `.claude/settings.json` (D-17).
+- **Model is pinned to Claude Opus 5.5 (`claude-opus-5-5`)** in `.claude/settings.json` (D-74; was Fable 5.1 under D-17 through PRD 5.3).
 - End each session by updating NEXT.md: what was built, decided, left open, and the gate output.
 
 ## Session 0 — reuse check

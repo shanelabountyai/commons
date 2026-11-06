@@ -42,3 +42,11 @@ table { display: block; max-width: 100%; overflow-x: auto; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+/* 5.1 — the vote control sits beside the meta line, outside any panel; state in text as well as aria-pressed */
+.vote-control { display: inline-block; margin-right: 0.5rem; vertical-align: middle; }
+.vote-control form, .vote-control fieldset { display: inline; margin: 0; }
+.vote-control button { min-width: 24px; min-height: 24px; margin-right: 4px; }
+.vote-control button[aria-pressed='true'] { font-weight: bold; outline: 2px solid CanvasText; outline-offset: 1px; }
+.vote-control .vote-state { font-size: 0.8em; margin-left: 0.25em; }
+.vote-control [role='status'], .vote-control [role='alert'] { display: inline-block; margin: 0 0 0 0.5rem; font-size: 0.85em; }
