@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
-import { Markdown, Text, when } from '@/components/forum';
+import { CommentHeading, Crumbs, Markdown, removedName, Text, Tree, when } from '@/components/forum';
 import { downvoteGateNote, ensureProfile, myVotes, nowEpoch, permalinkView } from '@/forum/view';
 import { VoteControl } from '@/components/vote-control';
 import { vote } from '../../../../actions';
@@ -34,39 +34,38 @@ export default async function Permalink({ params }: { params: Promise<{ org: str
   const castVote = vote.bind(null, ctx.slug);
   return (
     <main id="main" tabIndex={-1}>
-      <p className="meta">
-        <Link href={`/o/${ctx.slug}/f`}>Boards</Link> › <Link href={here}><Text value={v.post.title} /></Link> › comment
-      </p>
+      <Crumbs items={[{ href: `/o/${ctx.slug}/f`, text: 'Boards' }, { href: `/o/${ctx.slug}/f/${v.post.board.slug}`, text: <Text value={v.post.board.title} /> }, { href: here, text: <Text value={v.post.title} /> }, { text: 'Comment' }]} />
       <h1>Comment in context</h1>
       {v.ancestors.length > 0 && (
         <ol aria-label="Ancestors">
           {v.ancestors.map((a) => (
             <li key={a.id} className="meta">
-              <Link href={`${here}/c/${a.publicId}`}>{a.status === 'visible' ? <Text value={a.author} /> : `[${a.status}]`}</Link>: {a.status === 'visible' ? a.body.slice(0, 120).replace(/\s+/g, ' ') : ''}
+              <Link href={`${here}/c/${a.publicId}`}>{a.status === 'visible' ? <Text value={a.author} /> : removedName(a.status)}</Link>: {a.status === 'visible' ? a.body.slice(0, 120).replace(/\s+/g, ' ') : ''}
               {a.body.length > 120 && a.status === 'visible' ? '…' : ''}
             </li>
           ))}
         </ol>
       )}
       {v.rows.length === 0 && <p className="removed">This comment was deleted or removed and has no visible replies.</p>}
-      <ol className="thread">
-        {v.rows.map((r) => (
-          <li key={r.id} id={r.id} className="c" style={{ marginLeft: `${r.depth * 1.25}rem` }}>
-            <article aria-label={`Comment by ${r.rendered_as === 'body' ? r.node.author : 'removed'}`}>
+      {v.rows.length > 0 && <h2>The comment and its replies</h2>}
+      <Tree
+        rows={v.rows}
+        item={(r) => (
+            <article>
+              <CommentHeading status={r.rendered_as} author={r.node.author} href={`/o/${ctx.slug}/f/u/${r.node.author}`} />
               {r.rendered_as === 'body' && <VoteControl action={castVote} postId={v.post.id} commentId={r.node.dbId} label={`comment by ${r.node.author}`} mine={mine.get(r.node.dbId) ?? 0} isAuthor={r.node.author === me.handle} gateNote={gateNote} />}
               <div className="meta">
-                {r.rendered_as === 'body' ? <Text value={r.node.author} /> : <span className="removed">[{r.rendered_as}]</span>} · {r.node.ups - r.node.downs} points · {when(new Date(r.node.created_at * 1000))} · depth {r.depth}
+                {r.node.ups - r.node.downs} points · {when(new Date(r.node.created_at * 1000))} · depth {r.depth}
               </div>
               {r.rendered_as === 'body' && <Markdown body={r.node.body} />}
               {r.continue_thread && (
                 <p>
-                  <Link href={`${here}/c/${r.node.publicId}`}>Continue this thread →</Link>
+                  <Link href={`${here}/c/${r.node.publicId}`}>Continue the thread under {r.rendered_as === 'body' ? `${r.node.author}'s comment` : `the ${r.rendered_as} comment`}</Link>
                 </p>
               )}
             </article>
-          </li>
-        ))}
-      </ol>
+        )}
+      />
       <p>
         <Link href={`${here}#${comment}`}>Back to the thread</Link>
       </p>

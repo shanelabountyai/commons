@@ -20,7 +20,7 @@ Vocabulary, formulas and the golden-case index. `docs/decisions.md` outranks thi
 ## 2. Tree rules (T-)
 
 - **T-1** A comment's parent is a post or a comment in the same post. Cross-post parents are refused (`TREE_INVALID`).
-- **T-2** Depth = number of comment ancestors; top-level comments are depth 0. No depth limit on storage; render cuts at `max_depth_rendered` (6).
+- **T-2** Depth = number of comment ancestors; top-level comments are depth 0. Writes stop past `max_depth_written` (32, PRD 6.4, D-93); render cuts at `max_depth_rendered` (6).
 - **T-3** Siblings order by the requested sort (Best/Top/New); ties per D-9.
 - **T-4** Thread pagination pages **top-level** comments only (page size 50); each page carries its full subtrees down to the render cut.
 - **T-5** Permalink to node X renders X's ancestors (bodies collapsed to one line), X, and X's subtree to the render cut.
@@ -84,6 +84,14 @@ Vote outcomes `SELF_VOTE` and `GATED_DOWNVOTE` are not refusals: the request is 
 | GL-05..GL-07 | L-2 downvote refused at 23:59:59 and with 2 contributions; allowed at exactly 24 h with 3 |
 | GL-08..GL-12 | L-3/L-4: young comment limit 2/60 s; retryAfter 58; a hit exactly 60 s old has left the window; 59 s has not; floor 1 s |
 | GL-13..GL-14 | Regular comment limit 6/60 s |
+| GL-15..GL-17 | PRD 6.2 (D-87): young upload window 2/3600 s; the third is refused with retryAfter 3580 |
+| GL-18 | Regular upload window 10/3600 s: 9 hits allow, 10 refuse |
+| GL-19..GL-20 | `upload.max_per_post` 4: a post holding 3 takes a fourth, holding 4 refuses a fifth |
+| GL-21..GL-22 | `upload.max_pixels` 25 000 000 as the header claims it (`tools/uploadlib.py`): 5000 × 5000 allowed, 1 × 25 000 001 refused |
+| GL-23..GL-25 | PRD 6.4 (D-93): the `profile+post` comment window 10/3600 s (young 3): 9 hits on one post allow, 10 refuse with retryAfter 3590; young 2 allow, 3 refuse; an 11th comment in the hour on another post is allowed |
+| GL-26 | `max_depth_written` 32 (T-2 depth, top level 0): depth 32 allowed, 33 refused with no retryAfter |
+| GL-27..GL-29 | PRD 7.2 (D-100): the profile `link` window 5/86400 s (young 2), one slot per markdown link: 4 allow a 5th, 5 refuse a 6th with retryAfter 85900; young 2 refuse a 3rd; a body's own links count, so a 3-link body on a 3-link history is refused whole |
+| GL-30 | Link hosts come from markdown links only (`\]\(https?://([^/\s)]+)`): a bare URL and an autolink are not counted |
 
 ## 2b. Vote events (V-) — the oracle is `tools/votelib.py`
 

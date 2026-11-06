@@ -2,12 +2,14 @@
 // Pure given the loaded fixtures; scripts/engine-eval.ts does the printing and the exit code. Mirrors the row
 // shapes tools/reference_rank.py writes; a difference is a defect in one side, never a reason to edit the file.
 import type { CsvRow } from '@/fixtures/csv';
-import { NOW, type Fixtures } from '@/fixtures/load';
-import { isYoung, replay, type Account } from '@/limits';
+import { NOW, type Fixtures, type LinkCase } from '@/fixtures/load';
+import { addedLinks, isYoung, replay, replayComments, replayLinks, type Account, type CommentAttempt, type LinkAttempt } from '@/limits';
+import { linkHrefs } from '@/render';
 import { hot, net, orderPosts, orderSiblings, wilsonLower, type Counts, type PostSort } from '@/ranking';
-import type { LimitRules, RankingRules } from '@/rules';
-import { assignPaths, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
+import type { Action, LimitRules, ModerationRules, RankingRules } from '@/rules';
+import { assignPaths, depthOf, pageCount, permalink, renderThread, type TreeNode } from '@/tree';
 import { reduceVotes, type Outcome } from '@/votes';
+import { detectReportSwarms, type SwarmScenario, type SwarmSignal } from '@/limits/report-swarm';
 import { detectSignals, type Signal, type SignalScenario } from '@/votes/signals';
 
 export type Diff = { file: string; row: number; field: string; expected: string; actual: string };
@@ -22,6 +24,8 @@ export type EvalReport = {
   threads: { post_id: string; comments_total: number; top_level_shown: number; pages: number }[];
   /** 5.2: every signal the whole community's votes raise (the false-positive check; the oracle finds only P-BRIGADE's). */
   communitySignals: Signal[];
+  /** PRD 7.2 (D-100): every REPORT_SWARM the organic reports raise (the oracle, tools/carried_measures.py, finds none). */
+  communitySwarms: SwarmSignal[];
 };
 
 const POST_SORTS: PostSort[] = ['hot', 'top_day', 'top_week', 'top_all', 'new'];
@@ -29,7 +33,7 @@ const NAMED_THREADS = ['P-THICK', 'P-CHAIN', 'P-GW'];
 const HOT_TOLERANCE = 1e-7;
 const WILSON_TOLERANCE = 5e-5;
 
-export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules, expected: (name: string) => CsvRow[], now = NOW, signalScenarios: readonly SignalScenario[] = []): EvalReport {
+export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules, expected: (name: string) => CsvRow[], now = NOW, signalScenarios: readonly SignalScenario[] = [], swarmScenarios: readonly SwarmScenario[] = [], mod?: ModerationRules): EvalReport {
   const accounts = new Map(fx.users.map((u) => [u.id, u.created_at]));
   const nodes = new Map<string, string>();
   for (const p of fx.posts) nodes.set(p.id, p.author);
@@ -154,10 +158,11 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
   compare('expected_permalink.csv', permaRows);
   // limits scripts
   const t0 = now - 3600;
-  const scripts: { script: string; action: 'post' | 'comment' | 'vote'; user: string; attempts: number[] }[] = [
+  const scripts: { script: string; action: Action; user: string; attempts: number[] }[] = [
     { script: 'spam-young-comments', action: 'comment', user: 'u193', attempts: Array.from({ length: 60 }, (_, i) => t0 + i) },
     { script: 'spam-young-posts', action: 'post', user: 'u193', attempts: Array.from({ length: 20 }, (_, i) => t0 + 60 * i) },
     { script: 'spam-young-votes', action: 'vote', user: 'u193', attempts: Array.from({ length: 100 }, (_, i) => t0 + i) },
+    { script: 'spam-young-uploads', action: 'upload', user: 'u193', attempts: Array.from({ length: 30 }, (_, i) => t0 + 10 * i) }, // PRD 6.2 (D-87)
     { script: 'normal-u050-posts', action: 'post', user: 'u050', attempts: fx.posts.filter((p) => p.author === 'u050').map((p) => p.created_at).sort((a, b) => a - b) },
     { script: 'normal-u050-comments', action: 'comment', user: 'u050', attempts: fx.comments.filter((c) => c.author === 'u050').map((c) => c.created_at).sort((a, b) => a - b) },
     { script: 'normal-u050-votes', action: 'vote', user: 'u050', attempts: fx.votes.filter((v) => v.voter === 'u050').map((v) => v.cast_at).sort((a, b) => a - b) },
@@ -166,12 +171,23 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
     const r = replay(s.attempts, s.action, { created_at: accounts.get(s.user)!, contributionsAt: (t) => contributionsAt(s.user, t) }, limits);
     return { script: s.script, action: s.action, attempts: s.attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? '' };
   });
+  const communityComments = [...byPost.entries()].flatMap(([pid, cs]) => {
+    const paths = assignPaths(cs);
+    return cs.map((c) => ({ t: c.created_at, user: c.author, post: pid, depth: depthOf(paths.get(c.id)!) }));
+  });
+  limitRows.push(...commentLimitRows(communityComments, Object.fromEntries(accounts), contributionsAt, limits, now));
+  const bodies = [...fx.posts, ...fx.comments].map((n) => ({ t: n.created_at, user: n.author, id: n.id, body: fx.text.get(n.id)?.body ?? '' }));
+  limitRows.push(...linkLimitRows(bodies, fx.links, Object.fromEntries(accounts), contributionsAt, limits, now));
   compare('expected_limits.csv', limitRows);
 
   // 5.2 (D-75): the additive scenario set, and the community's own votes through the same detector
   if (signalScenarios.length > 0) {
     const sigRows = signalScenarios.flatMap((sc) => detectSignals(sc, limits).map((s) => ({ scenario: sc.id, kind: s.kind, node: s.node, voters: s.voters, window_start: s.window_start })));
     compare('signals/expected_signals.csv', sigRows);
+  }
+  // 5.4 B: the report-swarm scenarios (the community fixture has no reports; its false-positive check is the organic scenarios)
+  if (swarmScenarios.length > 0 && mod) {
+    compare('moderation/expected_report_signals.csv', swarmScenarios.flatMap((sc) => detectReportSwarms(sc, mod).map((s) => ({ scenario: sc.id, author: s.author, reporters: s.reporters, window_start: s.window_start }))));
   }
   const community: SignalScenario = {
     id: 'community',
@@ -181,6 +197,7 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
     events: fx.votes.map((v) => ({ row: v.row, voter: v.voter, node_id: v.node_id, value: v.value, cast_at: v.cast_at })),
   };
   const communitySignals = detectSignals(community, limits);
+  const communitySwarms = mod ? detectReportSwarms({ id: 'community', note: 'the organic reports', accounts: fx.users, nodes: [...nodes].map(([id, author]) => ({ id, author })), reports: fx.reports }, mod) : [];
 
   const tally: Record<Outcome, number> = { APPLIED: 0, TOGGLED_OFF: 0, SWITCHED: 0, SELF_VOTE: 0, GATED_DOWNVOTE: 0, UNKNOWN_NODE: 0 };
   for (const o of outcomes.values()) tally[o]++;
@@ -194,5 +211,81 @@ export function evaluate(fx: Fixtures, ranking: RankingRules, limits: LimitRules
     limits: limitRows.map((r) => ({ script: r.script, attempts: r.attempts, allowed: r.allowed, refused: r.refused, firstRetryAfter: r.first_retry_after === '' ? null : Number(r.first_retry_after) })),
     threads,
     communitySignals,
+    communitySwarms,
   };
+}
+
+/**
+ * PRD 6.4 (D-93): the four comment scripts, shared by engine:eval (paths from the fixture) and engine:eval:db (depths
+ * as stored). `community` is every community comment as an attempt; the rest are scripted here.
+ */
+export function commentLimitRows(community: readonly CommentAttempt[], createdAt: Readonly<Record<string, number>>, contributionsAt: (user: string, t: number) => number, limits: LimitRules, now = NOW) {
+  const t0 = now - 3600;
+  const sorted = [...community].sort((a, b) => a.t - b.t || (a.user < b.user ? -1 : a.user > b.user ? 1 : 0) || (a.post < b.post ? -1 : a.post > b.post ? 1 : 0) || a.depth - b.depth);
+  const scripts: [string, CommentAttempt[], ('profile' | 'profile+post')[]][] = [
+    ['spam-flood-thread', Array.from({ length: 360 }, (_, i) => ({ t: t0 + 10 * i, user: 'u050', post: 'P-FLOOD', depth: 0 })), ['profile', 'profile+post']],
+    ['normal-community-thread', sorted, ['profile+post']],
+    ['spam-deep-chain', Array.from({ length: 60 }, (_, i) => ({ t: now - 60 * 400 + 400 * i, user: 'u050', post: 'P-DEEP', depth: i })), ['profile', 'profile+post']],
+    ['normal-community-depth', sorted, []],
+  ];
+  return scripts.map(([script, attempts, scopes]) => {
+    const r = replayComments(attempts, createdAt, contributionsAt, limits, scopes);
+    return { script, action: 'comment' as const, attempts: attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? ('' as const) };
+  });
+}
+
+/**
+ * PRD 7.2 (D-100): the two link scripts, shared by engine:eval (bodies from community/bodies.csv) and engine:eval:db
+ * (bodies as stored). `community` is every node with its body; the ones whose render holds a link are the attempts.
+ * PRD 7.3 (D-104): plus the three bypass scripts, counted from their bodies.
+ */
+export function linkLimitRows(community: readonly { t: number; user: string; id: string; body: string }[], cases: readonly LinkCase[], createdAt: Readonly<Record<string, number>>, contributionsAt: (user: string, t: number) => number, limits: LimitRules, now = NOW) {
+  const t0 = now - 3600;
+  const linked = community
+    .map((n) => ({ t: n.t, user: n.user, id: n.id, links: linkHrefs(n.body).length }))
+    .filter((n) => n.links > 0)
+    .sort((a, b) => a.t - b.t || (a.user < b.user ? -1 : a.user > b.user ? 1 : 0) || a.links - b.links || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const scripts: [string, LinkAttempt[]][] = [
+    ['spam-link-rotation', Array.from({ length: 20 }, (_, i) => ({ t: t0 + 780 * i, user: 'u050', links: 1 }))],
+    ['normal-community-links', linked],
+    ...linkAttackScripts(cases, now),
+  ];
+  return scripts.map(([script, attempts]) => {
+    const r = replayLinks(attempts, createdAt, contributionsAt, limits);
+    return { script, action: 'link' as const, attempts: attempts.length, allowed: r.allowed, refused: r.refused, first_retry_after: r.firstRetryAfter ?? ('' as const) };
+  });
+}
+
+/** PRD 7.3 (D-104): the steps of the three bypass scripts, shared by the pure copies and abuse:spam. Rotation: the ten
+ *  syntaxes the 7.2 counter missed (`links/cases.json`), twice each, at the 7.2 timing. Edit-in: 20 link-free posts
+ *  13 min apart (setup, not attempts), then 20 edits a minute apart, each adding a link. Swap: 5 one-link posts, then
+ *  15 hourly edits, each moving one post's link to a new host. `before` is the body an edit replaces; a post has none. */
+export type LinkStep = { t: number; publicId: string; body: string; before?: string; setup?: true };
+export function linkAttacks(cases: readonly LinkCase[], now = NOW): [string, LinkStep[]][] {
+  const t0 = now - 3600;
+  const gaps = cases.filter((c) => c.anchors === 1 && c.counted_7_2 === 0);
+  const plain = (i: number) => `Deal ${i}, link to follow`;
+  const swapBody = (k: number) => `Today's deal: <https://swap-${k}.example.test/nas>`;
+  return [
+    ['spam-link-syntax-rotation', Array.from({ length: 20 }, (_, i) => ({ t: t0 + 780 * i, publicId: `SYN-${i}`, body: `Deal ${i}: ${gaps[i % gaps.length]!.body.replace('.example.test', `-${i}.example.test`)}` }))],
+    [
+      'spam-link-edit-in',
+      [
+        ...Array.from({ length: 20 }, (_, i) => ({ t: t0 + 780 * i, publicId: `EDIT-${i}`, body: plain(i), setup: true as const })),
+        ...Array.from({ length: 20 }, (_, j) => ({ t: t0 + 780 * 20 + 60 * j, publicId: `EDIT-${j}`, before: plain(j), body: `${plain(j)}: <https://edit-${j}.example.test/nas>` })),
+      ],
+    ],
+    [
+      'spam-link-edit-swap',
+      [
+        ...Array.from({ length: 5 }, (_, i) => ({ t: t0 + 780 * i, publicId: `SWAP-${i}`, body: swapBody(i) })),
+        // edit j rewrites post j % 5, whose current body is swapBody(j) (its post, or the edit five before)
+        ...Array.from({ length: 15 }, (_, j) => ({ t: t0 + 780 * 5 + 3600 * j, publicId: `SWAP-${j % 5}`, before: swapBody(j), body: swapBody(5 + j) })),
+      ],
+    ],
+  ];
+}
+
+function linkAttackScripts(cases: readonly LinkCase[], now: number): [string, LinkAttempt[]][] {
+  return linkAttacks(cases, now).map(([script, steps]) => [script, steps.filter((s) => !s.setup).map((s) => ({ t: s.t, user: 'u050', links: addedLinks(s.before === undefined ? [] : linkHrefs(s.before), linkHrefs(s.body)) }))]);
 }

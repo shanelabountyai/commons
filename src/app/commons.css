@@ -1,31 +1,47 @@
 /* Commons' one stylesheet (ported from Quorum's: system colours only, so both colour schemes are contrast-safe and
    axe measures what the browser renders). */
 :root { color-scheme: light dark; }
+/* 6.1 A (D-62, D-84) — native tokens, the design review §2 block: type and spacing scales, colour roles mixed from
+   system colours so both schemes stay measurable. Role text is used only where it clears 4.5:1 in light AND dark
+   (--danger, --ok, --ink-muted do; --warn does not on Canvas light, so warn tints borders, never text). */
+:root {
+ --fs-xs:.75rem;--fs-sm:.875rem;--fs-md:1rem;--fs-lg:1.25rem;--fs-xl:1.5rem;   /* 1.2 ratio */
+ --sp-1:.25rem;--sp-2:.5rem;--sp-3:.75rem;--sp-4:1rem;--sp-6:1.5rem;--sp-8:2rem;
+ --ink:CanvasText;--bg:Canvas;
+ --ink-muted:color-mix(in srgb,CanvasText 65%,Canvas);
+ --rule:color-mix(in srgb,CanvasText 20%,transparent);
+ --accent:LinkText;                 /* links, active tab, upvote */
+ --danger:color-mix(in srgb,red 70%,CanvasText);     /* error, removed, banned */
+ --warn:color-mix(in srgb,orange 70%,CanvasText);    /* gated, warned, duplicate, locked */
+ --ok:color-mix(in srgb,green 60%,CanvasText);       /* restored, cleared, notice */
+ --pin:color-mix(in srgb,CanvasText 10%,Canvas);     /* pinned row tint */
+ --target:2rem;
+}
 body { font-family: system-ui, sans-serif; line-height: 1.45; margin: 0 auto; max-width: 64rem; padding: 0 1rem 3rem; background: Canvas; color: CanvasText; }
-nav { padding: 0.75rem 0; border-bottom: 1px solid CanvasText; margin-bottom: 1rem; }
+nav { padding: 0.75rem 0; border-bottom: 1px solid var(--rule); margin-bottom: 1rem; }
 nav.tabs { border: 0; margin: 0 0 0.5rem; padding: 0; }
 nav.tabs a[aria-current='page'] { font-weight: bold; text-decoration: none; border-bottom: 2px solid CanvasText; }
-.scope { border: 1px solid CanvasText; padding: 0.25rem 0.75rem; margin: 0.5rem 0 1rem; font-size: 0.95em; }
-.meta { font-size: 0.9em; opacity: 0.85; }
-.post { margin: 0.75rem 0; padding: 0.5rem 0; border-bottom: 1px solid color-mix(in srgb, CanvasText 25%, transparent); }
+.scope { border-top: 1px solid var(--rule); color: var(--ink-muted); padding: var(--sp-2) 0; margin: var(--sp-8) 0 0; font-size: var(--fs-sm); }
+.meta { font-size: var(--fs-sm); color: var(--ink-muted); }
+.post { margin: 0.75rem 0; padding: 0.5rem 0; border-bottom: 1px solid var(--rule); }
 .body { max-width: 48rem; }
-.body pre { overflow-x: auto; padding: 0.5rem; border: 1px solid CanvasText; }
-.body blockquote { border-left: 3px solid CanvasText; margin: 0.5rem 0; padding-left: 0.75rem; }
-ol.thread, ol.thread ol { list-style: none; padding-left: 0; }
-ol.thread ol { margin-left: 1.25rem; border-left: 1px solid color-mix(in srgb, CanvasText 30%, transparent); padding-left: 0.75rem; }
+.body pre { overflow-x: auto; padding: 0.5rem; border: 1px solid var(--rule); }
+.body blockquote { border-left: 3px solid var(--rule); margin: 0.5rem 0; padding-left: 0.75rem; }
+ol.thread, ol.thread details > ol { list-style: none; padding-left: 0; }
+/* 6.1 B: one indent rule at every width — depth 6 costs 6 × 1 rem at 360 px and 6 × 2 rem at 1280 px */
+ol.thread details > ol { margin: 0 0 0 clamp(0.5rem, 2vw, 1.25rem); border-left: 1px solid var(--rule); padding-left: clamp(0.5rem, 1.5vw, 0.75rem); }
 li.c { margin: 0.5rem 0; }
-.removed { font-style: italic; opacity: 0.8; }
+.removed { font-style: italic; color: var(--ink-muted); }
 .votes form { display: inline; }
 .votes button { padding: 0 0.4rem; }
 details > summary { cursor: pointer; }
 fieldset { margin: 0.5rem 0; }
 label { display: inline-block; margin: 0.25rem 0.5rem 0.25rem 0; }
 textarea { width: 100%; max-width: 48rem; min-height: 6rem; font-family: ui-monospace, monospace; }
-[role='alert'] { border: 2px solid CanvasText; padding: 0.25rem 0.5rem; }
+[role='alert'] { border: 2px solid var(--danger); color: var(--danger); padding: 0.25rem 0.5rem; }
+[role='status'] { color: var(--ok); }
 table { border-collapse: collapse; margin: 0.5rem 0 1rem; }
-th, td { border: 1px solid CanvasText; padding: 0.25rem 0.5rem; text-align: left; vertical-align: top; }
-.pin::before { content: '📌 '; }
-.lock::before { content: '🔒 '; }
+th, td { border: 1px solid var(--rule); padding: 0.25rem 0.5rem; text-align: left; vertical-align: top; }
 
 /* 4.1.13 — targets, reflow, focus, motion (reviews: a11y S6/S7, design #8) */
 body { line-height: 1.5; }
@@ -34,9 +50,8 @@ body { line-height: 1.5; }
 main:focus { outline: none; }
 .votes button { min-width: 24px; min-height: 24px; margin-right: 4px; }
 input[type='text'], input:not([type]), input[type='search'], select { max-width: 100%; box-sizing: border-box; }
-table { display: block; max-width: 100%; overflow-x: auto; }
+table { display: block; max-width: 100%; overflow-x: auto; } /* the two forum tables carry tabIndex={0} and a name: a scroll region must be reachable by keyboard (axe scrollable-region-focusable, Phase 6 gate) */
 @media (max-width: 40rem) {
-  ol.thread ol { margin-left: 0.5rem; padding-left: 0.5rem; }
   nav { overflow-wrap: anywhere; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -50,3 +65,34 @@ table { display: block; max-width: 100%; overflow-x: auto; }
 .vote-control button[aria-pressed='true'] { font-weight: bold; outline: 2px solid CanvasText; outline-offset: 1px; }
 .vote-control .vote-state { font-size: 0.8em; margin-left: 0.25em; }
 .vote-control [role='status'], .vote-control [role='alert'] { display: inline-block; margin: 0 0 0 0.5rem; font-size: 0.85em; }
+
+/* 5.4 A — the triage queue: a text badge per item kind, a plain-text excerpt before the full body */
+.badge { font-size: var(--fs-xs); border: 1px solid var(--ink-muted); border-radius: 3px; padding: 0 0.3rem; vertical-align: middle; white-space: nowrap; }
+.badge-pin { background: var(--pin); }
+.badge-warn { border-color: var(--warn); border-width: 2px; }
+.badge-danger { border-color: var(--danger); color: var(--danger); }
+.badge-ok { border-color: var(--ok); color: var(--ok); }
+.excerpt { max-width: 48rem; margin: 0.25rem 0; }
+.filters a { margin-right: 0.75rem; }
+.filters a[aria-current='page'] { font-weight: bold; }
+
+/* 6.1 A — board row: vote cell + title/meta, 25 rows a page; the pager is one shared nav */
+.row { display: grid; grid-template-columns: 3.5rem 1fr; gap: 0 var(--sp-2); align-items: start; }
+.row > * { min-width: 0; overflow-wrap: anywhere; }
+.row .votes-cell { white-space: nowrap; }
+.row .vote-control { margin-right: 0; }
+.row.pinned { background: var(--pin); }
+.pager a { margin-right: var(--sp-2); }
+.pager a[aria-current='page'] { font-weight: bold; text-decoration: none; }
+nav.crumbs { border: 0; margin: 0; padding: var(--sp-2) 0 0; font-size: var(--fs-sm); }
+nav.crumbs ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0 var(--sp-2); }
+nav.crumbs li + li::before { content: '›'; margin-right: var(--sp-2); color: var(--ink-muted); }
+footer.scope nav { border: 0; margin: 0; padding: 0; }
+
+/* 6.1 B — the thread's type hierarchy from the scale; a heading per comment; the subtree summary is quiet */
+article[aria-label='Post'] h1 { font-size: var(--fs-xl); margin: var(--sp-2) 0; }
+h2#comments { font-size: var(--fs-lg); margin-top: var(--sp-6); }
+.body { font-size: var(--fs-md); }
+li.c { margin: var(--sp-3) 0; }
+li.c > article > h3 { display: inline-block; margin: 0 var(--sp-2) 0 0; font-weight: bold; }
+li.c > details > summary { font-size: var(--fs-sm); color: var(--ink-muted); margin: var(--sp-1) 0; }

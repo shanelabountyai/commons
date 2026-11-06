@@ -5,10 +5,12 @@ import { db } from '@/core/db';
 import { deleteOwn, RateLimited, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { toDate } from '@/forum/db';
 import { guardAndRecord, sweepLimitHits } from '@/forum/limits-store';
-import { parseLimitRules } from '@/rules';
+import { createComment } from '@/forum/tree-write';
+import { parseLimitRules, parseModerationRules } from '@/rules';
 import { makeOrg } from '../helpers/org';
 
 const rules = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
+const mod = parseModerationRules(JSON.parse(readFileSync('rules/moderation.json', 'utf8')));
 const T0 = 1_793_232_000;
 const DAY = 86_400;
 let orgId: string;
@@ -120,5 +122,116 @@ describe('the action door', () => {
     const swept = await tx((t) => sweepLimitHits(t, T0 + 10 * DAY, rules));
     expect(swept).toBe(before);
     expect(await tx((t) => guardAndRecord(t, { orgId, profileId: P.vet!, action: 'report', at: T0 + 10 * DAY }, rules))).toMatchObject({ verdict: 'allow' });
+  });
+});
+
+// PRD 5.4 B: a lock locks. What it refuses is data (rules/moderation.json lock_refuses); red before the door changed.
+describe('a locked thread refuses what lock_refuses lists', () => {
+  const T = T0 + 50 * DAY;
+  it('reply, vote and edit on a locked thread are THREAD_LOCKED (post and comment alike); nothing is recorded; unlock reverses', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-LOCK', title: 't', body: 'b', at: T }, rules));
+    const c = await tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: post.id, parentId: null, publicId: 'A-LOCK-C', body: 'c', at: T + 1 }, rules, mod));
+    const voter = await profile('lock-voter', T0 - 400 * DAY);
+    await db.post.update({ where: { id: post.id }, data: { lockedAt: toDate(T + 2) } }); // the moderator's LOCK, minus the log (moderation.test covers that)
+    const hits = await db.limitHit.count({ where: { orgId } });
+    await expect(tx((t) => submitComment(t, { orgId, profileId: voter, postId: post.id, parentId: null, publicId: 'A-LOCK-X', body: 'c', at: T + 3 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitVote(t, { orgId, profileId: voter, node: { kind: 'POST', id: post.id }, value: 1, at: T + 4 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitVote(t, { orgId, profileId: voter, node: { kind: 'COMMENT', id: c.id }, value: 1, at: T + 5 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'POST', id: post.id }, body: 'edited', at: T + 6 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'COMMENT', id: c.id }, body: 'edited', at: T + 7 }, rules, mod))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    expect(await db.limitHit.count({ where: { orgId } })).toBe(hits); // refused before the window, like a ban
+    expect(await db.voteEvent.count({ where: { nodeId: post.id } })).toBe(0);
+    expect(await db.editHistory.count({ where: { nodeId: post.id } })).toBe(0);
+    await db.post.update({ where: { id: post.id }, data: { lockedAt: null } });
+    await expect(tx((t) => submitVote(t, { orgId, profileId: voter, node: { kind: 'COMMENT', id: c.id }, value: 1, at: T + 8 }, rules, mod))).resolves.toMatchObject({ outcome: 'APPLIED' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'POST', id: post.id }, body: 'edited', at: T + 9 }, rules, mod))).resolves.toMatchObject({ withinWindow: true }); // 9 s after posting: inside the edit window
+  });
+  it('the set is data: with lock_refuses = ["reply"] a vote on a locked thread goes through; without rules the door takes the strictest reading', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-LOCK2', title: 't', body: 'b', at: T + 100 }, rules));
+    const voter = await profile('lock-voter2', T0 - 400 * DAY);
+    await db.post.update({ where: { id: post.id }, data: { lockedAt: toDate(T + 101) } });
+    const replyOnly = { ...mod, lock_refuses: ['reply' as const] };
+    await expect(tx((t) => submitVote(t, { orgId, profileId: voter, node: { kind: 'POST', id: post.id }, value: 1, at: T + 102 }, rules, replyOnly))).resolves.toMatchObject({ outcome: 'APPLIED' });
+    await expect(tx((t) => submitComment(t, { orgId, profileId: voter, postId: post.id, parentId: null, publicId: 'A-LOCK2-C', body: 'c', at: T + 103 }, rules, replyOnly))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+    await expect(tx((t) => submitEdit(t, { orgId, editorId: P.vet!, node: { kind: 'POST', id: post.id }, body: 'edited', at: T + 104 }, rules))).rejects.toMatchObject({ code: 'THREAD_LOCKED' });
+  });
+});
+
+
+// PRD 6.4 (D-93): the profile+post comment window (history = the member's Comment rows on the post) and max_depth_written
+describe('thread window and depth cap at the door', () => {
+  const T = T0 + 100 * DAY;
+  const hits = () => db.limitHit.count({ where: { profileId: P.vet!, action: 'comment' } });
+  it('refuses the 11th reply to one post in an hour with RATE_LIMITED, and allows a reply to another post', async () => {
+    const [a, b] = await Promise.all(['A-T1', 'A-T2'].map((publicId, i) => tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId, title: 't', body: 'b', at: T - 7200 + 3600 * i }, rules))));
+    for (let i = 0; i < 10; i++) await tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: a!.id, parentId: null, publicId: `A-T1-C${i}`, body: 'c', at: T + 70 * i }, rules));
+    const before = await hits();
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: a!.id, parentId: null, publicId: 'A-T1-C10', body: 'c', at: T + 700 }, rules))).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'comment', retryAfter: 2900 });
+    expect(await hits()).toBe(before); // the refusal rolled back the profile row's hit
+    expect(await db.comment.count({ where: { postId: a!.id } })).toBe(10);
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: b!.id, parentId: null, publicId: 'A-T2-C0', body: 'c', at: T + 770 }, rules))).resolves.toMatchObject({ depth: 0 });
+  });
+  it('allows a reply at depth 32 and refuses one at depth 33 with INPUT_INVALID, writing no LimitHit', async () => {
+    const post = await tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId: 'A-D32', title: 't', body: 'b', at: T + DAY - 3 * 3600 }, rules));
+    let parentId: string | null = null; // a 32-deep chain (depths 0..31) through the tree writer, not the door, two hours back so the thread window is clear
+    for (let d = 0; d < 32; d++) parentId = (await tx((t) => createComment(t, { orgId, postId: post.id, parentId, authorId: P.vet!, publicId: `A-D32-${d}`, body: 'c', createdAt: T + DAY - 2 * 3600 + d }))).id;
+    const at32 = await tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: post.id, parentId, publicId: 'A-D32-32', body: 'c', at: T + DAY + 400 }, rules));
+    expect(at32.depth).toBe(32);
+    const before = await hits();
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: post.id, parentId: at32.id, publicId: 'A-D32-33', body: 'c', at: T + DAY + 800 }, rules))).rejects.toMatchObject({ code: 'INPUT_INVALID', message: expect.stringMatching(/Too deep to reply here/) });
+    expect(await hits()).toBe(before);
+  });
+});
+
+// PRD 7.2 (D-100): the profile link window; the history is the links in the member's own Post and Comment bodies
+describe('link window at the door', () => {
+  const T = T0 + 200 * DAY;
+  it('refuses the 6th link of the day with RATE_LIMITED (action link), across posts and comments; a body with no link is unaffected', async () => {
+    const post = (publicId: string, body: string, at: number) => tx((t) => submitPost(t, { orgId, profileId: P.vet!, boardId, publicId, title: 't', body, at }, rules));
+    for (let i = 0; i < 5; i++) await post(`A-L${i}`, `deal ${i}: [here](https://h${i}.example/nas)`, T + 780 * i);
+    const hits = await db.limitHit.count({ where: { profileId: P.vet!, action: 'post' } });
+    await expect(post('A-L5', 'deal 5: [here](https://h5.example/nas)', T + 3900)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link', retryAfter: 82_500 });
+    expect(await db.limitHit.count({ where: { profileId: P.vet!, action: 'post' } })).toBe(hits); // rolled back, post slot included
+    expect(await db.post.count({ where: { publicId: 'A-L5' } })).toBe(0);
+    const plain = await post('A-L6', 'no link, bare https://h6.example is not counted', T + 4680);
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: plain.id, parentId: null, publicId: 'A-L6-C0', body: '[x](https://h7.example)', at: T + 4700 }, rules))).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link' });
+    await expect(tx((t) => submitComment(t, { orgId, profileId: P.vet!, postId: plain.id, parentId: null, publicId: 'A-L6-C1', body: '[x](https://h7.example)', at: T + DAY + 1 }, rules))).resolves.toMatchObject({ depth: 0 });
+  });
+});
+
+// PRD 7.3 (D-104): a link is every anchor the renderer emits; an edit asks the window for each href it adds; the
+// history is the member's LimitHit rows with action 'link', so removing a link frees no slot
+describe('link window: every syntax, and edits', () => {
+  const T = T0 + 300 * DAY;
+  const post = (who: string, publicId: string, body: string, at: number) => tx((t) => submitPost(t, { orgId, profileId: P[who]!, boardId, publicId, title: 't', body, at }, rules));
+  const edit = (who: string, id: string, body: string, at: number) => tx((t) => submitEdit(t, { orgId, editorId: P[who]!, node: { kind: 'POST', id }, body, at }, rules));
+  const history = (id: string) => db.editHistory.count({ where: { nodeId: id } });
+
+  it('refuses the 6th autolink of the day at submitPost', async () => {
+    for (let i = 0; i < 5; i++) await post('vet', `B-A${i}`, `deal ${i}: <https://a${i}.example/nas>`, T + 780 * i);
+    await expect(post('vet', 'B-A5', 'deal 5: <https://a5.example/nas>', T + 3900)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link', retryAfter: 82_500 });
+    expect(await db.limitHit.count({ where: { profileId: P.vet!, action: 'link', at: { gte: toDate(T) } } })).toBe(5);
+  });
+
+  it('an edit adding the 6th link is refused and writes no EditHistory row; rewording around the links asks nothing; removing one frees no slot', async () => {
+    const U = T + 10 * DAY;
+    const five = [0, 1, 2, 3, 4].map((i) => `[l${i}](https://e${i}.example)`).join(' ');
+    const p = await post('vet', 'B-E0', `five: ${five}`, U);
+    await expect(edit('vet', p.id, `five: ${five} [l5](https://e5.example)`, U + 60)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link', retryAfter: DAY - 60 });
+    expect(await history(p.id)).toBe(0);
+    await expect(edit('vet', p.id, `reworded, same five: ${five}`, U + 120)).resolves.toBeDefined();
+    const four = [0, 1, 2, 3].map((i) => `[l${i}](https://e${i}.example)`).join(' ');
+    await expect(edit('vet', p.id, `four now: ${four}`, U + 180)).resolves.toBeDefined();
+    await expect(edit('vet', p.id, `back to five: ${five}`, U + 240)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link' });
+    expect(await history(p.id)).toBe(2);
+  });
+
+  it("a young member's 3rd edited-in link is refused", async () => {
+    const V = T + 20 * DAY;
+    await profile('newbie', V - 3600);
+    const p = await post('newbie', 'B-Y0', 'link to follow', V);
+    await edit('newbie', p.id, 'one <https://y1.example>', V + 60);
+    await edit('newbie', p.id, 'one <https://y1.example> two <https://y2.example>', V + 120);
+    await expect(edit('newbie', p.id, 'one <https://y1.example> two <https://y2.example> three <https://y3.example>', V + 180)).rejects.toMatchObject({ code: 'RATE_LIMITED', action: 'link', retryAfter: DAY - 120 });
   });
 });

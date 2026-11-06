@@ -1,7 +1,7 @@
 // GL-01..GL-14 (brief §4) and the V- rules in TypeScript (tasks 1.7, 1.8).
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { checkLimit, downvoteAllowed, isYoung, replay } from '@/limits';
+import { addedLinks, checkLimit, checkLinks, downvoteAllowed, isYoung, replay, replayComments, replayLinks } from '@/limits';
 import { parseLimitRules } from '@/rules';
 import { reduceVotes, type VoteEventIn } from '@/votes';
 
@@ -38,9 +38,64 @@ describe('sliding window (L-3, L-4)', () => {
     expect(checkLimit([0, 1, 2, 3, 4].map((i) => T0 + i), 'comment', false, T0 + 5, rules).verdict).toBe('allow');
     expect(checkLimit([0, 1, 2, 3, 4, 5].map((i) => T0 + i), 'comment', false, T0 + 6, rules).verdict).toBe('refuse');
   });
+  // PRD 6.4 (D-93): the profile+post comment window and max_depth_written
+  const aged = { a: T0 - 30 * DAY };
+  const many = () => 100;
+  it('GL-23 thread window 10/3600 s: 9 allow, 10 refuse with retryAfter 3590', () => {
+    expect(checkLimit([0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => T0 + i), 'comment', false, T0 + 9, rules, 'profile+post')).toEqual({ verdict: 'allow' });
+    expect(checkLimit([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => T0 + i), 'comment', false, T0 + 10, rules, 'profile+post')).toEqual({ verdict: 'refuse', retryAfter: 3590 });
+  });
+  it('GL-24 young thread window is 3', () => {
+    expect(checkLimit([T0, T0 + 100], 'comment', true, T0 + 200, rules, 'profile+post').verdict).toBe('allow');
+    expect(checkLimit([T0, T0 + 100, T0 + 200], 'comment', true, T0 + 300, rules, 'profile+post').verdict).toBe('refuse');
+  });
+  it('the profile rows are unchanged by the scoped row', () => {
+    expect(checkLimit([0, 1, 2, 3, 4].map((i) => T0 + i), 'comment', false, T0 + 5, rules)).toEqual({ verdict: 'allow' });
+    expect(checkLimit([T0, T0 + 1], 'comment', true, T0 + 2, rules)).toEqual({ verdict: 'refuse', retryAfter: 58 });
+  });
+  it('GL-25 the scoped row refuses the 11th comment on one post in an hour, and allows a 7th on another post', () => {
+    const onOne = replayComments(Array.from({ length: 11 }, (_, i) => ({ t: T0 + 70 * i, user: 'a', post: 'P1', depth: 0 })), aged, many, rules);
+    expect(onOne).toEqual({ allowed: 10, refused: 1, firstRetryAfter: 3600 - 700 });
+    const split = replayComments(Array.from({ length: 11 }, (_, i) => ({ t: T0 + 70 * i, user: 'a', post: i < 4 ? 'P1' : 'P2', depth: 0 })), aged, many, rules);
+    expect(split).toEqual({ allowed: 11, refused: 0, firstRetryAfter: null });
+  });
+  it('GL-26 max_depth_written 32: depth 32 allowed, 33 refused with no retryAfter, and it spends no slot', () => {
+    const r = replayComments([{ t: T0, user: 'a', post: 'P', depth: 32 }, { t: T0 + 100, user: 'a', post: 'P', depth: 33 }], aged, many, rules);
+    expect(r).toEqual({ allowed: 1, refused: 1, firstRetryAfter: null });
+  });
   it('replay: 100 young votes at 1/s allows 20 (two windows), first retryAfter 50', () => {
     const r = replay(Array.from({ length: 100 }, (_, i) => T0 + i), 'vote', { created_at: T0 - 3600, contributionsAt: () => 0 }, rules);
     expect(r).toEqual({ allowed: 20, refused: 80, firstRetryAfter: 50 });
+  });
+});
+
+// PRD 7.2 (D-100): the profile link window, one slot per markdown link, the body's own links counting
+describe('link window', () => {
+  const aged = { a: T0 - 30 * DAY };
+  const many = () => 100;
+  it('GL-31 an edit asks for the hrefs it adds (multiset): rewording 0, removing 0, a second copy of an href 1', () => {
+    expect([addedLinks(['a', 'b'], ['b', 'a']), addedLinks(['a', 'b'], ['a']), addedLinks(['a'], ['a', 'a'])]).toEqual([0, 0, 1]);
+  });
+  it('GL-32 a swap asks one slot: 5 one-link posts, then moving one link to a new host is refused at 82,500', () => {
+    const swap = [...[0, 1, 2, 3, 4].map((i) => ({ t: T0 + 780 * i, user: 'a', links: 1 })), { t: T0 + 3900, user: 'a', links: addedLinks(['h0'], ['h5']) }];
+    expect(replayLinks(swap, aged, many, rules)).toEqual({ allowed: 5, refused: 1, firstRetryAfter: 82_500 });
+  });
+  it('GL-27 the 6th link in 24 h is refused with retryAfter from the oldest', () => {
+    expect(checkLinks([0, 1, 2, 3].map((i) => T0 + i), 1, false, T0 + 400, rules)).toEqual({ verdict: 'allow' });
+    expect(checkLinks([0, 100, 200, 300, 400].map((i) => T0 + i), 1, false, T0 + 500, rules)).toEqual({ verdict: 'refuse', retryAfter: 85_900 });
+  });
+  it('GL-28 the 3rd link in 24 h is refused for a young member', () => {
+    expect(checkLinks([T0], 1, true, T0 + 3600, rules).verdict).toBe('allow');
+    expect(checkLinks([T0, T0 + 3600], 1, true, T0 + 7200, rules).verdict).toBe('refuse');
+  });
+  it('GL-29 a body needs one slot per link: a 3-link body on a 3-link history is refused whole', () => {
+    expect(checkLinks([T0, T0 + 1], 3, false, T0 + 10, rules)).toEqual({ verdict: 'allow' });
+    expect(checkLinks([T0, T0 + 1, T0 + 2], 3, false, T0 + 10, rules)).toEqual({ verdict: 'refuse', retryAfter: 86_390 });
+    const r = replayLinks([0, 1, 2].map((i) => ({ t: T0 + i, user: 'a', links: 1 })).concat({ t: T0 + 10, user: 'a', links: 3 }), aged, many, rules);
+    expect(r).toEqual({ allowed: 3, refused: 1, firstRetryAfter: 86_390 });
+  });
+  it('the attack: 20 one-link posts 13 min apart from an aged account allow 5, refuse 15, retryAfter 82500', () => {
+    expect(replayLinks(Array.from({ length: 20 }, (_, i) => ({ t: T0 + 780 * i, user: 'a', links: 1 })), aged, many, rules)).toEqual({ allowed: 5, refused: 15, firstRetryAfter: 82_500 });
   });
 });
 

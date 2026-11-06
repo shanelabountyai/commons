@@ -25,6 +25,7 @@ export default async function Search({ params, searchParams }: { params: Promise
           <h2>
             Posts ({r.posts.length}) for “<Text value={q} />”
           </h2>
+          {r.posts.length === 0 && <p>No posts match.</p>}
           <ul>
             {r.posts.map((p) => (
               <li key={p.publicId}>
@@ -35,6 +36,7 @@ export default async function Search({ params, searchParams }: { params: Promise
             ))}
           </ul>
           <h2>Comments ({r.comments.length})</h2>
+          {r.comments.length === 0 && <p>No comments match.</p>}
           <ul>
             {r.comments.map((c) => (
               <li key={c.publicId}>

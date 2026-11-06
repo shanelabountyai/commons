@@ -13,6 +13,8 @@ export type NodeStatus = 'visible' | 'deleted' | 'removed';
 export type User = { id: string; handle: string; created_at: number; banned_until: number | null };
 export type Post = { id: string; board: string; author: string; created_at: number; status: NodeStatus };
 export type Comment = { id: string; post_id: string; parent_id: string; author: string; created_at: number; status: NodeStatus };
+export type LinkCase = { id: string; syntax: string; body: string; anchors: number; counted_7_2: number };
+export type Board = { slug: string; title: string };
 export type VoteEvent = { row: number; voter: string; node_id: string; value: 1 | -1; cast_at: number; note: string };
 
 const int = (row: CsvRow, field: string, file: string): number => {
@@ -57,7 +59,14 @@ export function loadFixtures(dir = FIXTURES_DIR) {
     if (value !== 1 && value !== -1) throw new InputInvalid('votes.csv.value', `must be 1 or -1, got ${value}`);
     return { row: i + 2, voter: r['voter']!, node_id: r['node_id']!, value, cast_at: int(r, 'cast_at', 'votes.csv'), note: r['note'] ?? '' };
   });
-  return { users, posts, comments, votes };
+  const boards: Board[] = readFixture('boards.csv', dir).map((r) => ({ slug: r['slug']!, title: r['title']! }));
+  // PRD 7.1 (D-98): the additive text fixture, keyed by node id; no expected file depends on it
+  const text = new Map(readFixture('community/bodies.csv', dir).map((r) => [r['node_id']!, { title: r['title']!, body: r['body']! }]));
+  // PRD 7.2 (D-100): the organic reports, for the community report-swarm check
+  const reports = readFixture('community/reports.csv', dir).map((r, i) => ({ row: i + 2, reporter: r['reporter']!, node_id: r['node_id']!, reported_at: int(r, 'reported_at', 'community/reports.csv') }));
+  // PRD 7.3 (D-104): one body per markdown link syntax, with the anchors the renderer emits for it
+  const links = (JSON.parse(readFileSync(join(dir, 'links', 'cases.json'), 'utf8')) as { cases: LinkCase[] }).cases;
+  return { users, posts, comments, votes, boards, text, reports, links };
 }
 export type Fixtures = ReturnType<typeof loadFixtures>;
 

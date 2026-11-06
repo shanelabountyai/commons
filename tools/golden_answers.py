@@ -95,6 +95,51 @@ check("GL-11", "a hit 59 s old is still counted", limit_check([T0, T0 + 1], "com
 check("GL-12", "retryAfter floor is 1 s", limit_check([T0 - 59, T0 - 59], "comment", True, T0)[1], 1)
 check("GL-13", "regular comment limit is 6: 5 hits allow", limit_check([T0 + i for i in range(5)], "comment", False, T0 + 5)[0], "allow")
 check("GL-14", "regular comment limit is 6: 6 hits refuse", limit_check([T0 + i for i in range(6)], "comment", False, T0 + 6)[0], "refuse")
+check("GL-15", "young upload window: first upload allowed", limit_check([], "upload", True, T0), ("allow", None))
+check("GL-16", "young upload window: second upload 10 s later allowed", limit_check([T0], "upload", True, T0 + 10), ("allow", None))
+check("GL-17", "young upload window: third refused, retryAfter = T0 + 3600 - (T0 + 20) = 3580", limit_check([T0, T0 + 10], "upload", True, T0 + 20), ("refuse", 3580))
+check("GL-18", "regular upload window is 10 per hour: 9 hits allow, 10 refuse",
+      (limit_check([T0 + i for i in range(9)], "upload", False, T0 + 9)[0], limit_check([T0 + i for i in range(10)], "upload", False, T0 + 10)[0]), ("allow", "refuse"))
+
+# PRD 6.4 (D-93): the profile+post comment window and max_depth_written (depth per T-2: top level is 0)
+from limitslib import replay_comments, MAX_DEPTH_WRITTEN  # noqa: E402
+check("GL-23", "thread window 10/3600 s: 9 hits on the post allow, 10 refuse with retryAfter 3590",
+      (limit_check([T0 + i for i in range(9)], "comment", False, T0 + 9, "profile+post"), limit_check([T0 + i for i in range(10)], "comment", False, T0 + 10, "profile+post")), (("allow", None), ("refuse", 3590)))
+check("GL-24", "young thread window is 3: 2 hits allow, 3 refuse",
+      (limit_check([T0, T0 + 100], "comment", True, T0 + 200, "profile+post")[0], limit_check([T0, T0 + 100, T0 + 200], "comment", True, T0 + 300, "profile+post")[0]), ("allow", "refuse"))
+check("GL-25", "the window is per post: an 11th comment in the hour on another post is allowed",
+      replay_comments([(T0 + 70 * i, "a", "P1" if i < 10 else "P2", 0) for i in range(11)], {"a": T0 - 30 * 86400}, lambda u, t: 100)[:2], (11, 0))
+check("GL-26", "max_depth_written 32: a reply at depth 32 is allowed, at 33 refused with no retryAfter",
+      (MAX_DEPTH_WRITTEN, replay_comments([(T0, "a", "P", 32), (T0 + 100, "a", "P", 33)], {"a": T0 - 30 * 86400}, lambda u, t: 100)), (32, (1, 1, None)))
+
+# PRD 7.2 (D-100): the link window 5/86400 s (young 2), one slot per markdown link
+from limitslib import replay_links  # noqa: E402
+from community_text_lib import hosts as link_hosts  # noqa: E402
+check("GL-27", "link window 5/86400 s: 4 links allow a 5th, 5 refuse a 6th with retryAfter 85900",
+      (limit_check([T0 + i for i in range(4)], "link", False, T0 + 400), limit_check([T0 + 100 * i for i in range(5)], "link", False, T0 + 500)), (("allow", None), ("refuse", 85900)))
+check("GL-28", "young link window is 2: 2 links in a day refuse a 3rd",
+      limit_check([T0, T0 + 3600], "link", True, T0 + 7200)[0], "refuse")
+check("GL-29", "a body's own links count: 3 links on a 3-link history allow 2, the third refuses the body",
+      replay_links([(T0 + i, "a", 1) for i in range(3)] + [(T0 + 10, "a", 3)], {"a": T0 - 30 * 86400}, lambda u, t: 100), (3, 1, 86390))
+check("GL-30", "hosts come from markdown links only: a bare URL and an autolink are not counted",
+      link_hosts("see [x](https://a.example/p) and https://b.example and <https://c.example>"), ["a.example"])
+# GL-30 is the oracle's extraction for the community side (it agrees with the renderer on all 5,500 bodies, D-103);
+# from PRD 7.3 the product counts what the renderer emits (linkHrefs), autolinks included.
+
+# PRD 7.3 (D-104): an edit asks one slot per href it adds (multiset difference)
+from limitslib import added_links  # noqa: E402
+check("GL-31", "an edit asks for the hrefs it adds: rewording asks 0, removing asks 0, adding a duplicate href asks 1",
+      (added_links(["a", "b"], ["b", "a"]), added_links(["a", "b"], ["a"]), added_links(["a"], ["a", "a"])), (0, 0, 1))
+check("GL-32", "a swap asks one slot: 5 one-link posts, then an edit moving one link to a new host is refused at 82500",
+      replay_links([(T0 + 780 * i, "a", 1) for i in range(5)] + [(T0 + 3900, "a", added_links(["h0"], ["h5"]))], {"a": T0 - 30 * 86400}, lambda u, t: 100), (5, 1, 82500))
+
+# PRD 6.2 (D-87): per-post count and the pixel cap, through tools/uploadlib.py
+from uploadlib import parse as upload_parse, per_post_allowed  # noqa: E402
+from build_upload_fixtures import ihdr, png  # noqa: E402
+check("GL-19", "a post holding 3 attachments takes a fourth", per_post_allowed(3), True)
+check("GL-20", "a post holding 4 attachments refuses a fifth", per_post_allowed(4), False)
+check("GL-21", "5000 x 5000 = 25 000 000 px, exactly max_pixels, is allowed", upload_parse("image/png", png(ihdr(5000, 5000)))["verdict"], "allow")
+check("GL-22", "1 x 25 000 001 px, one over max_pixels, is refused", (upload_parse("image/png", png(ihdr(1, 25_000_001)))["verdict"], upload_parse("image/png", png(ihdr(1, 25_000_001)))["reason"]), ("refuse", "too_many_pixels"))
 
 # PRD 5.2 (D-75): one case per signal scenario, from fixtures/signals/scenarios.json through signallib.
 from signallib import detect, load_scenarios  # noqa: E402

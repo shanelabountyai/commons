@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { can } from '@/core/authz/permissions';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
+import { ScopeNote } from '@/components/forum';
 
 // Navigation only. Layouts do not re-run on every navigation, so each page calls requireOrg itself.
 export default async function OrgLayout({ children, params }: { children: React.ReactNode; params: Promise<{ org: string }> }) {
@@ -21,9 +22,9 @@ export default async function OrgLayout({ children, params }: { children: React.
         {mod && <> · <Link href={`${base}/f/mod`}>Mod queue</Link></>}
         {' · '}<Link href={`${base}/settings/members`}>Members</Link>
         {' · '}<Link href="/onboarding">Your orgs</Link> · <Link href="/account/security">Account</Link>
-        {can(ctx.role, 'org.delete') && <> · <Link href={`${base}/settings/danger`} className="meta">Settings: delete org</Link></>}
       </nav>
       {children}
+      <ScopeNote>{can(ctx.role, 'org.delete') && <p><Link href={`${base}/settings/danger`}>Settings: delete org</Link></p>}</ScopeNote>
     </>
   );
 }

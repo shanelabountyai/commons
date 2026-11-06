@@ -2,20 +2,27 @@
 // src/tree because it must touch Prisma). The path and depth come from src/tree's segment math; the ordinal is the
 // creation order among siblings, taken under a per-parent advisory lock so two simultaneous replies get different
 // segments (task 2.3). The author's fixed +1 (D-12) is written as a Vote row in the same transaction.
-import { segment } from '@/tree';
+import { depthOf, segment } from '@/tree';
 import { ForumRefused, lockKey, toDate, type Tx } from './db';
 
-export type NewPost = { orgId: string; boardId: string; authorId: string; publicId: string; title: string; body: string; createdAt: number };
-export type NewComment = { orgId: string; postId: string; parentId: string | null; authorId: string; publicId: string; body: string; createdAt: number };
+export type NewPost = { orgId: string; boardId: string; authorId: string; publicId: string; title: string; body: string; createdAt: number; bodyHash?: string };
+export type NewComment = { orgId: string; postId: string; parentId: string | null; authorId: string; publicId: string; body: string; createdAt: number; bodyHash?: string };
 
 export async function createPost(tx: Tx, p: NewPost): Promise<{ id: string }> {
   const at = toDate(p.createdAt);
   const post = await tx.post.create({
-    data: { orgId: p.orgId, boardId: p.boardId, authorId: p.authorId, publicId: p.publicId, title: p.title, body: p.body, createdAt: at, ups: 1 },
+    data: { orgId: p.orgId, boardId: p.boardId, authorId: p.authorId, publicId: p.publicId, title: p.title, body: p.body, bodyHash: p.bodyHash, createdAt: at, ups: 1 },
     select: { id: true },
   });
   await tx.vote.create({ data: { orgId: p.orgId, voterId: p.authorId, nodeKind: 'POST', nodeId: post.id, value: 1, castAt: at } });
   return post;
+}
+
+/** PRD 6.4 (D-93): the depth a reply under `parentId` would get (T-2; top level 0). An unknown parent reads as top
+ *  level here and is refused by createComment (TREE_INVALID). */
+export async function replyDepth(tx: Tx, parentId: string | null): Promise<number> {
+  const parent = parentId ? await tx.comment.findUnique({ where: { id: parentId }, select: { path: true } }) : null;
+  return parent ? depthOf(parent.path) + 1 : 0;
 }
 
 /**
@@ -38,7 +45,7 @@ export async function createComment(tx: Tx, c: NewComment): Promise<{ id: string
   const depth = path.length / 6 - 1;
   const at = toDate(c.createdAt);
   const row = await tx.comment.create({
-    data: { orgId: c.orgId, postId: c.postId, parentId: c.parentId, authorId: c.authorId, publicId: c.publicId, path, depth, body: c.body, createdAt: at, ups: 1 },
+    data: { orgId: c.orgId, postId: c.postId, parentId: c.parentId, authorId: c.authorId, publicId: c.publicId, path, depth, body: c.body, bodyHash: c.bodyHash, createdAt: at, ups: 1 },
     select: { id: true, path: true, depth: true },
   });
   await tx.vote.create({ data: { orgId: c.orgId, voterId: c.authorId, nodeKind: 'COMMENT', nodeId: row.id, value: 1, castAt: at } });

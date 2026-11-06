@@ -18,8 +18,10 @@ sys.path.insert(0, HERE)
 from rankinglib import hot, wilson_lower, top_window_includes  # noqa: E402
 from votelib import reduce_votes  # noqa: E402
 from treelib import assign_paths, depth, render, permalink  # noqa: E402
-from limitslib import replay  # noqa: E402
+from limitslib import replay, replay_comments, replay_links  # noqa: E402
+import community_text_lib  # noqa: E402
 from signallib import expected_rows as signal_rows, load_scenarios  # noqa: E402
+from modlib import expected_rows as swarm_rows, load_scenarios as load_mod_scenarios  # noqa: E402
 
 FIX = os.path.join(HERE, "..", "fixtures")
 T0 = 1_793_232_000
@@ -29,8 +31,11 @@ NAMED_THREADS = ["P-THICK", "P-CHAIN", "P-GW"]
 EXPECTED = ["expected_post_order_hot.csv", "expected_post_order_top_day.csv", "expected_post_order_top_week.csv",
             "expected_post_order_top_all.csv", "expected_post_order_new.csv", "expected_comment_order_best.csv",
             "expected_counts.csv", "expected_vote_outcomes.csv", "expected_tree.csv", "expected_pages.csv",
-            "expected_permalink.csv", "expected_limits.csv", "signals/expected_signals.csv"]
-INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json", "signals/scenarios.json"]
+            "expected_permalink.csv", "expected_limits.csv", "signals/expected_signals.csv",
+            "moderation/expected_report_signals.csv"]
+INPUTS = ["users.csv", "boards.csv", "posts.csv", "comments.csv", "votes.csv", "xss/cases.json", "links/cases.json", "signals/scenarios.json",
+          "moderation/scenarios.json", "uploads/cases.json", "community/bodies.csv", "community/reports.csv",
+          "community/reposts.csv"]
 
 
 def read(name):
@@ -137,6 +142,7 @@ def compute(users, posts, comments, votes):
     scripts.append(("spam-young-comments", "comment", "u193", [t0 + i for i in range(60)]))
     scripts.append(("spam-young-posts", "post", "u193", [t0 + 60 * i for i in range(20)]))
     scripts.append(("spam-young-votes", "vote", "u193", [t0 + i for i in range(100)]))
+    scripts.append(("spam-young-uploads", "upload", "u193", [t0 + 10 * i for i in range(30)]))  # PRD 6.2 (D-87)
     # normal user: replay u050's own fixture activity through every window
     normal = "u050"
     acts = {"post": sorted(p["created_at"] for p in posts if p["author"] == normal),
@@ -148,9 +154,43 @@ def compute(users, posts, comments, votes):
     for name, action, user, attempts in scripts:
         a, r, first = replay(attempts, action, accounts[user], lambda t, u=user: contributions_at(u, t))
         limit_rows.append({"script": name, "action": action, "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
+    # PRD 6.4 (D-93): the thread window and the depth cap. Attempts are (t, user, post, depth); depth per T-2.
+    community = []
+    for pid, cs in by_post.items():
+        paths = assign_paths(cs)
+        community += [(c["created_at"], c["author"], pid, depth(paths[c["id"]])) for c in cs]
+    community.sort()
+    comment_scripts = [
+        ("spam-flood-thread", "u050", [(t0 + 10 * i, "u050", "P-FLOOD", 0) for i in range(360)], ("profile", "profile+post")),
+        ("normal-community-thread", None, community, ("profile+post",)),
+        ("spam-deep-chain", "u050", [(NOW - 60 * 400 + 400 * i, "u050", "P-DEEP", i) for i in range(60)], ("profile", "profile+post")),
+        ("normal-community-depth", None, community, ()),
+    ]
+    for name, _, attempts, scopes in comment_scripts:
+        a, r, first = replay_comments(attempts, accounts, contributions_at, scopes)
+        limit_rows.append({"script": name, "action": "comment", "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
+    # PRD 7.2 (D-100): the link window. Attempts are (t, user, links); hosts from markdown links (community_text_lib)
+    attack = [(t0 + 780 * i, "u050", 1) for i in range(20)]  # 20 posts, 20 hosts, one every 13 min
+    linked = sorted((n["created_at"], n["author"], len(community_text_lib.hosts(n["body"])), n["id"])
+                    for n in community_text_lib.nodes() if community_text_lib.hosts(n["body"]))
+    for name, attempts in (("spam-link-rotation", attack), ("normal-community-links", [a[:3] for a in linked])):
+        a, r, first = replay_links(attempts, accounts, contributions_at)
+        limit_rows.append({"script": name, "action": "link", "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
+    # PRD 7.3 (D-104): the three bypasses. Each body or edit adds one link by construction, so no parser is needed here.
+    # Rotation: the ten uncounted syntaxes (links/cases.json) twice each, at the 7.2 timing. Edit-in: 20 link-free posts
+    # 13 min apart (they ask nothing), then 20 edits a minute apart, each adding a link. Swap: 5 one-link posts, then
+    # 15 hourly edits, each replacing the link with a new host (one added href each).
+    t7 = t0 + 780 * 20
+    for name, attempts in (("spam-link-syntax-rotation", attack),
+                           ("spam-link-edit-in", [(t7 + 60 * j, "u050", 1) for j in range(20)]),
+                           ("spam-link-edit-swap", attack[:5] + [(t0 + 780 * 5 + 3600 * j, "u050", 1) for j in range(15)])):
+        a, r, first = replay_links(attempts, accounts, contributions_at)
+        limit_rows.append({"script": name, "action": "link", "attempts": len(attempts), "allowed": a, "refused": r, "first_retry_after": "" if first is None else first})
     out["expected_limits.csv"] = limit_rows
     # PRD 5.2 (D-75): the additive signal scenarios, computed by signallib from their own inputs
     out["signals/expected_signals.csv"] = signal_rows(load_scenarios(FIX))
+    # PRD 5.4 B: report-swarm scenarios, computed by modlib from their own inputs
+    out["moderation/expected_report_signals.csv"] = swarm_rows(load_mod_scenarios(FIX))
     return out, counts
 
 
@@ -172,10 +212,13 @@ def table(out):
         lines.append(f"limits {r['script']:28s}: {r['attempts']:3d} attempts, {r['allowed']:3d} allowed, {r['refused']:3d} refused, first retryAfter {r['first_retry_after']}")
     for r in out["signals/expected_signals.csv"]:
         lines.append(f"signal {r['scenario']:18s}: {r['kind']:12s} on {r['node']} voters {r['voters']}")
+    for r in out["moderation/expected_report_signals.csv"]:
+        lines.append(f"swarm  {r['scenario']:18s}: REPORT_SWARM on {r['author']} reporters {r['reporters']}")
     return "\n".join(lines)
 
 
-FIELDS = {"signals/expected_signals.csv": ["scenario", "kind", "node", "voters", "window_start"], "expected_post_order_hot.csv": ["rank", "post_id", "score"], "expected_post_order_top_day.csv": ["rank", "post_id", "score"],
+FIELDS = {"signals/expected_signals.csv": ["scenario", "kind", "node", "voters", "window_start"], "moderation/expected_report_signals.csv": ["scenario", "author", "reporters", "window_start"],
+          "expected_post_order_hot.csv": ["rank", "post_id", "score"], "expected_post_order_top_day.csv": ["rank", "post_id", "score"],
           "expected_post_order_top_week.csv": ["rank", "post_id", "score"], "expected_post_order_top_all.csv": ["rank", "post_id", "score"],
           "expected_post_order_new.csv": ["rank", "post_id", "score"]}
 

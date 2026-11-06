@@ -12,7 +12,7 @@ import { orgAction, ref } from '@/core/authz/action';
 import type { OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
-import { deleteOwn as deleteOwnNode, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
+import { checkLine, deleteOwn as deleteOwnNode, submitComment, submitEdit, submitPost, submitVote } from '@/forum/actions';
 import { ForumRefused } from '@/forum/db';
 import { refusalText } from '@/forum/refusals';
 import { actOnContent, actOnThread, actOnUser, reviewSignal, setModerator, submitReport } from '@/forum/moderation';
@@ -48,6 +48,25 @@ export const newPost = orgAction(null, z.object({ boardId: ref('board'), title: 
     refused(e);
   }
   redirect(`${base(ctx.slug)}/p/${publicId}`);
+});
+
+/** PRD 6.3 (D-90): owner and admin say what a board is for. Trimmed; '' clears; one line, ≤ 300 chars. Template audit
+ *  only: the mod log records actions on members and content, and a description is neither. */
+export const describeBoard = orgAction('org.update', z.object({ boardId: ref('board'), description: z.string() }), async (ctx, i) => {
+  const board = await db.board.findFirst({ where: { id: i.boardId, orgId: ctx.orgId } });
+  if (!board) notFound(); // INV-04
+  const to = i.description.trim();
+  try {
+    if (to) checkLine('description', to, 300);
+    await db.$transaction(async (tx) => {
+      await tx.board.update({ where: { id: board.id }, data: { description: to } });
+      await audit(ctx, 'forum.board.describe', { targetType: 'board', targetId: board.id, data: { from: board.description, to } }, tx);
+    });
+  } catch (e) {
+    refused(e);
+  }
+  revalidatePath(base(ctx.slug), 'layout'); // the Boards page and the board page both show it
+  redirect(`${base(ctx.slug)}/${board.slug}`);
 });
 
 export const reply = orgAction(null, z.object({ postId: ref('post'), parentId: ref('comment').optional(), body: z.string().min(1).max(50_000) }), async (ctx, i) => {
@@ -93,7 +112,7 @@ export const vote = orgAction(null, nodeSchema.extend({ value: z.enum(['1', '-1'
   const { node } = await resolveNode(ctx.orgId, i);
   let outcome = '';
   try {
-    outcome = (await db.$transaction((tx) => submitVote(tx, { orgId: ctx.orgId, profileId: me.profileId, node, value: i.value === '1' ? 1 : -1, at: nowEpoch() }, limits))).outcome;
+    outcome = (await db.$transaction((tx) => submitVote(tx, { orgId: ctx.orgId, profileId: me.profileId, node, value: i.value === '1' ? 1 : -1, at: nowEpoch() }, limits, mod))).outcome;
   } catch (e) {
     refused(e);
   }
@@ -107,7 +126,7 @@ export const edit = orgAction(null, nodeSchema.extend({ body: z.string().min(1).
   const { node, postPublicId, anchor } = await resolveNode(ctx.orgId, i);
   try {
     await db.$transaction(async (tx) => {
-      const r = await submitEdit(tx, { orgId: ctx.orgId, editorId: me.profileId, node, body: i.body, at: nowEpoch() }, limits);
+      const r = await submitEdit(tx, { orgId: ctx.orgId, editorId: me.profileId, node, body: i.body, at: nowEpoch() }, limits, mod);
       await audit(ctx, 'forum.edited', { targetType: node.kind.toLowerCase(), targetId: node.id, data: { withinWindow: r.withinWindow } }, tx);
     });
   } catch (e) {
@@ -151,6 +170,10 @@ export const report = orgAction(null, nodeSchema.extend({ reason: z.string().min
 // ----------------------------------------------------------------------------------------------- moderation
 
 const modSchema = z.object({ reason: z.string().min(1).max(1000), back: z.string().default('') });
+/** `back` is where the form came from (the thread, or 5.4 A's filtered queue page). Only a same-site path is followed, so a
+ *  tampered field cannot redirect off-site; anything else falls to the action's default. Checked at the redirect, not in the
+ *  schema, so the org-scope refusals (INV-02/03) stay first. */
+const sitePath = (b: string): string => (b.startsWith('/') && !b.startsWith('//') ? b : '');
 
 export const moderateContent = orgAction(null, nodeSchema.extend({ ...modSchema.shape, action: z.enum(['REMOVE', 'RESTORE', 'CLEAR', 'REOPEN']) }), async (ctx, i) => {
   const me = await ensureProfile(ctx);
@@ -164,7 +187,7 @@ export const moderateContent = orgAction(null, nodeSchema.extend({ ...modSchema.
     refused(e);
   }
   revalidatePath(`${base(ctx.slug)}/mod`);
-  redirect(i.back ? `${i.back}${anchor}` : `${base(ctx.slug)}/mod`);
+  redirect(sitePath(i.back) ? `${sitePath(i.back)}${anchor}` : `${base(ctx.slug)}/mod`);
 });
 
 export const moderateThread = orgAction(null, z.object({ postId: ref('post'), action: z.enum(['LOCK', 'UNLOCK', 'PIN', 'UNPIN']), ...modSchema.shape }), async (ctx, i) => {
@@ -178,7 +201,8 @@ export const moderateThread = orgAction(null, z.object({ postId: ref('post'), ac
   } catch (e) {
     refused(e);
   }
-  redirect(`${base(ctx.slug)}/p/${postPublicId}`);
+  revalidatePath(`${base(ctx.slug)}/mod`);
+  redirect(sitePath(i.back) || `${base(ctx.slug)}/p/${postPublicId}`);
 });
 
 export const moderateUser = orgAction(null, z.object({ handle: z.string().min(1), action: z.enum(['WARN', 'BAN', 'UNBAN']), hours: z.string().optional(), ...modSchema.shape }), async (ctx, i) => {
@@ -193,7 +217,7 @@ export const moderateUser = orgAction(null, z.object({ handle: z.string().min(1)
   } catch (e) {
     refused(e);
   }
-  redirect(i.back || `${base(ctx.slug)}/u/${i.handle}`);
+  redirect(sitePath(i.back) || `${base(ctx.slug)}/u/${i.handle}`);
 });
 
 /** 4.1.11 (D-48): owner/admin grant or revoke the moderator flag; logged as GRANT_MOD / REVOKE_MOD. */
@@ -214,7 +238,7 @@ export const moderatorFlag = orgAction(null, z.object({ handle: z.string().min(1
 });
 
 // Two actions, one per signal table, so each id is a ref('<model>') the invariant harness can scope (FR-08).
-async function review(ctx: OrgCtx, kind: 'BRIGADE' | 'DUPLICATE', signalId: string, reason: string) {
+async function review(ctx: OrgCtx, kind: 'BRIGADE' | 'DUPLICATE' | 'REPORT_SWARM', signalId: string, reason: string) {
   const me = await ensureProfile(ctx);
   try {
     await db.$transaction(async (tx) => {
@@ -228,3 +252,4 @@ async function review(ctx: OrgCtx, kind: 'BRIGADE' | 'DUPLICATE', signalId: stri
 }
 export const reviewBrigade = orgAction(null, z.object({ brigadeSignalId: ref('brigadeSignal'), reason: z.string().min(1).max(1000) }), (ctx, i) => review(ctx, 'BRIGADE', i.brigadeSignalId, i.reason));
 export const reviewDuplicate = orgAction(null, z.object({ duplicateSignalId: ref('duplicateSignal'), reason: z.string().min(1).max(1000) }), (ctx, i) => review(ctx, 'DUPLICATE', i.duplicateSignalId, i.reason));
+export const reviewSwarm = orgAction(null, z.object({ reportSwarmSignalId: ref('reportSwarmSignal'), reason: z.string().min(1).max(1000) }), (ctx, i) => review(ctx, 'REPORT_SWARM', i.reportSwarmSignalId, i.reason));

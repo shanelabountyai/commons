@@ -7,10 +7,14 @@ import { expect, test, type Page } from '@playwright/test';
 import pg from 'pg';
 import { expectAccessible } from './axe';
 import { memberFor, ownerFor } from './commons-helpers';
+import { readFixture } from '../src/fixtures/load';
 
 test.use({ bypassCSP: true }); // axe is injected; the app's CSP (INV-15) rightly refuses that
 test.describe.configure({ mode: 'serial', timeout: 300_000 });
 
+// PRD 7.1 (D-98): posts carry generated titles from fixtures/community, so specs look them up by id
+const TITLES = new Map(readFixture('community/bodies.csv').map((r) => [r['node_id']!, r['title']!]));
+const title = (id: string) => TITLES.get(id)!;
 const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
 const SLUG = `homelab-e2e-${Date.now()}`;
 const owner = ownerFor(SLUG);
@@ -41,15 +45,15 @@ test('boards and a board under Hot, Top and New, ranked by the job', async ({ pa
   await signIn(page);
   await page.goto(`/o/${SLUG}/f`);
   await expectAccessible(page, 'boards', 'Boards');
-  await expect(page.getByRole('link', { name: 'networking' })).toBeVisible();
-  await page.getByRole('link', { name: 'selfhosting' }).click();
+  await expect(page.getByRole('link', { name: 'Networking' })).toBeVisible();
+  await page.getByRole('link', { name: 'Self-hosting' }).click();
   await expectAccessible(page, 'board hot', 'Hot');
   await expect(page.getByText(/ranked (just now|\d+ (min|h|d) ago)/)).toBeVisible(); // 4.1.13: scaled units
   const hotFirst = await page.locator('ol li.post a').first().textContent();
   await page.getByRole('link', { name: 'Top all time' }).click();
   await expect(page.getByRole('link', { name: 'Top all time' })).toHaveAttribute('aria-current', 'page');
   const topFirst = await page.locator('ol li.post a').first().textContent();
-  expect(topFirst).toContain('P-GH-50'); // 50 votes, the fixture's top-all winner (expected_post_order_top_all.csv)
+  expect(topFirst).toContain(title('P-GH-50')); // 50 votes, the fixture's top-all winner (expected_post_order_top_all.csv)
   expect(hotFirst).not.toBeNull();
   await page.getByRole('link', { name: 'New' }).click();
   await expectAccessible(page, 'board new', 'New');
@@ -58,11 +62,11 @@ test('boards and a board under Hot, Top and New, ranked by the job', async ({ pa
 test('the deep thread: removed and deleted comments in place, continue-thread, permalink with ancestors', async ({ page }) => {
   await signIn(page);
   await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
-  await expectAccessible(page, 'thread P-CHAIN', 'P-CHAIN title');
-  await expect(page.getByText('[deleted]')).toBeVisible(); // C-CHAIN-3, author delete, subtree kept
-  await expect(page.getByText('[removed]')).toBeVisible(); // C-CHAIN-5, moderator removal
+  await expectAccessible(page, 'thread P-CHAIN', title('P-CHAIN'));
+  await expect(page.getByRole('heading', { level: 3, name: 'Deleted comment' }).first()).toBeVisible(); // C-CHAIN-3, author delete, subtree kept
+  await expect(page.getByRole('heading', { level: 3, name: 'Removed comment (by moderator)' }).first()).toBeVisible(); // C-CHAIN-5, moderator removal (M2)
   await expect(page.getByText('11 comments · 2 top-level shown')).toBeVisible(); // two dead leaves hidden (D-13)
-  await page.getByRole('link', { name: 'Continue this thread →' }).first().click();
+  await page.getByRole('link', { name: /^Continue the thread under .+'s comment$/ }).first().click(); // M5
   await expectAccessible(page, 'permalink C-CHAIN-6', 'Comment in context');
   await expect(page.getByRole('list', { name: 'Ancestors' }).getByRole('listitem')).toHaveCount(6);
   await expect(page.getByText('depth 1')).toBeVisible(); // C-CHAIN-7 under the re-rooted C-CHAIN-6
@@ -87,8 +91,8 @@ test('reply, vote, edit; a young-looking owner cannot downvote yet; refusals car
   await mine.getByLabel('Edit your comment').fill('Edited within the window.');
   await mine.getByRole('button', { name: 'Save edit' }).click();
   await expect(page.locator('ol.thread')).toContainText('Edited within the window.');
-  await expect(page.locator('ol.thread')).not.toContainText('· edited'); // inside 900 s, no mark (D-32)
-  await expectAccessible(page, 'thread after reply', 'P-GW title');
+  await expect(page.locator('ol.thread .badge', { hasText: 'Edited' })).toHaveCount(0); // inside 900 s, no mark (D-32)
+  await expectAccessible(page, 'thread after reply', title('P-GW'));
 });
 
 test('every XSS fixture body posted through the real form renders inert in a real browser', async ({ page }) => {
@@ -112,6 +116,8 @@ test('every XSS fixture body posted through the real form renders inert in a rea
   const alert = page.locator('p[role="alert"]'); // the form's own; Next's route announcer is also role=alert
   for (const c of bodies) {
     await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]); // one case per attempt; the limit itself is proven by abuse:spam
+    // PRD 6.4 (D-93): the thread window counts the owner's Comment rows on the post, so age them out of the hour, order kept
+    await db.query(`UPDATE "Comment" c SET "createdAt" = c."createdAt" - interval '2 hours' FROM "Post" p WHERE p.id = c."postId" AND p."orgId" = $1 AND p."publicId" = 'P-0001' AND c."createdAt" > now() - interval '1 hour'`, [orgId]);
     const before = await stored();
     await page.getByLabel('New comment').fill(c.input);
     await page.getByRole('button', { name: 'Comment', exact: true }).click();
@@ -156,7 +162,7 @@ test('every XSS fixture body posted through the real form renders inert in a rea
   expect(rendered).toBeGreaterThanOrEqual(accepted);
   expect(live).toEqual([]);
   expect(fired).toBe(false);
-  await expectAccessible(page, 'thread with hostile bodies', 'P-0001 title');
+  await expectAccessible(page, 'thread with hostile bodies', title('P-0001'));
 });
 
 test('report → queue (with the fixture brigade) → remove → restore → append-only log', async ({ page }) => {
@@ -170,8 +176,8 @@ test('report → queue (with the fixture brigade) → remove → restore → app
   await expectAccessible(page, 'mod queue', 'Moderation queue');
   await expect(page.getByRole('heading', { name: /Reported \(1\): spam/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Suspected brigade: 7 gated downvotes/ })).toBeVisible();
-  const item = page.getByRole('region', { name: /CASE on P-BRIGADE title/ });
-  await item.getByLabel('Reason for P-BRIGADE title').fill('affiliate spam');
+  const item = page.getByRole('region', { name: `CASE on ${title('P-BRIGADE')}` });
+  await item.getByLabel(`Reason for ${title('P-BRIGADE')}`).fill('affiliate spam');
   await item.getByRole('button', { name: 'Remove' }).click();
   await expect(page.getByRole('heading', { name: /Reported \(1\)/ })).toHaveCount(0);
   await expect(page.locator('table tbody tr').first()).toContainText('REMOVE');
@@ -180,7 +186,7 @@ test('report → queue (with the fixture brigade) → remove → restore → app
   await page.locator('article[aria-label="Post"] summary').first().click();
   await page.getByLabel('Moderation reason for this post').fill('appeal upheld');
   await page.getByRole('button', { name: 'Restore' }).click();
-  await expect(page.getByRole('heading', { name: 'P-BRIGADE title' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: title('P-BRIGADE') })).toBeVisible();
   await page.goto(`/o/${SLUG}/f/mod`);
   const rows = page.locator('table tbody tr');
   await expect(rows.nth(0)).toContainText('RESTORE');
@@ -189,9 +195,9 @@ test('report → queue (with the fixture brigade) → remove → restore → app
   expect(log[0].n).toBe(2);
   await expect(db.query(`DELETE FROM "ModerationAction" WHERE "orgId" = $1`, [orgId])).rejects.toThrow(/append-only/);
   // search finds the post by a word in its title; profile page lists it
-  await page.goto(`/o/${SLUG}/f/search?q=P-BRIGADE`);
+  await page.goto(`/o/${SLUG}/f/search?q=${encodeURIComponent(title('P-BRIGADE'))}`);
   await expectAccessible(page, 'search', 'Search');
-  await expect(page.getByRole('link', { name: 'P-BRIGADE title' })).toBeVisible();
+  await expect(page.getByRole('link', { name: title('P-BRIGADE') })).toBeVisible();
 });
 
 // ---- Phase 4.1 defect patch: each assertion below was red before its fix (docs/phase-4.1-tasks.md) ----
@@ -238,6 +244,7 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   await expect(uploadForm).toHaveAttribute('action', /\/f\/uploads\?post=/);
   expect(await page.evaluate(() => document.querySelectorAll('form form').length), 'no nested forms').toBe(0);
   await post.getByLabel(/Attach an image/).setInputFiles({ name: 'evil.png', mimeType: 'image/png', buffer: Buffer.from('<svg onload=alert(1)></svg>') });
+  await post.getByLabel('Describe the image').fill('not really a png'); // 6.2: described, so the refusal is the bytes'
   const posted = page.waitForRequest((r) => r.method() === 'POST', { timeout: 15_000 });
   await post.getByRole('button', { name: 'Attach', exact: true }).click();
   const req = await posted;
@@ -246,6 +253,7 @@ test('4.1.6: an upload refusal is visible without opening anything', async ({ pa
   const detail = `POST ${req.url()} → ${res?.status()} ${JSON.stringify(res?.headers() ?? {})}; page now ${page.url()}; body: ${(await page.textContent('body'))?.slice(0, 300)}`;
   await expect(page.locator('p[role="alert"]'), detail).toBeVisible(); // not inside a closed <details>
   await expect(page.locator('p[role="alert"]')).toContainText('INPUT_INVALID');
+  await expect(page.locator('p[role="alert"]')).toContainText('do not look like image/png');
 });
 
 test('4.1.12: a refused comment keeps what was typed (RATE_LIMITED on a young account)', async ({ page }) => {
@@ -270,12 +278,12 @@ test('4.1.13: every page has its own title; the thread is usable and axe-clean a
   await signIn(page);
   const titles: [string, RegExp][] = [
     [`/o/${SLUG}/f`, /^Boards/],
-    [`/o/${SLUG}/f/selfhosting`, /^selfhosting/],
-    [`/o/${SLUG}/f/p/P-GW`, /^P-GW title/],
+    [`/o/${SLUG}/f/selfhosting`, /^Self-hosting/],
+    [`/o/${SLUG}/f/p/P-GW`, new RegExp('^' + title('P-GW').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))],
     [`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, /^Comment by /],
     [`/o/${SLUG}/f/u/homelabber059`, /^homelabber059/],
     [`/o/${SLUG}/f/mod`, /^Moderation queue/],
-    [`/o/${SLUG}/f/search?q=P-GW`, /^Search/],
+    [`/o/${SLUG}/f/search?q=firewall`, /^Search/],
   ];
   for (const [path, re] of titles) {
     await page.goto(path);
@@ -284,7 +292,7 @@ test('4.1.13: every page has its own title; the thread is usable and axe-clean a
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true); // no horizontal scroll (1.4.10)
-  await expectAccessible(page, 'thread at 320px', 'P-CHAIN title');
+  await expectAccessible(page, 'thread at 320px', title('P-CHAIN'));
   await page.getByRole('link', { name: 'Skip to content' }).focus();
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeVisible();
   await page.goto(`/o/${SLUG}/f/selfhosting`);
@@ -299,7 +307,7 @@ test('4.1.13: every page has its own title; the thread is usable and axe-clean a
   expect(box.height).toBeGreaterThanOrEqual(24);
   await up.click();
   await expect(target.getByRole('status')).toBeVisible();
-  await expectAccessible(page, 'thread after a vote', 'P-GW title');
+  await expectAccessible(page, 'thread after a vote', title('P-GW'));
   await expect(page.locator('time').first()).toHaveAttribute('datetime', /^\d{4}-/);
 });
 
@@ -338,18 +346,308 @@ test('5.1: one click to vote, the pressed state shows, the author sees a fixed +
   const own = page.locator('li.c > article', { hasText: 'A comment the member wrote for 5.1.' }).first();
   await expect(own.getByText('+1 (yours, fixed)')).toBeVisible();
   await expect(own.getByRole('button', { name: /^(Upvote|Downvote) comment/ })).toHaveCount(0);
-  await expectAccessible(page, 'thread after 5.1 votes', 'P-GW title');
+  await expectAccessible(page, 'thread after 5.1 votes', title('P-GW'));
   // the board page: a vote control per post, with the same state
   await page.goto(`/o/${SLUG}/f/sbc`);
-  const row = page.locator('li.post', { hasText: 'P-GW title' });
+  const row = page.locator('li.post', { hasText: title('P-GW') });
+  for (let n = 2; (await row.count()) === 0; n++) {
+    if (n > 10) throw new Error('P-GW not on any sbc page'); // 6.1 A: 25 rows a page; P-GW ranks 135th under Hot
+    await page.goto(`/o/${SLUG}/f/sbc?page=${n}`);
+  }
   const postUp = row.getByRole('button', { name: /^Upvote post/ });
   await postUp.click();
   await expect(row.getByRole('status')).toContainText('APPLIED');
   await expect(postUp).toHaveAttribute('aria-pressed', 'true');
-  await expectAccessible(page, 'board after a vote', 'sbc');
+  await expectAccessible(page, 'board after a vote', 'Small-board computers');
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto(`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true);
   await expect(page.locator('li.c > article').first().getByRole('button', { name: /^Upvote comment/ })).toBeVisible();
   await expectAccessible(page, 'permalink at 320px with vote controls', 'Comment in context');
+});
+
+// ---- PRD 5.4 Part A (D-79): triage — filters with counts, act in place, reporter records, log paging with seq. Red before the page lands. ----
+
+test('5.4 A: the queue filters by kind, warns the author and locks the thread in place, shows reporter records, pages the log with seq', async ({ page }) => {
+  // the member reports two posts: one the owner clears (that becomes the member's record), one that stays open for triage
+  await member.signIn(db, page);
+  for (const [id, reason] of [['P-GW', 'off_topic'], ['P-CHAIN', 'harassment']] as const) {
+    await page.goto(`/o/${SLUG}/f/p/${id}`);
+    await page.locator('article[aria-label="Post"] summary').first().click();
+    await page.getByLabel('Reason for reporting this post').selectOption(reason);
+    await page.getByRole('button', { name: 'Report', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Reported');
+  }
+  // a DUPLICATE signal needs the same ≥ 40-char body twice inside the window (rules/moderation.json duplicate). The owner's
+  // account is minutes old, so its post window is young_max 1/h (rules/limits.json): the test's own row is aged past 24 h.
+  await db.query(`UPDATE "Profile" p SET "joinedAt" = now() - interval '2 days' FROM "User" u WHERE p."userId" = u.id AND u.email = $1`, [owner.email]);
+  await signIn(page);
+  for (const title of ['Duplicate check one', 'Duplicate check two']) {
+    await page.goto(`/o/${SLUG}/f/selfhosting`);
+    await page.waitForLoadState('networkidle');
+    await page.getByLabel('Title', { exact: true }).fill(title);
+    await page.getByLabel(/^Body/).fill('The same body, posted twice on purpose, so the duplicate signal reaches the moderation queue.');
+    await page.getByRole('button', { name: 'Post', exact: true }).click();
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  }
+  // three kinds present; each filter shows only its kind, with the count beside it
+  await page.goto(`/o/${SLUG}/f/mod`);
+  const kinds = page.getByRole('navigation', { name: 'Filter by kind' });
+  for (const [k, n] of [['BRIGADE', 1], ['DUPLICATE', 1], ['CASE', 2]] as const) {
+    await kinds.getByRole('link', { name: `${k} (${n})` }).click();
+    await expect(page).toHaveURL(new RegExp(`\\?kind=${k}$`));
+    await expect(page.getByRole('region')).toHaveCount(n);
+    await expect(page.getByRole('region').first()).toHaveAttribute('aria-label', new RegExp(`^${k} on `));
+  }
+  await expectAccessible(page, 'queue filtered to cases', 'Moderation queue');
+  // the reporter's record: clearing P-GW gives the member "0 removed / 1 cleared" on the P-CHAIN case; the redirect keeps the filter
+  const gw = page.getByRole('region', { name: `CASE on ${title('P-GW')}` });
+  await gw.getByLabel(`Reason for ${title('P-GW')}`).fill('on topic enough');
+  await gw.getByRole('button', { name: 'Clear' }).click();
+  await expect(page).toHaveURL(/\/f\/mod\?kind=CASE$/);
+  await expect(page.getByRole('region')).toHaveCount(1);
+  const chain = page.getByRole('region', { name: `CASE on ${title('P-CHAIN')}` });
+  const reporters = chain.getByRole('list', { name: 'Reporters' });
+  await expect(reporters).toContainText(/member-homelab\S* \(joined .*; 0 removed \/ 1 cleared before\): harassment/);
+  // the body is a ≤ 240-char excerpt until "Show full text" is opened
+  expect(((await chain.locator('.excerpt').textContent()) ?? '').length).toBeLessThanOrEqual(241);
+  await expect(chain.locator('details').first()).toHaveJSProperty('open', false);
+  // warn the author and lock the thread without leaving the queue
+  await chain.getByText('Author and thread actions').click();
+  await chain.getByLabel(`Reason for the author of ${title('P-CHAIN')}`).fill('first warning: harassment');
+  await chain.getByRole('button', { name: 'Warn' }).click();
+  await expect(page).toHaveURL(/\/f\/mod\?kind=CASE$/);
+  await expect(chain.locator('.meta').first()).toContainText('(WARNED;');
+  await chain.getByText('Author and thread actions').click();
+  await chain.getByLabel(`Reason for the thread of ${title('P-CHAIN')}`).fill('cooling off');
+  await chain.getByRole('button', { name: 'Lock thread' }).click();
+  await expect(page).toHaveURL(/\/f\/mod\?kind=CASE$/);
+  await expect(chain.locator('.meta').first()).toContainText('thread locked');
+  await chain.getByText('Author and thread actions').click();
+  await expect(chain.getByRole('button', { name: 'Unlock thread' })).toBeVisible();
+  // both in the log, newest first, with seq in total order and the target linked
+  const rows = page.locator('table tbody tr');
+  await expect(rows.nth(0)).toContainText('LOCK');
+  await expect(rows.nth(1)).toContainText('WARN');
+  const seq = async (i: number) => Number(await rows.nth(i).locator('td').first().textContent());
+  expect(await seq(0)).toBeGreaterThan(await seq(1));
+  await expect(rows.nth(0).getByRole('link', { name: title('P-CHAIN') })).toBeVisible();
+  // log paging at queue.page_size (50): synthetic rows in the test's own org push the earlier entries onto page 2
+  const { rows: [{ id: actor }] } = await db.query(`SELECT p.id FROM "Profile" p JOIN "User" u ON u.id = p."userId" WHERE u.email = $1`, [owner.email]);
+  await db.query(`INSERT INTO "ModerationAction" (id, "orgId", "actorId", "subjectId", kind, "fromState", "toState", reason, "createdAt") SELECT gen_random_uuid(), $1, $2, $2, 'WARN', 'ACTIVE', 'WARNED', 'synthetic log row ' || g, now() FROM generate_series(1, 50) g`, [orgId, actor]);
+  await page.goto(`/o/${SLUG}/f/mod?kind=CASE`);
+  await expect(rows).toHaveCount(50);
+  await page.getByRole('link', { name: 'Next log page' }).click();
+  await expect(page).toHaveURL(/logPage=2$/);
+  await expect(page.getByText('Log page 2 of 2')).toBeVisible();
+  await expect(rows.last()).toContainText('REMOVE'); // the very first action of the run, from the Phase 4 capstone
+  // 320 px: no horizontal scroll; axe clean in light and dark on the filtered queue
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(`/o/${SLUG}/f/mod?kind=CASE`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 320)).toBe(true);
+  await expectAccessible(page, 'filtered queue at 320px', 'Moderation queue');
+});
+
+// ---- PRD 6.1 Part A (D-84): tokens, text badges, board page 25/page, breadcrumbs, scope footer, empty states. Red first. ----
+const WIDTHS = [320, 768, 1280] as const; // the Phase 6 gate's three widths; axe.ts does light and dark at each
+const SCOPE = 'Learning project, synthetic community.';
+
+test('6.1 A: the board pages at 25 with a pager, pinned is a text badge, meta carries a relative <time>, and the scope sentence sits once in the footer', async ({ page }) => {
+  await signIn(page);
+  // pin P-GH-50 through the thread's moderation form (the fixture has no pinned post)
+  await page.goto(`/o/${SLUG}/f/p/P-GH-50`);
+  await page.getByRole('article', { name: 'Post' }).locator('summary').first().click();
+  await page.getByLabel('Reason for thread action').fill('6.1 pin check');
+  await page.getByRole('button', { name: 'Pin', exact: true }).click();
+  await expect(page.locator('h1 .badge', { hasText: 'Pinned' })).toBeVisible();
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('h1')!, '::before').content)).toBe('none'); // no CSS emoji
+  // the board: 25 rows, the pinned one first with its badge, a relative age with a machine-readable time
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await expect(page.locator('ol li.post')).toHaveCount(25);
+  const first = page.locator('ol li.post').first();
+  await expect(first).toContainText(title('P-GH-50'));
+  await expect(first.locator('.badge', { hasText: 'Pinned' })).toBeVisible();
+  await expect(first.locator('.meta time')).toHaveAttribute('datetime', /^\d{4}-/);
+  await expect(first.locator('.meta')).toContainText(/(just now|\d+ (min|h|d|mo|y) ago)/);
+  await expect(first.locator('.meta')).not.toContainText(/\d{4}-\d{2}-\d{2}/);
+  await page.getByRole('link', { name: 'Page 2' }).click();
+  await expect(page.getByRole('link', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('ol li.post')).toHaveCount(25);
+  await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Boards' })).toBeVisible();
+  expect(await page.getByRole('navigation', { name: 'Breadcrumb' }).textContent()).not.toMatch(/›\s*$/);
+  // the scope sentence once per page, in the footer; "delete org" out of the forum nav and into the footer (owner)
+  for (const path of [`/o/${SLUG}/f`, `/o/${SLUG}/f/selfhosting`, `/o/${SLUG}/f/p/P-CHAIN`, `/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, `/o/${SLUG}/f/search?q=firewall`, `/o/${SLUG}/f/u/homelabber059`, `/o/${SLUG}/f/mod`]) {
+    await page.goto(path);
+    await expect(page.getByText(SCOPE), path).toHaveCount(1);
+    await expect(page.locator('footer').getByText(SCOPE), path).toHaveCount(1);
+    await expect(page.getByRole('navigation', { name: 'Forum' }).getByRole('link', { name: /delete org/i }), path).toHaveCount(0);
+    await expect(page.locator('footer').getByRole('link', { name: /delete org/i }), path).toHaveCount(1);
+  }
+  // axe at the three widths, light and dark, on Boards and the board; no horizontal scroll at 320
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`/o/${SLUG}/f`);
+    await expectAccessible(page, `boards at ${width}px`, 'Boards');
+    await page.goto(`/o/${SLUG}/f/selfhosting?page=2`);
+    expect(await page.evaluate((w) => document.documentElement.scrollWidth <= w, width)).toBe(true);
+    await expectAccessible(page, `board page 2 at ${width}px`, 'Hot');
+  }
+});
+
+// ---- PRD 6.1 Part B (D-84): the thread — headings per comment, status names, subtree <details>, shared Tree, indent, link text. Red first. ----
+test('6.1 B: one h3 per comment, removed and deleted named by status, subtrees in <details open>, distinct permalink names, nested permalink tree, clamp indent', async ({ page }) => {
+  await signIn(page);
+  await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
+  const articles = page.locator('ol.thread li.c > article');
+  const n = await articles.count();
+  expect(n).toBeGreaterThan(0);
+  await expect(page.locator('ol.thread li.c > article > h3')).toHaveCount(n); // heading navigation lists every comment
+  await expect(page.locator('ol.thread article[aria-label]')).toHaveCount(0); // one name, the heading
+  await expect(page.getByRole('heading', { level: 3, name: 'Deleted comment' }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'Removed comment (by moderator)' }).first()).toBeVisible();
+  await expect(page.locator('ol.thread li.c > article > h3 .badge', { hasText: 'Removed' }).first()).toBeVisible();
+  // the subtree under C-CHAIN-0 is open by default and counts the rows rendered below it on this page
+  const sub = page.locator('li#C-CHAIN-0 > details');
+  await expect(sub).toHaveAttribute('open', '');
+  const shown = await page.locator('li#C-CHAIN-0 > details li.c').count();
+  expect(shown).toBeGreaterThan(1);
+  await expect(sub.locator('> summary')).toHaveText(`${shown} replies shown`);
+  // every permalink has its own accessible name (M5), one per comment
+  const names = await page.getByRole('link', { name: /^Permalink to / }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
+  expect(names.length).toBe(n);
+  expect(new Set(names).size).toBe(names.length);
+  await expect(page.getByRole('link', { name: 'permalink', exact: true })).toHaveCount(0);
+  // the type scale: the post title at --fs-xl (1.5rem)
+  expect(await page.locator('article[aria-label="Post"] h1').evaluate((e) => getComputedStyle(e).fontSize)).toBe('24px');
+  // continue-thread names its comment, no arrow glyph; the permalink page nests its tree, no inline indent (M1)
+  const cont = page.getByRole('link', { name: /^Continue the thread under .+'s comment$/ });
+  await expect(cont).toHaveCount(1);
+  await expect(cont).not.toContainText('→');
+  await cont.click();
+  await expect(page.getByRole('heading', { name: 'Comment in context' })).toBeVisible();
+  expect(await page.locator('ol.thread details > ol').count()).toBeGreaterThan(0);
+  await expect(page.locator('ol.thread li[style]')).toHaveCount(0);
+  await expect(page.locator('ol.thread li.c > article > h3').first()).toBeVisible();
+  // the comment pager is the shared Pager (P-0001 has more than one page after the XSS walk)
+  await page.goto(`/o/${SLUG}/f/p/P-0001`);
+  await page.getByRole('navigation', { name: 'Comment pages' }).getByRole('link', { name: 'Page 2' }).click();
+  await expect(page.getByRole('navigation', { name: 'Comment pages' }).getByRole('link', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page');
+  // axe at the three widths, light and dark: the thread, the deep thread and the permalink; indent ≤ 1 rem a level at 320
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const [path, see] of [[`/o/${SLUG}/f/p/P-GW`, title('P-GW')], [`/o/${SLUG}/f/p/P-CHAIN`, title('P-CHAIN')], [`/o/${SLUG}/f/p/P-CHAIN/c/C-CHAIN-6`, 'Comment in context']] as const) {
+      await page.goto(path);
+      expect(await page.evaluate((w) => document.documentElement.scrollWidth <= w, width), `${path} at ${width}px`).toBe(true);
+      await expectAccessible(page, `${path.split('/f/')[1]} at ${width}px`, see);
+    }
+    if (width === 320) {
+      await page.goto(`/o/${SLUG}/f/p/P-CHAIN`);
+      const step = await page.locator('ol.thread details > ol').first().evaluate((e) => parseFloat(getComputedStyle(e).marginLeft) + parseFloat(getComputedStyle(e).paddingLeft));
+      expect(step).toBeLessThanOrEqual(16);
+    }
+  }
+});
+
+// ---- PRD 6.2 (D-87): author alt text, decorative, the refusal named by aria-describedby, alt as attribute text. Red first. ----
+const uploadCases = (JSON.parse(readFileSync('fixtures/uploads/cases.json', 'utf8')) as { cases: { id: string; hex: string }[] }).cases;
+const pngFile = (name: string) => ({ name, mimeType: 'image/png', buffer: Buffer.from(uploadCases.find((c) => c.id === 'U-STRIP-PNG')!.hex, 'hex') });
+
+test('6.2: an attachment is named by its description; decorative is alt=""; a missing description is refused and described; hostile alt stays text', async ({ page }) => {
+  await signIn(page);
+  await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]); // the owner is young: 4.1.6 just spent the post window
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await page.waitForLoadState('networkidle');
+  await page.getByLabel('Title', { exact: true }).fill('Attachment alt check');
+  await page.getByLabel(/^Body/).fill('A post with described attachments.');
+  await page.getByRole('button', { name: 'Post', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Attachment alt check' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const post = page.locator('article[aria-label="Post"]');
+  const attach = async (o: { alt?: string; decorative?: boolean }) => {
+    await db.query(`DELETE FROM "LimitHit" WHERE "orgId" = $1`, [orgId]); // the young window is not what this spec measures
+    if ((await post.locator('details').first().getAttribute('open')) === null) await post.locator('summary').first().click(); // open="" is open
+    await post.getByLabel(/Attach an image/).setInputFiles(pngFile('rack.png'));
+    if (o.alt !== undefined) await post.getByLabel('Describe the image').fill(o.alt);
+    if (o.decorative) await post.getByLabel('Decorative (no description)').check();
+    await post.getByRole('button', { name: 'Attach', exact: true }).click();
+    await page.waitForLoadState('networkidle');
+  };
+  // no description, not decorative: refused above the panel, and the file input names the refusal
+  await attach({});
+  const alert = page.locator('p[role="alert"]');
+  await expect(alert).toContainText('description is empty');
+  await expect(alert).toContainText('INPUT_INVALID');
+  const describedBy = (await post.getByLabel(/Attach an image/).getAttribute('aria-describedby')) ?? '';
+  expect(describedBy.split(' ')).toContain(await alert.getAttribute('id'));
+  await expect(page.locator('ul[aria-label="Attachments"] img')).toHaveCount(0);
+  // described, decorative, hostile
+  await attach({ alt: 'A 12U rack, front view, patch panel at the top' });
+  await expect(page.getByRole('img', { name: 'A 12U rack, front view, patch panel at the top' })).toBeVisible();
+  await attach({ decorative: true });
+  await expect(page.locator('ul[aria-label="Attachments"] img[alt=""]')).toHaveCount(1);
+  const hostile = '"><img src=x onerror=alert(1)>';
+  await attach({ alt: hostile });
+  await expect(page.locator('ul[aria-label="Attachments"] img')).toHaveCount(3); // no second img from the description
+  expect(await page.locator('ul[aria-label="Attachments"] img').nth(2).getAttribute('alt')).toBe(hostile);
+  expect(await page.evaluate(() => document.querySelectorAll('[onerror]').length)).toBe(0);
+  // axe at the three widths, light and dark, on a thread with attachments
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.reload();
+    await expectAccessible(page, `thread with attachments at ${width}px`, 'Attachment alt check');
+  }
+});
+
+test('6.3: a board says what belongs on it; only the owner edits it; a hostile description stays text', async ({ page }) => {
+  const SELF = 'Running your own services: containers, reverse proxies, backups, the stack you\'d rather not rent.';
+  // a member sees the description on Boards and under the board h1, and no edit control
+  await member.signIn(db, page);
+  await page.goto(`/o/${SLUG}/f`);
+  await expect(page.locator('li', { has: page.getByRole('link', { name: 'Self-hosting' }) })).toContainText(SELF);
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await expect(page.locator('h1 + p')).toHaveText(SELF);
+  await expect(page.getByText('Edit description')).toHaveCount(0);
+  // the owner edits it and sees it on both pages
+  await signIn(page);
+  await page.goto(`/o/${SLUG}/f/selfhosting`);
+  await page.waitForLoadState('networkidle');
+  await page.getByText('Edit description').click();
+  const next = 'Services you run yourself: containers, proxies, backups.';
+  await page.getByLabel('Board description').fill(next);
+  await page.getByRole('button', { name: 'Save description' }).click();
+  await expect(page.locator('h1 + p')).toHaveText(next);
+  await page.goto(`/o/${SLUG}/f`);
+  await expect(page.locator('li', { has: page.getByRole('link', { name: 'Self-hosting' }) })).toContainText(next);
+  // a stored hostile description renders as text
+  const hostile = '<img src=x onerror=alert(1)>';
+  await db.query(`UPDATE "Board" SET description = $1 WHERE "orgId" = $2 AND slug = 'networking'`, [hostile, orgId]);
+  await page.goto(`/o/${SLUG}/f/networking`);
+  await expect(page.locator('h1 + p')).toHaveText(hostile);
+  await expect(page.locator('h1 + p img')).toHaveCount(0);
+  expect(await page.evaluate(() => document.querySelectorAll('[onerror]').length)).toBe(0);
+  // axe at the three widths, light and dark, on Boards and a board with descriptions present
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`/o/${SLUG}/f`);
+    await expectAccessible(page, `boards with descriptions at ${width}px`, next);
+    await page.goto(`/o/${SLUG}/f/selfhosting`);
+    await expectAccessible(page, `board with description at ${width}px`, next);
+  }
+});
+
+test('Phase 6 gate: search, a profile and the mod queue are axe-clean at the three widths, light and dark', async ({ page }) => {
+  // the 6.x specs measured Boards, a board, the threads, the permalink and attachments; these three pages were not
+  await signIn(page);
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const [path, see] of [
+      [`/o/${SLUG}/f/search?q=firewall`, 'Search'],
+      [`/o/${SLUG}/f/u/homelabber059`, 'homelabber059'],
+      [`/o/${SLUG}/f/mod`, 'Moderation queue'],
+    ] as const) {
+      await page.goto(path);
+      expect(await page.evaluate((w) => document.documentElement.scrollWidth <= w, width), `${path} at ${width}px`).toBe(true);
+      await expectAccessible(page, `${path.split('/f/')[1]} at ${width}px`, see);
+    }
+  }
 });

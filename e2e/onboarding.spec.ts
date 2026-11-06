@@ -38,4 +38,5 @@ test('new email → org created → lands in /o/[slug]', async ({ page }) => {
   await expect(page).toHaveURL(/\/o\/acme-\d+\/f$/);
   await expect(page.getByRole('heading', { name: 'Boards' })).toBeVisible();
   await expect(page.getByText('No boards yet.')).toBeVisible();
+  await expect(page.getByText(/npm run/)).toHaveCount(0); // 6.1 A: empty states name no CLI
 });

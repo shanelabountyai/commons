@@ -11,8 +11,10 @@ describe('rules loader (task 1.4)', () => {
     expect(r.hot.gravity_seconds).toBe(45000);
     expect(r.best.z).toBeCloseTo(1.959963984540054, 12);
     const l = parseLimitRules(limits());
-    expect(l.windows).toHaveLength(4);
+    expect(l.windows).toHaveLength(7);
     expect(windowFor(l, 'comment')).toMatchObject({ per_seconds: 60, max: 6, young_max: 2 });
+    expect(windowFor(l, 'comment', 'profile+post')).toMatchObject({ per_seconds: 3600, max: 10, young_max: 3 }); // PRD 6.4 (D-93)
+    expect(l.max_depth_written).toBe(32);
     expect(l.signals.brigade).toEqual({ min_voters: 5, window_seconds: 600 }); // 4.1.3: D-31's constants are data
   });
 
@@ -37,7 +39,15 @@ describe('rules loader (task 1.4)', () => {
   it('refuses an unknown action by name', () => {
     const l = limits();
     l.windows.push({ action: 'poke', per_seconds: 60, max: 1, young_max: 1 });
-    expect(() => parseLimitRules(l)).toThrow(/RULES_INVALID: windows\.4\.action/);
+    expect(() => parseLimitRules(l)).toThrow(/RULES_INVALID: windows\.7\.action/);
+  });
+  it('PRD 6.4: refuses a second window for the same (action, scope), and a profile+post scope on anything but comment', () => {
+    const dup = limits();
+    dup.windows.push({ action: 'comment', scope: 'profile+post', per_seconds: 60, max: 1, young_max: 1 });
+    expect(() => parseLimitRules(dup)).toThrow(/RULES_INVALID: windows: duplicate action and scope/);
+    const vote = limits();
+    vote.windows.push({ action: 'vote', scope: 'profile+post', per_seconds: 60, max: 1, young_max: 1 });
+    expect(() => parseLimitRules(vote)).toThrow(/RULES_INVALID: windows\.7\.scope/);
   });
   it('refuses an unknown key (closed schema) and young_max above max', () => {
     const r = ranking();

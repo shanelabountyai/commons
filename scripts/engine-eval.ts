@@ -4,8 +4,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { evaluate } from '../src/eval';
+import { evalUploads, type UploadCase } from '../src/eval/uploads';
 import { expectedRows, loadFixtures } from '../src/fixtures/load';
-import { parseLimitRules, parseRankingRules } from '../src/rules';
+import type { SwarmScenario } from '../src/limits/report-swarm';
+import { parseLimitRules, parseModerationRules, parseRankingRules } from '../src/rules';
 import type { SignalScenario } from '../src/votes/signals';
 
 const arg = (name: string, dflt: string) => {
@@ -19,22 +21,30 @@ const limits = parseLimitRules(JSON.parse(readFileSync(join(rulesDir, 'limits.js
 const fx = loadFixtures(fixturesDir);
 const scenariosPath = join(fixturesDir, 'signals', 'scenarios.json');
 const scenarios = existsSync(scenariosPath) ? (JSON.parse(readFileSync(scenariosPath, 'utf8')) as { scenarios: SignalScenario[] }).scenarios : [];
-const report = evaluate(fx, ranking, limits, (name) => expectedRows(name, fixturesDir), undefined, scenarios);
+const mod = parseModerationRules(JSON.parse(readFileSync(join(rulesDir, 'moderation.json'), 'utf8')));
+const swarmsPath = join(fixturesDir, 'moderation', 'scenarios.json');
+const swarms = existsSync(swarmsPath) ? (JSON.parse(readFileSync(swarmsPath, 'utf8')) as { scenarios: SwarmScenario[] }).scenarios : [];
+const report = evaluate(fx, ranking, limits, (name) => expectedRows(name, fixturesDir), undefined, scenarios, swarms, mod);
+const uploadsPath = join(fixturesDir, 'uploads', 'cases.json'); // PRD 6.2 (D-87)
+if (existsSync(uploadsPath)) report.files.push(evalUploads((JSON.parse(readFileSync(uploadsPath, 'utf8')) as { cases: UploadCase[] }).cases, limits.upload.max_pixels));
 
 console.log(`engine:eval — ${report.nodes} nodes, ${report.visiblePosts} visible posts, now ${report.now}, fixtures ${fixturesDir}, rules ${rulesDir}`);
 console.log('vote outcomes: ' + Object.entries(report.outcomes).map(([k, v]) => `${k} ${v}`).join(', '));
 for (const t of report.threads) console.log(`thread ${t.post_id.padEnd(8)} ${t.comments_total} comments, ${t.top_level_shown} top-level shown, ${t.pages} pages`);
 for (const l of report.limits) console.log(`limits ${l.script.padEnd(22)} ${String(l.attempts).padStart(3)} attempts, ${String(l.allowed).padStart(3)} allowed, ${String(l.refused).padStart(3)} refused, first retryAfter ${l.firstRetryAfter ?? '-'}`);
 console.log(`signals over the community's votes: ${report.communitySignals.map((x) => `${x.kind} ${x.node} ${x.voters}`).join('; ') || 'none'}`);
-let failed = false;
+console.log(`report swarms over the community's ${fx.reports.length} reports: ${report.communitySwarms.map((x) => `${x.author} ${x.reporters}`).join('; ') || 'none'}`);
+// PRD 7.2 (D-100): the oracle (tools/carried_measures.py) finds no swarm in the organic reports; any here is a disagreement
+let failed = report.communitySwarms.length > 0;
+if (failed) console.log(`DIFF community report swarms: expected none (tools/carried_measures.py), actual ${report.communitySwarms.length}`);
 for (const f of report.files) {
   const ok = !f.firstDiff && f.matched === f.rows;
   console.log(`${ok ? 'ok  ' : 'DIFF'} ${f.file.padEnd(36)} ${f.matched}/${f.rows} rows` + (f.firstDiff ? `  first: row ${f.firstDiff.row} ${f.firstDiff.field}: expected ${f.firstDiff.expected}, actual ${f.firstDiff.actual}` : ''));
   failed ||= !ok;
 }
 if (failed) {
-  const d = report.files.find((f) => f.firstDiff)!.firstDiff!;
-  console.error(`engine:eval: FAIL — ${d.file} row ${d.row} ${d.field}: expected ${d.expected}, actual ${d.actual}`);
+  const d = report.files.find((f) => f.firstDiff)?.firstDiff;
+  console.error(d ? `engine:eval: FAIL — ${d.file} row ${d.row} ${d.field}: expected ${d.expected}, actual ${d.actual}` : `engine:eval: FAIL — community report swarms: expected none, actual ${report.communitySwarms.length}`);
   process.exit(1);
 }
 console.log(`engine:eval: OK — ${report.files.length} files, ${report.files.reduce((n, f) => n + f.rows, 0)} rows, 0 differences`);

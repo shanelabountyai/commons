@@ -2,15 +2,16 @@ import { readFileSync } from 'node:fs';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
+import { can } from '@/core/authz/permissions';
 import { db } from '@/core/db';
 import { ForumForm as ActionForm } from '@/components/forum-form';
-import { ago, ScopeNote, Text } from '@/components/forum';
+import { ago, Badge, Crumbs, Pager, Text } from '@/components/forum';
 import { boardPosts, downvoteGateNote, ensureProfile, myVotes, nowEpoch, POST_SORTS, SORT_LABEL } from '@/forum/view';
 import { VoteControl } from '@/components/vote-control';
 import { parseLimitRules } from '@/rules';
 import type { PostSort } from '@/ranking';
 import { parseRankingRules } from '@/rules';
-import { newPost, vote } from '../actions';
+import { describeBoard, newPost, vote } from '../actions';
 
 const ranking = parseRankingRules(JSON.parse(readFileSync('rules/ranking.json', 'utf8')));
 const limits = parseLimitRules(JSON.parse(readFileSync('rules/limits.json', 'utf8')));
@@ -22,28 +23,46 @@ export async function generateMetadata({ params }: { params: Promise<{ org: stri
   return { title: b ? `${b.title} · Commons` : 'Commons' };
 }
 
-export default async function Board({ params, searchParams }: { params: Promise<{ org: string; board: string }>; searchParams: Promise<{ sort?: string }> }) {
+export default async function Board({ params, searchParams }: { params: Promise<{ org: string; board: string }>; searchParams: Promise<{ sort?: string; page?: string }> }) {
   const ctx = await requireOrg((await params).org);
   const me = await ensureProfile(ctx);
   const { board: slug } = await params;
-  const sortParam = (await searchParams).sort;
-  const sort: PostSort = (POST_SORTS as string[]).includes(sortParam ?? '') ? (sortParam as PostSort) : 'hot';
-  const v = await boardPosts(ctx.orgId, slug, sort, nowEpoch(), ranking);
+  const sp = await searchParams;
+  const sort: PostSort = (POST_SORTS as string[]).includes(sp.sort ?? '') ? (sp.sort as PostSort) : 'hot';
+  const v = await boardPosts(ctx.orgId, slug, sort, nowEpoch(), ranking, Number.parseInt(sp.page ?? '1', 10) || 1);
   if (!v) notFound();
   // 5.1: the viewer's votes on the listed posts and whether their ▼ would count now
   const mine = await myVotes(ctx.orgId, me.profileId, v.posts.map((p) => ({ kind: 'POST' as const, id: p.id })));
   const gateNote = await downvoteGateNote(me.profileId, nowEpoch(), limits);
   const newVote = vote.bind(null, ctx.slug);
   const base = `/o/${ctx.slug}/f/${slug}`;
+  const canDescribe = can(ctx.role, 'org.update'); // PRD 6.3: owner and admin (D-90)
   return (
     <main id="main" tabIndex={-1}>
-      <p className="meta">
-        <Link href={`/o/${ctx.slug}/f`}>Boards</Link> ›
-      </p>
+      <Crumbs items={[{ href: `/o/${ctx.slug}/f`, text: 'Boards' }, { text: <Text value={v.board.title} /> }]} />
       <h1>
         <Text value={v.board.title} />
       </h1>
-      <ScopeNote />
+      {v.board.description ? (
+        <p>
+          <Text value={v.board.description} />
+        </p>
+      ) : (
+        canDescribe && <p className="meta">No description yet.</p>
+      )}
+      {canDescribe && (
+        <details>
+          <summary>Edit description</summary>
+          <ActionForm action={describeBoard.bind(null, ctx.slug)}>
+            <input type="hidden" name="boardId" value={v.board.id} />
+            <label>
+              Board description <input name="description" defaultValue={v.board.description} maxLength={300} />
+            </label>
+            <button type="submit">Save description</button>
+          </ActionForm>
+        </details>
+      )}
+      <p className="meta"><a href="#compose">Write a post</a></p>
       <nav className="tabs" aria-label="Sort">
         {POST_SORTS.map((s) => (
           <span key={s}>
@@ -54,22 +73,30 @@ export default async function Board({ params, searchParams }: { params: Promise<
         ))}
         <span className="meta">· ranked {ago(v.rankedAt)}{v.posts.some((p) => !p.score.fromSnapshot) ? ' (newest posts scored live)' : ''}</span>
       </nav>
-      {v.posts.length === 0 && <p>Nothing here under this sort.</p>}
+      {v.empty && <p>No posts yet. Start one below.</p>}
+      {!v.empty && v.posts.length === 0 && <p>Nothing in this window.</p>}
       <ol>
         {v.posts.map((p) => (
-          <li key={p.id} className="post">
-            <VoteControl action={newVote} postId={p.id} label={`post ${p.title}`} mine={mine.get(p.id) ?? 0} isAuthor={p.authorId === me.profileId} gateNote={gateNote} />
-            <Link href={`/o/${ctx.slug}/f/p/${p.publicId}`} className={p.pinnedAt ? 'pin' : undefined}>
-              <Text value={p.title} />
-            </Link>
-            <div className="meta">
-              {p.ups - p.downs} points · {p.commentCount} comments · by <Link href={`/o/${ctx.slug}/f/u/${p.author.handle}`}><Text value={p.author.handle} /></Link> · {p.createdAt.toISOString().slice(0, 10)}
-              {p.lockedAt ? ' · locked' : ''}
+          <li key={p.id} className={p.pinnedAt ? 'post row pinned' : 'post row'}>
+            <div className="votes-cell">
+              <VoteControl action={newVote} postId={p.id} label={`post ${p.title}`} mine={mine.get(p.id) ?? 0} isAuthor={p.authorId === me.profileId} gateNote={gateNote} />
+              {p.ups - p.downs}
+            </div>
+            <div>
+              <Link href={`/o/${ctx.slug}/f/p/${p.publicId}`}>
+                <Text value={p.title} />
+              </Link>
+              {p.pinnedAt && <> <Badge role="pin">Pinned</Badge></>}
+              {p.lockedAt && <> <Badge role="warn">Locked</Badge></>}
+              <div className="meta">
+                by <Link href={`/o/${ctx.slug}/f/u/${p.author.handle}`}><Text value={p.author.handle} /></Link> · {ago(p.createdAt)} · {p.commentCount} comments
+              </div>
             </div>
           </li>
         ))}
       </ol>
-      <h2>New post</h2>
+      <Pager page={v.page} pages={v.pages} label="Board pages" href={(n) => `${base}?sort=${sort}&page=${n}`} />
+      <h2 id="compose">New post</h2>
       <ActionForm action={newPost.bind(null, ctx.slug)}>
         <input type="hidden" name="boardId" value={v.board.id} />
         <label>

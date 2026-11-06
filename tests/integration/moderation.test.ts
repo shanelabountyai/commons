@@ -129,6 +129,15 @@ describe('signals in the queue (4.5, D-31)', () => {
     expect((await queue(db, orgId, 50)).filter((i) => i.kind !== 'CASE')).toHaveLength(0);
     await expect(tx((t) => reviewSignal(t, modCtx('mod'), { kind: 'BRIGADE', id: b.id }, 'again', T0 + 502))).rejects.toMatchObject({ code: 'TRANSITION_INVALID' });
   });
+
+  it('5.4 A (found by the e2e sweep): a copy posted inside the same epoch second as its original is still a duplicate', async () => {
+    const at = T0 + 3 * 3600; // D-7 clocks are whole seconds; the first version's window ended strictly before `at`
+    const body = 'two copies of this body land in the very same second, on purpose';
+    await tx((t) => submitPost(t, { orgId, profileId: P.reporter!, boardId, publicId: 'M-P10', title: 't', body, at }, limits, mod));
+    const dup = await tx((t) => submitPost(t, { orgId, profileId: P.mod!, boardId, publicId: 'M-P11', title: 't', body, at }, limits, mod));
+    expect(dup.duplicate).toBe(true);
+    expect((await queue(db, orgId)).filter((i) => i.kind === 'DUPLICATE')).toHaveLength(1);
+  });
 });
 
 describe('context for moderators (4.1.8, 4.1.9)', () => {
@@ -146,7 +155,22 @@ describe('context for moderators (4.1.8, 4.1.9)', () => {
     await tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'other', detail: 'links to a crypto miner disguised as a NAS script', at: T0 + 901 }, limits, mod));
     await expect(tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'spam', at: T0 + 902 }, limits, mod))).rejects.toMatchObject({ code: 'ALREADY_REPORTED' });
     const item = (await queue(db, orgId, 50)).find((i) => i.kind === 'CASE' && i.node.id === post.id);
-    expect(item && item.kind === 'CASE' ? item.details : null).toEqual(['links to a crypto miner disguised as a NAS script']);
+    expect(item && item.kind === 'CASE' ? item.reporters.map((r) => r.detail) : null).toEqual(['links to a crypto miner disguised as a NAS script']);
+  });
+
+  it('5.4 A: each reporter comes with their handle, join date and how their past reports ended (REMOVED vs CLEARED, last action wins)', async () => {
+    const a = await tx((t) => submitPost(t, { orgId, profileId: P.author!, boardId, publicId: 'M-P8', title: 't', body: 'a body the reporter gets right', at: T0 + 2 * 3600 }, limits, mod));
+    const b = await tx((t) => submitPost(t, { orgId, profileId: P.author!, boardId, publicId: 'M-P9', title: 't', body: 'a body the reporter gets wrong', at: T0 + 2 * 3600 + 1 }, limits, mod));
+    for (const post of [a, b]) await tx((t) => submitReport(t, { orgId, profileId: P.reporter!, node: { kind: 'POST', id: post.id }, reason: 'spam', at: T0 + 2 * 3600 + 2 }, limits, mod));
+    await tx((t) => actOnContent(t, modCtx('mod'), 'REMOVE', { kind: 'POST', id: a.id }, 'spam indeed', T0 + 2 * 3600 + 3, mod));
+    await tx((t) => actOnContent(t, modCtx('mod'), 'CLEAR', { kind: 'POST', id: b.id }, 'not spam', T0 + 2 * 3600 + 4, mod));
+    const p7 = await db.post.findFirstOrThrow({ where: { publicId: 'M-P7' } });
+    const item = (await queue(db, orgId)).find((i) => i.kind === 'CASE' && i.node.id === p7.id); // no limit: every open item
+    const r = item && item.kind === 'CASE' ? item.reporters[0]! : null;
+    expect(r?.handle).toBe('reporter');
+    expect(r?.joinedAt).toEqual(toDate(T0 - 400 * DAY));
+    // M-P1 was removed then restored (counts for neither); M-P8 ended REMOVED, M-P9 CLEARED; the open ones count for neither
+    expect([r?.removed, r?.cleared]).toEqual([1, 1]);
   });
 
   it('edit history is readable for moderators: previous bodies, newest first, with the window flag (P0-6)', async () => {
@@ -217,5 +241,45 @@ describe('5.2 signals through the real vote path (D-75)', () => {
     expect((await db.brigadeSignal.findMany({ where: { orgId, nodeId: post.id } })).map((r) => [r.kind, r.voterCount])).toEqual([['AGED_BRIGADE', 5]]);
     expect(await db.brigadeSignal.count({ where: { orgId, nodeId: old.id } })).toBe(0);
     expect((await db.post.findUniqueOrThrow({ where: { id: post.id } })).downs).toBe(5); // counted: a signal is for a human (D-31)
+  });
+});
+
+describe('report swarms (5.4 B): four reporters under 7 days on one author inside 24 h', () => {
+  const T = T0 + 5000;
+  it('the 4th fresh reporter opens one REPORT_SWARM naming the author and the reporters; a 5th updates it; reports stay; review is logged', async () => {
+    const target = await profile('swarm-target', T0 - 400 * DAY);
+    const posts: string[] = [];
+    for (let i = 0; i < 3; i++) posts.push((await tx((t) => submitPost(t, { orgId, profileId: target, boardId, publicId: `M-SW${i}`, title: 't', body: `swarm target ${i}`, at: T - 3600 + i }, limits, mod))).id);
+    const fresh: string[] = [];
+    for (let i = 0; i < 5; i++) fresh.push(await profile(`fresh${i}`, T - 2 * DAY, {}, 0));
+    for (let i = 0; i < 3; i++) {
+      const r = await tx((t) => submitReport(t, { orgId, profileId: fresh[i]!, node: { kind: 'POST', id: posts[i]! }, reason: 'spam', at: T + i * 600 }, limits, mod));
+      expect(r.swarm).toBe(false);
+    }
+    expect(await db.reportSwarmSignal.count({ where: { orgId } })).toBe(0);
+    const fourth = await tx((t) => submitReport(t, { orgId, profileId: fresh[3]!, node: { kind: 'POST', id: posts[0]! }, reason: 'harassment', at: T + 1800 }, limits, mod));
+    expect(fourth.swarm).toBe(true);
+    const fifth = await tx((t) => submitReport(t, { orgId, profileId: fresh[4]!, node: { kind: 'POST', id: posts[1]! }, reason: 'spam', at: T + 20 * 3600 }, limits, mod));
+    expect(fifth.swarm).toBe(false); // the open window's count updates; no second row
+    const rows = await db.reportSwarmSignal.findMany({ where: { orgId } });
+    expect(rows.map((r) => [r.subjectId, r.reporterCount, r.windowStart.getTime() / 1000, r.reporterIds.length])).toEqual([[target, 5, T, 5]]);
+    expect(await db.report.count({ where: { orgId, reporterId: { in: fresh } } })).toBe(5); // nothing hidden (D-31)
+    const item = (await queue(db, orgId)).find((q) => q.kind === 'REPORT_SWARM');
+    expect(item && item.kind === 'REPORT_SWARM' ? { handle: item.subject.handle, n: item.reporters.map((r) => r.handle).sort() } : null).toEqual({ handle: 'swarm-target', n: ['fresh0', 'fresh1', 'fresh2', 'fresh3', 'fresh4'] });
+    await tx((t) => reviewSignal(t, modCtx('mod'), { kind: 'REPORT_SWARM', id: item!.id }, 'five two-day-old accounts, same afternoon', T + 21 * 3600));
+    expect((await queue(db, orgId)).filter((q) => q.kind === 'REPORT_SWARM')).toHaveLength(0);
+    expect(await db.moderationAction.findFirst({ where: { orgId, kind: 'REVIEW_SIGNAL', subjectId: target } })).toMatchObject({ reason: expect.stringContaining('REPORT_SWARM') });
+  });
+  it('four reporters older than 7 days raise nothing; one fresh reporter on four nodes raises nothing', async () => {
+    const target = await profile('organic-target', T0 - 400 * DAY);
+    const posts: string[] = [];
+    for (let i = 0; i < 4; i++) posts.push((await tx((t) => submitPost(t, { orgId, profileId: target, boardId, publicId: `M-ORG${i}`, title: 't', body: `organic target ${i}`, at: T + DAY + i }, limits, mod))).id);
+    for (let i = 0; i < 4; i++) {
+      const old = await profile(`old${i}`, T - (30 + i) * DAY);
+      await tx((t) => submitReport(t, { orgId, profileId: old, node: { kind: 'POST', id: posts[i]! }, reason: 'off_topic', at: T + DAY + 100 + i * 60 }, limits, mod));
+    }
+    const lone = await profile('lone-fresh', T - DAY, {}, 0);
+    for (let i = 0; i < 4; i++) await tx((t) => submitReport(t, { orgId, profileId: lone, node: { kind: 'POST', id: posts[i]! }, reason: 'spam', at: T + DAY + 500 + i * 60 }, limits, mod));
+    expect(await db.reportSwarmSignal.count({ where: { orgId, subjectId: target } })).toBe(0);
   });
 });

@@ -1,14 +1,25 @@
 // commons:load (task 2.4): the fixture forum into one org, write-once. Users become template Users on example.com
 // (D-1) with a member Membership and a Profile; posts and comments go through the tree writer in (created_at, id)
-// order so the stored ordinals equal src/tree's assignPaths; every vote event goes through the vote path in
-// (cast_at, row) order. A second run on the same org inserts nothing; a different fixture set refuses.
+// order so the stored ordinals equal src/tree's assignPaths, with titles and bodies from fixtures/community (PRD 7.1,
+// D-98); every vote event goes through the vote path in (cast_at, row) order. A second run on the same org inserts nothing; a different fixture set refuses.
 import type { Fixtures } from '@/fixtures/load';
 import type { LimitRules } from '@/rules';
+import { bodyHash } from './actions';
 import { ForumRefused, toDate, type Tx } from './db';
 import { createComment, createPost } from './tree-write';
 import { castVote } from './votes';
 
 export type LoadReport = { table: string; wanted: number; existing: number; inserted: number };
+
+/** PRD 6.3 (D-90): seed copy, not fixture data or a rule; change the wording freely. */
+const BOARD_DESCRIPTIONS: Record<string, string> = {
+  selfhosting: "Running your own services: containers, reverse proxies, backups, the stack you'd rather not rent.",
+  networking: 'Routers, switches, VLANs, VPNs, DNS and anything else between the boxes.',
+  hardware: 'Servers, storage, power and cooling: what to buy, what broke, what it draws at idle.',
+  sbc: 'Raspberry Pi and other single-board computers: which board, which OS, which case.',
+  help: 'Stuck on something? Say what you tried, what you expected and what happened.',
+  meta: 'About this forum itself: boards, rules, moderation and bugs.',
+};
 
 export async function loadForum(tx: Tx, orgId: string, fx: Fixtures, rules: LimitRules): Promise<LoadReport[]> {
   const report: LoadReport[] = [];
@@ -31,13 +42,15 @@ export async function loadForum(tx: Tx, orgId: string, fx: Fixtures, rules: Limi
   const boards = new Map<string, string>();
   const boardSlugs = [...new Set(fx.posts.map((p) => p.board))].sort();
   for (const slug of boardSlugs) {
-    const b = await tx.board.create({ data: { orgId, slug, title: slug } });
+    const title = fx.boards.find((x) => x.slug === slug)?.title ?? slug; // fixtures/boards.csv, read only (D-90)
+    const b = await tx.board.create({ data: { orgId, slug, title, description: BOARD_DESCRIPTIONS[slug] ?? '' } });
     boards.set(slug, b.id);
   }
   report.push({ table: 'Board', wanted: boardSlugs.length, existing: 0, inserted: boardSlugs.length });
   const postIds = new Map<string, string>();
   for (const p of [...fx.posts].sort((a, b) => a.created_at - b.created_at || (a.id < b.id ? -1 : 1))) {
-    const row = await createPost(tx, { orgId, boardId: boards.get(p.board)!, authorId: profileOf.get(p.author)!, publicId: p.id, title: `${p.id} title`, body: `${p.id} body`, createdAt: p.created_at });
+    const t = fx.text.get(p.id)!;
+    const row = await createPost(tx, { orgId, boardId: boards.get(p.board)!, authorId: profileOf.get(p.author)!, publicId: p.id, title: t.title, body: t.body, bodyHash: bodyHash(t.body), createdAt: p.created_at });
     postIds.set(p.id, row.id);
   }
   report.push({ table: 'Post', wanted: fx.posts.length, existing: 0, inserted: fx.posts.length });
@@ -48,7 +61,8 @@ export async function loadForum(tx: Tx, orgId: string, fx: Fixtures, rules: Limi
   for (const [pid, cs] of byPost) {
     // parents before children, siblings in creation order: sort by (created_at, id) is enough because a parent is always older
     for (const c of [...cs].sort((a, b) => a.created_at - b.created_at || (a.id < b.id ? -1 : 1))) {
-      const row = await createComment(tx, { orgId, postId: postIds.get(pid)!, parentId: c.parent_id ? commentIds.get(c.parent_id)! : null, authorId: profileOf.get(c.author)!, publicId: c.id, body: `${c.id} body`, createdAt: c.created_at });
+      const body = fx.text.get(c.id)!.body;
+      const row = await createComment(tx, { orgId, postId: postIds.get(pid)!, parentId: c.parent_id ? commentIds.get(c.parent_id)! : null, authorId: profileOf.get(c.author)!, publicId: c.id, body, bodyHash: bodyHash(body), createdAt: c.created_at });
       commentIds.set(c.id, row.id);
       nComments++;
     }

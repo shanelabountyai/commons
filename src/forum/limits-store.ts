@@ -2,8 +2,8 @@
 // allowed action = one row; a refusal writes nothing (L-3). The check and the record happen under a per-(profile,
 // action) advisory lock so two simultaneous attempts cannot both squeeze under the limit. Young-account status
 // (task 3.5) is computed here from Profile.joinedAt and live contributions (L-1, L-5).
-import { checkLimit, isYoung, type LimitVerdict } from '@/limits';
-import type { Action, LimitRules } from '@/rules';
+import { checkLimit, checkLinks, isYoung, type LimitVerdict } from '@/limits';
+import { windowFor, type Action, type LimitRules } from '@/rules';
 import { contributionsAt, lockKey, toDate, toEpoch, type Tx } from './db';
 
 export type GuardInput = { orgId: string; profileId: string; action: Action; at: number };
@@ -20,7 +20,7 @@ export async function accountAt(tx: Tx, profileId: string, at: number): Promise<
 /** Check the window and, if allowed, record the hit. Returns the engine's verdict plus the young flag used. */
 export async function guardAndRecord(tx: Tx, g: GuardInput, rules: LimitRules): Promise<GuardResult> {
   await lockKey(tx, `limit:${g.profileId}:${g.action}`);
-  const w = rules.windows.find((x) => x.action === g.action)!;
+  const w = windowFor(rules, g.action);
   const at = toDate(g.at);
   const rows = await tx.limitHit.findMany({
     where: { profileId: g.profileId, action: g.action, at: { gt: toDate(g.at - w.per_seconds), lte: at } },
@@ -36,6 +36,30 @@ export async function guardAndRecord(tx: Tx, g: GuardInput, rules: LimitRules): 
   );
   if (verdict.verdict === 'allow') await tx.limitHit.create({ data: { orgId: g.orgId, profileId: g.profileId, action: g.action, at } });
   return { ...verdict, young };
+}
+
+/** PRD 6.4 (D-93): the profile+post comment window. The history is the member's own Comment rows on the post, any
+ *  status (rule 3: the rows are truth; deleting a comment frees no slot), so nothing is recorded here. Call after
+ *  guardAndRecord in the same transaction: its per-(profile, comment) lock serialises this read too. */
+export async function guardThread(tx: Tx, g: { profileId: string; postId: string; at: number; young: boolean }, rules: LimitRules): Promise<LimitVerdict> {
+  const w = windowFor(rules, 'comment', 'profile+post');
+  const rows = await tx.comment.findMany({ where: { authorId: g.profileId, postId: g.postId, createdAt: { gt: toDate(g.at - w.per_seconds), lte: toDate(g.at) } }, select: { createdAt: true } });
+  return checkLimit(rows.map((r) => toEpoch(r.createdAt)), 'comment', g.young, g.at, rules, 'profile+post');
+}
+
+/** PRD 7.3 (D-104; reverses D-100 (4)): the profile link window. `links` is how many new links the write adds
+ *  (linkHrefs on a create, addedLinks on an edit). The history is the member's LimitHit rows with action 'link', one
+ *  per allowed new link at its `at`, so an edited-in link is timed when it appeared and removing a link frees no slot.
+ *  A refusal records nothing (L-3). The lock is per (profile, link) because posts, comments and edits share it. */
+export async function guardLinks(tx: Tx, g: { orgId: string; profileId: string; links: number; at: number; young: boolean }, rules: LimitRules): Promise<LimitVerdict> {
+  if (g.links === 0) return { verdict: 'allow' };
+  await lockKey(tx, `limit:${g.profileId}:link`);
+  const w = windowFor(rules, 'link');
+  const at = toDate(g.at);
+  const rows = await tx.limitHit.findMany({ where: { profileId: g.profileId, action: 'link', at: { gt: toDate(g.at - w.per_seconds), lte: at } }, select: { at: true } });
+  const verdict = checkLinks(rows.map((r) => toEpoch(r.at)), g.links, g.young, g.at, rules);
+  if (verdict.verdict === 'allow') await tx.limitHit.createMany({ data: Array.from({ length: g.links }, () => ({ orgId: g.orgId, profileId: g.profileId, action: 'link', at })) });
+  return verdict;
 }
 
 /** Cron: delete rows older than the longest window. */

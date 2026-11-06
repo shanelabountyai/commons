@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ForumForm as ActionForm } from '@/components/forum-form';
-import { ago, Markdown, ScopeNote, Text, when } from '@/components/forum';
+import { ago, Badge, CommentHeading, Crumbs, Markdown, Pager, removedName, Text, Tree, when, whenText } from '@/components/forum';
 import { canModerate, editHistoryForThread } from '@/forum/moderation';
 import { downvoteGateNote, ensureProfile, myVotes, nowEpoch, thread, type ThreadNode } from '@/forum/view';
 import { VoteControl } from '@/components/vote-control';
@@ -47,47 +47,28 @@ export default async function Thread({ params, searchParams }: { params: Promise
   const myCommentIds = new Set((await db.comment.findMany({ where: { postId: post.id, authorId: me.profileId }, select: { publicId: true } })).map((c) => c.publicId));
   const reasons = mod.report_reasons;
 
-  // Rows come flat with depth; nest them into <ol>s so the tree is in the markup, not only in the indent.
-  function Tree({ rows }: { rows: Row[] }) {
-    const render = (from: number, depth: number): [React.ReactNode[], number] => {
-      const items: React.ReactNode[] = [];
-      let i = from;
-      while (i < rows.length && rows[i]!.depth === depth) {
-        const r = rows[i]!;
-        const [kids, next] = render(i + 1, depth + 1);
-        items.push(
-          <li key={r.id} id={r.id} className="c" tabIndex={-1}>
-            <CommentView r={r} />
-            {kids.length > 0 && <ol>{kids}</ol>}
-          </li>,
-        );
-        i = next;
-      }
-      return [items, i];
-    };
-    return <ol className="thread">{render(0, 0)[0]}</ol>;
-  }
-
   function CommentView({ r }: { r: Row }) {
     const n = r.node;
     const removed = r.rendered_as !== 'body';
+    const who = removed ? removedName(r.rendered_as).toLowerCase() : `comment by ${n.author}`; // M5: names that tell links apart
     return (
-      <article aria-label={`Comment by ${removed ? 'removed' : n.author}`}>
+      <article>
+        <CommentHeading status={r.rendered_as} author={n.author} href={`/o/${ctx.slug}/f/u/${n.author}`} />
         {!removed && <VoteControl action={bound(vote)} postId={post.id} commentId={n.dbId} label={`comment by ${n.author}`} mine={mine.get(n.dbId) ?? 0} isAuthor={n.author === me.handle} gateNote={gateNote} />}
         <div className="meta">
-          {removed ? <span className="removed">[{r.rendered_as}]</span> : <Link href={`/o/${ctx.slug}/f/u/${n.author}`}><Text value={n.author} /></Link>} · {n.ups - n.downs} points · {when(new Date(n.created_at * 1000))}
-          {n.editedAt && ' · edited'} · <Link href={`${here}/c/${n.publicId}`}>permalink</Link>
+          {n.ups - n.downs} points · {ago(new Date(n.created_at * 1000))}
+          {n.editedAt && <> · <Badge>Edited</Badge></>} · <Link href={`${here}/c/${n.publicId}`} aria-label={`Permalink to ${who}, ${whenText(new Date(n.created_at * 1000))}`}>permalink</Link>
         </div>
         {!removed && <Markdown body={n.body} />}
         {r.continue_thread && (
           <p>
-            <Link href={`${here}/c/${n.publicId}`}>Continue this thread →</Link>
+            <Link href={`${here}/c/${n.publicId}`}>Continue the thread under {removed ? `the ${r.rendered_as} comment` : `${n.author}'s comment`}</Link>
           </p>
         )}
         {!removed && (
           <details>
             <summary>Reply, report{myCommentIds.has(n.publicId) ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
-            {!post.lockedAt && (
+            {!post.lockedAt && r.depth < limits.max_depth_written && ( // PRD 6.4: no reply form where the door would refuse
               <ActionForm action={bound(reply)}>
                 <input type="hidden" name="postId" value={post.id} />
                 <input type="hidden" name="parentId" value={n.dbId} />
@@ -193,31 +174,32 @@ export default async function Thread({ params, searchParams }: { params: Promise
 
   return (
     <main id="main" tabIndex={-1}>
-      <p className="meta">
-        <Link href={`/o/${ctx.slug}/f`}>Boards</Link> › <Link href={`/o/${ctx.slug}/f/${post.board.slug}`}><Text value={post.board.title} /></Link> ›
-      </p>
+      <Crumbs items={[{ href: `/o/${ctx.slug}/f`, text: 'Boards' }, { href: `/o/${ctx.slug}/f/${post.board.slug}`, text: <Text value={post.board.title} /> }, { text: 'Thread' }]} />
       <article aria-label="Post">
-        <h1 className={[post.pinnedAt ? 'pin' : '', post.lockedAt ? 'lock' : ''].join(' ').trim() || undefined}>
+        <h1>
           {post.status === 'visible' ? <Text value={post.title} /> : <span className="removed">[{post.status}]</span>}
+          {post.pinnedAt && <> <Badge role="pin">Pinned</Badge></>}
+          {post.lockedAt && <> <Badge role="warn">Locked</Badge></>}
         </h1>
         {post.status === 'visible' && <VoteControl action={bound(vote)} postId={post.id} label="post" mine={mine.get(post.id) ?? 0} isAuthor={post.author.id === me.profileId} gateNote={gateNote} />}
         <div className="meta">
-          {post.ups - post.downs} points · by <Link href={`/o/${ctx.slug}/f/u/${post.author.handle}`}><Text value={post.author.handle} /></Link> · {when(post.createdAt)}
-          {post.editedAt && ' · edited'} · {post.commentCount} comments · ranked {ago(t.rankedAt)}{isMod && <> · hot {t.postScore.hot.toFixed(2)} (moderators only, D-9)</>}
+          {post.ups - post.downs} points · by <Link href={`/o/${ctx.slug}/f/u/${post.author.handle}`}><Text value={post.author.handle} /></Link> · {ago(post.createdAt)}
+          {post.editedAt && <> · <Badge>Edited</Badge></>} · {post.commentCount} comments · ranked {ago(t.rankedAt)}{isMod && <> · hot {t.postScore.hot.toFixed(2)} (moderators only, D-9)</>}
         </div>
         {post.status === 'visible' ? <Markdown body={post.body} /> : <p className="removed">This post was {post.status}{isMod ? '; the body is below for moderators.' : '.'}</p>}
         {post.status !== 'visible' && isMod && <Markdown body={post.body} />}
-        {post.uploads.length > 0 && (
+        {post.uploads.length > 0 && (post.status === 'visible' || isMod) && (
           <ul aria-label="Attachments">
             {post.uploads.map((u) => (
               <li key={u.id}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- served by our own guarded route with the stored mime; next/image would re-fetch it through the optimizer, outside the guard */}
-                <img src={`/o/${ctx.slug}/f/uploads/${u.id}`} alt={`Attachment ${u.id.slice(0, 8)} (${u.mime}, ${Math.round(u.bytes / 1024)} kB)`} style={{ maxWidth: '100%', maxHeight: '24rem' }} />
+                <img src={`/o/${ctx.slug}/f/uploads/${u.id}`} alt={u.alt ?? 'Undescribed attachment'} style={{ maxWidth: '100%', maxHeight: '24rem' }} />
+                {u.alt === null && post.author.id === me.profileId && <p className="meta">No description: this was attached before descriptions existed (PRD 6.2).</p>}
               </li>
             ))}
           </ul>
         )}
-        {sp.upload && <p role="alert">{sp.upload}</p>}
+        {sp.upload && <p role="alert" id="upload-refusal">{sp.upload}</p>}
         <details open={sp.upload ? true : undefined}>
           <summary>Report{post.author.id === me.profileId ? ', edit' : ''}{isMod ? ', moderate' : ''}</summary>
           <ReportForm kind="POST" label="this post" />
@@ -241,7 +223,19 @@ export default async function Thread({ params, searchParams }: { params: Promise
             <form method="post" encType="multipart/form-data" action={`/o/${ctx.slug}/f/uploads?post=${post.id}`}>
               <label>
                 Attach an image (png, jpeg or webp, up to {Math.round(limits.upload.max_bytes / 1_000_000)} MB)
-                <input type="file" name="file" accept={limits.upload.types.join(',')} required />
+                <input type="file" name="file" accept={limits.upload.types.join(',')} required aria-describedby={sp.upload ? 'upload-refusal upload-hint' : 'upload-hint'} />
+              </label>
+              <p className="meta" id="upload-hint">
+                Up to {limits.upload.max_per_post} per post. Location and camera data are removed before the image is stored.
+              </p>
+              <label>
+                Describe the image <input name="alt" maxLength={300} aria-describedby={sp.upload ? 'upload-refusal alt-hint' : 'alt-hint'} />
+              </label>
+              <p className="meta" id="alt-hint">
+                What someone who cannot see it needs to know, up to 300 characters.
+              </p>
+              <label>
+                <input type="checkbox" name="decorative" /> Decorative (no description)
               </label>
               <button type="submit">Attach</button>
             </form>
@@ -262,7 +256,6 @@ export default async function Thread({ params, searchParams }: { params: Promise
           )}
         </details>
       </article>
-      <ScopeNote />
       <h2 id="comments">
         {post.commentCount} comments · {t.topLevelShown} top-level shown
       </h2>
@@ -285,19 +278,9 @@ export default async function Thread({ params, searchParams }: { params: Promise
           <button type="submit">Comment</button>
         </ActionForm>
       )}
-      {post.lockedAt && <p className="lock">This thread is locked; no new replies.</p>}
-      <Tree rows={t.rows as Row[]} />
-      {t.pages > 1 && (
-        <nav aria-label="Comment pages">
-          {Array.from({ length: t.pages }, (_, i) => i + 1).map((p) => (
-            <span key={p}>
-              <Link href={`${here}?sort=${sort}&page=${p}`} aria-current={p === page ? 'page' : undefined}>
-                {p}
-              </Link>{' '}
-            </span>
-          ))}
-        </nav>
-      )}
+      {post.lockedAt && <p><Badge role="warn">Locked</Badge> This thread is locked; no new replies.</p>}
+      <Tree rows={t.rows as Row[]} item={(r) => <CommentView r={r} />} />
+      <Pager page={page} pages={t.pages} label="Comment pages" href={(p) => `${here}?sort=${sort}&page=${p}`} />
     </main>
   );
 }
