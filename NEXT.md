@@ -1,5 +1,10 @@
 # NEXT
 
+## ▶ Closure 4 of 4 done: cost review (D-108, 2026-11-05, Sonnet 5.5). Baseline $0: no Vercel or Neon project exists, no LLM key, the cron is inert until a deploy, Actions has no schedule. **Found: the GitHub repo is PUBLIC** (house default is private); Shane decides whether that is deliberate. All four deliverables now exist: DEMO.md, `Commons in Brief` (https://claude.ai/artifact/713LjboxWNuj5gwyPDS28c), Ledger posts #164/#165 (https://claude.ai/artifact/Ai5xKScgT2sWtqXRQ1ZA8i). Still for Shane: merge #4 -> ... -> #16, share the brief, confirm #164 line 5, public vs private.
+
+BUILD LOG UPDATE: Commons, status: closed (not deployed, learning project), repo https://github.com/shanelabountyai/commons, brief https://claude.ai/artifact/713LjboxWNuj5gwyPDS28c, live: none.
+
+---
 ## ▶ Closure 3 of 4 done: two Commons posts added to the Lab Intelligence Ledger (https://claude.ai/artifact/Ai5xKScgT2sWtqXRQ1ZA8i), 2026-11-05, Sonnet 5.5. **#164 (Scale)** "My forum blocked banned members from posting. They could still edit." (D-64, the edit door), slotted last after #162 (Impact). **#165 (Scale)** "My file upload feature passed its tests on my machine. In CI, the code didn't exist." (D-69, gitignored uploads route), slotted between #159 (MarTech) and #160 (Impact). Existing Commons posts: #150, #154. Reserve angles not drafted: NUL byte (D-53, MarTech), link-syntax rotation 20 -> 5 / 15 (D-101/D-105, Impact), the 19 inert XSS patterns (D-41). #164 line 5 ("I've seen the same shape in intake") is a claim about Shane's own work; he confirms or cuts it. Next session item: **closure 4, the cost review** (not deployed, no Neon or Vercel project; `vercel.json` carries a daily cron that runs only on deploy; GitHub Actions is push/PR only; record keep / slow / off and a $0 baseline in `docs/decisions.md`). Then record artifact URLs in `docs/RELEASE_NOTES.md` or here, and print the BUILD LOG UPDATE. Still for Shane: merge #4 -> ... -> #16, share the brief.
 
 ---
