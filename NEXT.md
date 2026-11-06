@@ -1,5 +1,8 @@
 # NEXT
 
+## ▶ Merged and closed out (2026-11-06, Sonnet 5.5). Shane asked for the merges. #4 merged into `main` after resolving a `docs/decisions.md` conflict with foundation v1.4.1; #5-#10 were stacked under #11, so `main` was merged into `phase-6.4` and #11 merged (carries 5.4-7.3); #16 (closure) retargeted to `main` and merged. `main` now holds everything. **Renumbered:** main's foundation v1.4.1 decision is now **D-109** (D-99 was taken by the PRD 7.2 draft). Brief already shared; #164 line 5 ("I've seen the same shape in intake") cut from the Ledger; repo stays public (deliberate). Nothing queued; name a Phase 8 or a new project.
+
+---
 ## ▶ Closure 4 of 4 done: cost review (D-108, 2026-11-05, Sonnet 5.5). Baseline $0: no Vercel or Neon project exists, no LLM key, the cron is inert until a deploy, Actions has no schedule. **Found: the GitHub repo is PUBLIC** (house default is private); Shane decides whether that is deliberate. All four deliverables now exist: DEMO.md, `Commons in Brief` (https://claude.ai/artifact/713LjboxWNuj5gwyPDS28c), Ledger posts #164/#165 (https://claude.ai/artifact/Ai5xKScgT2sWtqXRQ1ZA8i). Still for Shane: merge #4 -> ... -> #16, share the brief, confirm #164 line 5, public vs private.
 
 BUILD LOG UPDATE: Commons, status: closed (not deployed, learning project), repo https://github.com/shanelabountyai/commons, brief https://claude.ai/artifact/713LjboxWNuj5gwyPDS28c, live: none.
