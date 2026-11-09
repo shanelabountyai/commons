@@ -257,3 +257,5 @@ The test DB has migration `20261103120000`. Run `npm run db:migrate` on the dev 
 **Mac session (2026-10-29):** port row added; reuse scan run (D-19): Handhold is a moderation-queue donor the overlap doc had missed; flat comments and a regex sanitizer there are not donors. KICKOFF step 2 now names the sibling clone folder `~/Projects/commons-app`.
 
 **By hand (Shane):** see KICKOFF.md § Still to do by hand.
+
+**2026-11-09 (foundation upgrade):** saas-foundation v1.6.1 -> v1.6.2 (PR "Foundation v1.6.2"): Org.events -> Org.orgEvents, rls:policies module guards, e2e seeds via seed:demo:test, CI enforce leg reads DB name from DATABASE_URL (template version taken). No migration, no env change. F-09 module-guard test accepts removed modules. 503 pass, 36 skipped.
