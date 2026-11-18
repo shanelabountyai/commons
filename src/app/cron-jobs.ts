@@ -4,7 +4,7 @@ import { sweepLimitHits } from '@/forum/limits-store';
 import { recomputeRanks } from '@/forum/rank';
 import { drainOutbox, sweepOutbox } from '@/modules/notifications/outbox'; // notifications
 import { parseLimitRules, parseRankingRules } from '@/rules';
-import { sweepSsoStates } from '@/modules/sso/hooks'; // sso
+import { recheckSsoDomains, sweepSsoStates } from '@/modules/sso/hooks'; // sso
 import { cronWebhooks } from '@/modules/apikeys/webhooks'; // apikeys
 
 // Clone-owned (plan §3.2): /api/cron calls this after its own core sweeps. A clone adds its jobs here,
@@ -25,6 +25,7 @@ export async function cronJobs(): Promise<Record<string, unknown>> {
   jobs.rank = { orgs: orgs.length, ranked, intervalSeconds: ranking.recompute.interval_seconds };
   jobs.limitHits = { swept: await db.$transaction((tx) => sweepLimitHits(tx, now, limits)) }; // D-39: rows past the longest window
   jobs.ssoStates = await sweepSsoStates(); // sso
+  jobs.ssoDomains = await recheckSsoDomains(); // sso
   jobs.webhooks = await cronWebhooks(); // apikeys
   return jobs;
 }
